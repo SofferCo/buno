@@ -75,6 +75,7 @@ Everything below exists and works as a **local prototype** — a single React fi
 2. **`schema.sql`** — the Supabase schema (already applied). Source of truth for the data model.
 3. **`BUILD_PLAN.md`** — the 7-stage roadmap (0 setup ✔ · 1 permissions+drafts ✔ · 2 server+Auth · 3 assistant live · 4 email/calendar · 5 WhatsApp · 6 polish).
 4. **`agent-voice-spec.md`** — **the assistant's design spec**: the "observer who serves, not a manager who pushes" philosophy, the graduated-permission model (suggest → draft → act), trust built from reversibility, anchored-to-source outputs, and the forbidden-phrases list. This is the canonical voice/behavior brief for the digital twin. Honor it when building the live assistant (Stage 3) — including a lint pass for forbidden phrases before any assistant text is shown.
+5. **`OPEN_THREADS.md`** — the living inventory of everything that is still a **simulation or shortcut** in the prototype (demo/placeholder → real implementation, per build stage). It is the contract for "what's still fake" — keep it updated: when a thread is implemented, replace its section with a one-line "✅ done in <commit>" note.
 
 ---
 
