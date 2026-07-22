@@ -145,10 +145,19 @@ export default function App() {
             const hasLocal = blob?.clients?.length && Object.keys(blob.cards || {}).length;
             if (hasLocal) { setImportPending({ blob, manifest: buildManifest(blob) }); }
             else {
-              const st = seedState();
-              attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
-              applyBoard(st);
-              engineRef.current!.schedule(st);
+              // several open tabs race to seed a brand-new account; re-check
+              // emptiness right before pushing, and let the losing tab load
+              // whatever the winner already wrote
+              const again = await loadRemote(supabase!, identity!.id);
+              if (again.state) {
+                attachEngine(again.colMap, again.state);
+                applyBoard(again.state);
+              } else {
+                const st = seedState();
+                attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
+                applyBoard(st);
+                engineRef.current!.schedule(st);
+              }
             }
           }
         } catch (e: any) { setSyncErr("הטעינה מהענן נכשלה: " + (e.message || e)); }
