@@ -1,0 +1,19 @@
+/* buno — the prototype stylesheet, split by section.
+   Import order is the original cascade order. Do not reorder.
+   The fonts @import must stay FIRST: Google Sans carries Latin text,
+   Hebrew falls through to Assistant (see the font-family stack in base.css). */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&family=Assistant:wght@400;500;600;700;800&display=swap');
+@import './base.css';
+@import './card.css';
+@import './myday.css';
+@import './card-detail.css';
+@import './pickers.css';
+@import './archive-report.css';
+@import './calendar.css';
+@import './chat.css';
+@import './calendar-week.css';
+@import './portal.css';
+@import './dashboard.css';
+@import './frame.css';
+@import './login.css';
+@import './import.css';

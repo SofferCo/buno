@@ -1,0 +1,531 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { BoardView } from "./components/board/BoardView";
+import { CardPanel } from "./components/card/CardPanel";
+import { ArchivePanel } from "./components/screens/ArchivePanel";
+import { CalendarPanel } from "./components/screens/CalendarPanel";
+import { ChatPanel } from "./components/screens/ChatPanel";
+import { ClientModal } from "./components/screens/ClientModal";
+import { MyDay } from "./components/screens/MyDay";
+import { PersonalDashboard } from "./components/screens/PersonalDashboard";
+import { ReportPanel } from "./components/screens/ReportPanel";
+import { SettingsPanel } from "./components/screens/SettingsPanel";
+import { Badge } from "./components/ui/Badge";
+import { DemoTag } from "./components/ui/DemoTag";
+import { Icon } from "./components/ui/Icon";
+import { APREFIX, DEFAULT_COLUMNS, KEY, PRI_ORDER } from "./lib/constants";
+import { storage } from "./data/local";
+import { useAuth } from "./auth/AuthProvider";
+import { addPeriod, daysUntil, flexDay, relTime, routineKind, todayStr, ymOf } from "./lib/date";
+import { fmtMoney, fmtShort } from "./lib/format";
+import { setUidMode, uid } from "./lib/id";
+import { supabase } from "./lib/supabase";
+import { loadRemote, SyncEngine } from "./data/remote";
+import { buildManifest, pushImport } from "./data/importer";
+import { ImportScreen } from "./components/screens/ImportScreen";
+import { readDataURL, resizeImage } from "./lib/image";
+import { initials, nameColor, peopleOf } from "./lib/people";
+import { cardSeconds } from "./lib/time";
+
+export default function App() {
+  const { identity, signOut, localMode } = useAuth();
+  const [loaded, setLoaded] = useState(false);
+  const [clients, setClients] = useState<any[]>([]);
+  const [currentId, setCurrentId] = useState<any>(null);
+  const [columns, setColumns] = useState<any[]>(DEFAULT_COLUMNS);
+  const [cards, setCards] = useState<Record<string, any>>({});
+  const [order, setOrder] = useState<Record<string, string[]>>({});
+  const [assets, setAssets] = useState<Record<string, string>>({});
+  const [lastReset, setLastReset] = useState(todayStr());
+  const [now, setNow] = useState(Date.now());
+  const [editing, setEditing] = useState<any>(null);
+  const [dragId, setDragId] = useState<any>(null);
+  const [dropCol, setDropCol] = useState<any>(null);
+  const [clientMenu, setClientMenu] = useState(false);
+  const [clientEdit, setClientEdit] = useState<any>(null);
+  const [dayOpen, setDayOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [dashOpen, setDashOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifSeen, setNotifSeen] = useState(() => Date.now() - 6 * 3600e3);
+  function openPage(name) {
+    setDayOpen(name === "day"); setArchiveOpen(name === "archive"); setReportOpen(name === "report");
+    setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
+  }
+  const notifs = useMemo(() => {
+    const out = [];
+    Object.values(cards).forEach((c) => {
+      if (c.archived) return;
+      const cn = clients.find((x) => x.id === c.clientId)?.name || "";
+      if (c.draft) out.push({ id: "d" + c.id, type: "draft", at: c.draft.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: "טיוטת העוזר ממתינה לאישור" });
+      if (c.proposed) out.push({ id: "p" + c.id, type: "request", at: c.proposed.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: `בקשת תזמון מ${c.proposed.by || "לקוח"}` });
+      (c.comments || []).forEach((cm) => {
+        const mention = /@\S/.test(cm.text || "");
+        out.push({ id: "c" + cm.id, type: mention ? "mention" : "comment", at: cm.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: `${cm.by}: ${(cm.text || "").replace(/\s+/g, " ").slice(0, 44)}` });
+      });
+    });
+    return out.sort((a, b) => b.at - a.at).slice(0, 30);
+  }, [cards, clients]);
+  const unreadCount = notifs.filter((n) => n.at > notifSeen).length;
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatSeed, setChatSeed] = useState<any>(null);
+  const [viewer, setViewer] = useState(false);
+  const [viewerQ, setViewerQ] = useState("");
+  const [profile, setProfile] = useState<any>({ name: "", photo: null, assistant: { cards: "draft", calendar: "draft", outbound: "suggest" } });
+  const engineRef = useRef<SyncEngine | null>(null);
+  const [importPending, setImportPending] = useState<any>(null);
+  const [syncErr, setSyncErr] = useState<string | null>(null);
+  const asstLevel = (k) => (profile.assistant && profile.assistant[k]) || "suggest";
+
+
+  // routine daily reset — shared by the local and cloud load paths
+  function applyRoutineReset(cds: Record<string, any>, ord: Record<string, string[]>, lastResetVal: string) {
+    const t = todayStr();
+    if ((lastResetVal || "") === t) return { cards: cds, order: ord, lastReset: t, changed: false };
+    const no: Record<string, string[]> = {}; Object.keys(ord).forEach((k) => (no[k] = [...ord[k]]));
+    const out = { ...cds }; let any = false;
+    Object.values(cds).forEach((c: any) => {
+      const kind = routineKind(c);
+      if (kind !== "none") {
+        let dl = c.deadline || t; let changed = false, guard = 0;
+        while (dl < t && guard < 500) { dl = addPeriod(dl, kind); changed = true; guard++; }
+        if (!c.deadline) { dl = t; changed = true; }
+        const inDone = no["col-done"] && no["col-done"].includes(c.id);
+        if (changed || inDone) {
+          any = true;
+          out[c.id] = { ...c, routine: kind, deadline: dl, subtasks: (c.subtasks || []).map((s) => ({ ...s, done: false })) };
+          if (inDone) {
+            no["col-done"] = no["col-done"].filter((x) => x !== c.id);
+            const tgt = (c.activeColumn && no[c.activeColumn]) ? c.activeColumn : "col-doing";
+            (no[tgt] = no[tgt] || []).push(c.id);
+          }
+        }
+      }
+    });
+    return { cards: out, order: no, lastReset: t, changed: any };
+  }
+  function applyBoard(st: any) {
+    setClients(st.clients); setCurrentId(st.currentId); setColumns(st.columns.length ? st.columns : DEFAULT_COLUMNS);
+    setCards(st.cards); setOrder(st.order); setLastReset(st.lastReset || todayStr());
+    if (st.profile) setProfile(st.profile);
+  }
+  function attachEngine(colMap: any, baseline: any) {
+    const eng = new SyncEngine(supabase!, identity!.id, colMap, baseline);
+    eng.onError = (e) => setSyncErr(e.message);
+    eng.onDirty = (d) => { if (!d) setSyncErr(null); };
+    engineRef.current = eng;
+    return eng;
+  }
+
+  const initedFor = useRef<string | null>(null);
+  useEffect(() => {
+    // StrictMode double-runs effects in dev; an empty-cloud load that runs
+    // twice would seed (and push) twice. One init per signed-in user.
+    const initKey = identity?.id || "local";
+    if (initedFor.current === initKey) return;
+    initedFor.current = initKey;
+    (async () => {
+      const cloud = !!(supabase && identity);
+      if (cloud) setUidMode("uuid");
+      if (cloud) {
+        try {
+          const { state, colMap } = await loadRemote(supabase!, identity!.id);
+          if (state) {
+            const r = applyRoutineReset(state.cards, state.order, state.lastReset);
+            const applied = { ...state, cards: r.cards, order: r.order, lastReset: r.lastReset };
+            const eng = attachEngine(colMap, state);
+            applyBoard(applied);
+            if (r.changed) eng.schedule(applied);
+          } else {
+            // cloud board is empty — offer to import the local board, or seed
+            let blob: any = null;
+            try { const res = await storage.get(KEY); if (res?.value) blob = JSON.parse(res.value); } catch {}
+            const hasLocal = blob?.clients?.length && Object.keys(blob.cards || {}).length;
+            if (hasLocal) { setImportPending({ blob, manifest: buildManifest(blob) }); }
+            else {
+              const st = seedState();
+              attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
+              applyBoard(st);
+              engineRef.current!.schedule(st);
+            }
+          }
+        } catch (e: any) { setSyncErr("הטעינה מהענן נכשלה: " + (e.message || e)); }
+      } else {
+        try {
+          const res = await storage.get(KEY);
+          if (res && res.value) {
+            const b = JSON.parse(res.value);
+            const r = applyRoutineReset(b.cards || {}, b.order || {}, b.lastReset || "");
+            applyBoard({ clients: b.clients || [], currentId: b.currentId || (b.clients || [])[0]?.id, columns: b.columns || DEFAULT_COLUMNS, cards: r.cards, order: r.order, lastReset: r.lastReset, profile: b.profile });
+            if (!(b.clients || []).length) applyBoard(seedState());
+          } else applyBoard(seedState());
+        } catch { applyBoard(seedState()); }
+      }
+      // assets stay local until the Storage bucket exists
+      try {
+        const lst = await storage.list(APREFIX);
+        const keys = (lst && lst.keys) || [];
+        const entries = await Promise.all(keys.map(async (k) => {
+          const key = typeof k === "string" ? k : (k as any).key;
+          try { const r = await storage.get(key); return [key.replace(APREFIX, ""), r?.value]; } catch { return null; }
+        }));
+        const map: Record<string, string> = {}; entries.forEach((e) => { if (e && e[1]) map[e[0]] = e[1]; }); setAssets(map);
+      } catch {}
+      setLoaded(true);
+    })();
+    function seedState() {
+      const air = { id: uid("cl"), name: "Air Doctor", color: "#0E8F8C", contact: "", email: "", notes: "", logo: null };
+      const home = { id: uid("cl"), name: "אישי / בית", color: "#8E54C4", home: true, contact: "", email: "", notes: "", logo: null };
+      const o: Record<string, string[]> = {}; DEFAULT_COLUMNS.forEach((c) => (o[c.id] = []));
+      return { clients: [air, home], currentId: air.id, columns: DEFAULT_COLUMNS, cards: {}, order: o, lastReset: todayStr(), profile: null };
+    }
+  }, [identity?.id]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    (async () => { try { await storage.set(KEY, JSON.stringify({ clients, currentId, columns, cards, order, lastReset, profile })); } catch (e) {} })();
+    engineRef.current?.schedule({ clients, currentId, columns, cards, order, lastReset, profile });
+  }, [clients, currentId, columns, cards, order, lastReset, profile, loaded]);
+
+  // Auth identity seeds the profile once (name for card creator/My Day, Google photo).
+  useEffect(() => {
+    if (!loaded || !identity) return;
+    setProfile((p: any) => {
+      const name = p.name || identity.name || "";
+      const photo = p.photo || identity.photo || null;
+      return (name === p.name && photo === p.photo) ? p : { ...p, name, photo };
+    });
+  }, [loaded, identity]);
+
+  const running = Object.values(cards).some((c) => c.timerStart);
+  useEffect(() => { if (!running) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [running]);
+
+  const updateCard = useCallback((id, patch) => setCards((p) => ({ ...p, [id]: { ...p[id], ...patch } })), []);
+  // every assistant-initiated action passes through here; the app (not the prompt) enforces the matrix
+  function assistantAction(kind: string, payload: any = {}) {
+    const cat = /event|calendar/.test(kind) ? "calendar" : (/send|email|outbound/.test(kind) ? "outbound" : "cards");
+    const level = asstLevel(cat); // suggest | draft | act
+    if (kind === "create_card") {
+      const colId = payload.colId || (columns.find((c) => c.id === "col-brief") || columns[0])?.id;
+      if (!colId) return null;
+      const id = uid("card");
+      const draft = level === "act" ? null : { by: "העוזר", at: Date.now(), level };
+      setCards((p) => ({ ...p, [id]: { id, clientId: payload.clientId || currentId, title: payload.title || "", creator: "העוזר", cc: [], comments: [], attachments: [], subtasks: payload.subtasks || [], description: payload.description || "", deadline: payload.deadline || todayStr(), priority: payload.priority || "regular", routine: "none", dayFlex: false, time: payload.time || "", activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: payload.origin || { type: "chat", ref: "chat-" + id }, draft } }));
+      setOrder((p) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
+      return id;
+    }
+    return null;
+  }
+  // sweep: assistant drafts unresolved for 7+ days quietly expire (soft-remove)
+  useEffect(() => {
+    const WEEK = 7 * 864e5, t = Date.now();
+    const stale = Object.values(cards).filter((c) => c.draft && !c.archived && (t - c.draft.at) > WEEK);
+    if (stale.length) setCards((p) => { const n = { ...p }; stale.forEach((c) => { n[c.id] = { ...n[c.id], archived: true, archivedAt: t, removedBy: "assistant" }; }); return n; });
+  }, []); // eslint-disable-line
+  const editWithTrail = useCallback((id, patch, by) => setCards((p) => {
+    const c = p[id]; if (!c) return p;
+    const FIELD_LABEL = { title: "כותרת", description: "תיאור", cc: "אנשים", subtasks: "צ׳קליסט", comments: "תגובה", attachments: "קבצים", proposed: "הצעת תזמון", priority: "עדיפות", deadline: "תזמון", time: "שעה", routine: "חזרתיות" };
+    const key = Object.keys(patch).find((k) => FIELD_LABEL[k]) || Object.keys(patch)[0];
+    const label = FIELD_LABEL[key] || key;
+    const t = Date.now(); const hist = c.history ? [...c.history] : [];
+    const last = hist[hist.length - 1];
+    if (last && last.by === by && last.field === key && (t - last.at) < 240000) hist[hist.length - 1] = { ...last, at: t };
+    else hist.push({ id: uid("h"), by, field: key, label, at: t });
+    return { ...p, [id]: { ...c, ...patch, history: hist } };
+  }), []);
+  const cardColumn = useMemo(() => { const m = {}; Object.keys(order).forEach((col) => order[col].forEach((id) => (m[id] = col))); return m; }, [order]);
+
+  function addCard(colId, asCreator) {
+    const id = uid("card");
+    setCards((p) => ({ ...p, [id]: { id, clientId: currentId, title: "", creator: (asCreator || profile.name || "אני"), cc: [], comments: [], attachments: [], subtasks: [], description: "", deadline: todayStr(), priority: "regular", routine: "none", dayFlex: false, time: "", activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now() } }));
+    setOrder((p) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
+    setEditing(id);
+  }
+  function deleteCard(id, by = "owner") { // soft: move to archive, recoverable
+    setCards((p) => ({ ...p, [id]: { ...p[id], archived: true, archivedAt: Date.now(), removedBy: by, timerStart: null } }));
+    setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); return n; });
+    setEditing(null);
+  }
+  function restoreCard(id) {
+    const c = cards[id]; const cols = columns.map((x) => x.id);
+    let tgt = c?.activeColumn;
+    if (!tgt || !cols.includes(tgt) || tgt === "col-done") tgt = cols.find((x) => x !== "col-done") || cols[0];
+    setCards((p) => ({ ...p, [id]: { ...p[id], archived: false, removedBy: undefined } }));
+    setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); (n[tgt] = n[tgt] || []).push(id); return n; });
+  }
+  function hardDelete(id) { // permanent
+    const c = cards[id]; (c?.attachments || []).forEach((a: any) => { if (a.type !== "link") storage.delete(APREFIX + a.id).catch(() => {}); });
+    setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); return n; });
+    setCards((p) => { const n = { ...p }; delete n[id]; return n; });
+  }
+  function toggleTimer(id) {
+    setCards((prev) => {
+      const next = { ...prev }, ts = Date.now(), card = next[id];
+      if (card.timerStart) next[id] = { ...card, timeSpent: (card.timeSpent || 0) + Math.floor((ts - card.timerStart) / 1000), timerStart: null };
+      else { Object.keys(next).forEach((k) => { if (next[k].timerStart) next[k] = { ...next[k], timeSpent: (next[k].timeSpent || 0) + Math.floor((ts - next[k].timerStart) / 1000), timerStart: null }; }); next[id] = { ...next[id], timerStart: ts }; }
+      return next;
+    });
+    setNow(Date.now());
+  }
+  function moveCard(id, toCol, beforeId = null) {
+    setCards((p) => (p[id] && toCol !== "col-done" ? { ...p, [id]: { ...p[id], activeColumn: toCol } } : p));
+    setOrder((prev) => {
+      const n = {}; Object.keys(prev).forEach((k) => (n[k] = prev[k].filter((x) => x !== id)));
+      if (!n[toCol]) n[toCol] = [];
+      if (beforeId && n[toCol].includes(beforeId)) n[toCol].splice(n[toCol].indexOf(beforeId), 0, id); else n[toCol].push(id);
+      return n;
+    });
+  }
+  function renameCol(id, title) { setColumns((p) => p.map((c) => (c.id === id ? { ...c, title } : c))); }
+  function addColumn() { const id = uid("col"); setColumns((p) => [...p, { id, title: "עמודה חדשה" }]); setOrder((p) => ({ ...p, [id]: [] })); }
+  function deleteColumn(id) { setColumns((p) => p.filter((c) => c.id !== id)); setOrder((p) => { const n = { ...p }; delete n[id]; return n; }); }
+
+  async function addFiles(cardId, fileList: any) {
+    for (const file of Array.from(fileList) as any[]) {
+      const isImg = file.type.startsWith("image/");
+      let dataUrl: string;
+      try { dataUrl = isImg ? await resizeImage(file, 1000, "image/jpeg", 0.72) : await readDataURL(file); } catch { continue; }
+      if (dataUrl.length > 4600000) { continue; }
+      const attId = uid("att");
+      try { await storage.set(APREFIX + attId, dataUrl); } catch (e) {}
+      setAssets((p) => ({ ...p, [attId]: dataUrl }));
+      setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: [...(p[cardId].attachments || []), { id: attId, type: isImg ? "image" : "file", name: file.name, mime: file.type }] } }));
+    }
+  }
+  function addLink(cardId) { const attId = uid("att"); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: [...(p[cardId].attachments || []), { id: attId, type: "link", name: "", url: "" }] } })); }
+  function updateAtt(cardId, attId, patch) { setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.map((a) => (a.id === attId ? { ...a, ...patch } : a)) } })); }
+  function removeAtt(cardId, attId) { const a = cards[cardId]?.attachments?.find((x: any) => x.id === attId); if (a && a.type !== "link") storage.delete(APREFIX + attId).catch(() => {}); setAssets((p) => { const n = { ...p }; delete n[attId]; return n; }); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.filter((x) => x.id !== attId) } })); }
+
+  function saveClient(c) { setClients((p) => { const i = p.findIndex((x) => x.id === c.id); if (i === -1) return [...p, c]; const n = [...p]; n[i] = c; return n; }); if (!currentId) setCurrentId(c.id); setClientEdit(null); }
+  function deleteClient(id) {
+    const ids = Object.values(cards).filter((c) => c.clientId === id).map((c) => c.id);
+    setCards((p) => { const n = { ...p }; ids.forEach((x) => delete n[x]); return n; });
+    setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => !ids.includes(x)))); return n; });
+    setClients((p) => p.filter((c) => c.id !== id)); setClientEdit(null); setClientMenu(false);
+    if (currentId === id) setCurrentId(clients.filter((c) => c.id !== id)[0]?.id || null);
+  }
+
+  if (!loaded) return <div className="adk" style={{ display: "grid", placeItems: "center", height: "100vh" }}><div style={{ color: "var(--muted)", fontWeight: 600 }}>טוען את הלוח…</div></div>;
+
+  const current = clients.find((c) => c.id === currentId);
+  const clientCards = (id) => Object.values(cards).filter((c) => c.clientId === id);
+  const curCards = clientCards(currentId);
+  const openCount = curCards.filter((c) => !c.archived && cardColumn[c.id] !== "col-done").length;
+  const curTime = curCards.reduce((a, c) => a + cardSeconds(c, now), 0);
+  const archiveList = curCards.filter((c) => c.archived || cardColumn[c.id] === "col-done")
+    .map((c) => ({ ...c, reason: c.archived ? (c.removedBy === "client" ? "client" : "deleted") : "done", when: c.archivedAt || c.createdAt }))
+    .sort((a, b) => b.when - a.when);
+
+  const dayTasks = Object.values(cards).filter((c) => !c.archived && cardColumn[c.id] !== "col-done").map((c) => ({ card: c, d: daysUntil(c.deadline) }));
+  const planWindow = (c) => c.routine === "monthly" ? 31 : 7;
+  const inPlan = (t) => { if (t.d === null) return false; if (flexDay(t.card)) return t.d <= planWindow(t.card); return t.d <= 0; };
+  const byTime = (a, b) => { const ta = a.card.time || "99:99", tb = b.card.time || "99:99"; return ta < tb ? -1 : ta > tb ? 1 : 0; };
+  const planTasks = dayTasks.filter(inPlan).sort((a, b) => byTime(a, b) || (PRI_ORDER[a.card.priority] - PRI_ORDER[b.card.priority]) || ((a.d ?? 99) - (b.d ?? 99)));
+  const upcoming = dayTasks.filter((t) => !inPlan(t) && t.d !== null && t.d >= 1 && t.d <= 7).sort((a, b) => a.d - b.d);
+  const runningCard = Object.values(cards).find((c) => c.timerStart);
+  const firstImage = (c) => { const a = (c.attachments || []).find((x) => x.type === "image"); return a ? assets[a.id] : null; };
+
+  if (importPending) return (
+    <ImportScreen
+      manifest={importPending.manifest}
+      email={identity?.email || ""}
+      onConfirm={async () => {
+        const { state, colMap } = await pushImport(supabase!, identity!.id, importPending.blob);
+        attachEngine(colMap, state);
+        applyBoard(state);
+        setImportPending(null);
+      }}
+      onFresh={() => {
+        const o: Record<string, string[]> = {}; DEFAULT_COLUMNS.forEach((c) => (o[c.id] = []));
+        const st = { clients: [], currentId: null, columns: DEFAULT_COLUMNS, cards: {}, order: o, lastReset: todayStr(), profile: null };
+        attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
+        applyBoard(st);
+        engineRef.current!.schedule(st as any);
+        setImportPending(null);
+      }}
+    />
+  );
+
+  return (
+    <div className="adk">
+      <div className="adk-shell">
+      <div className="adk-top">
+        {viewer ? (<>
+          <div className="adk-csel-btn" style={{ cursor: "default", minWidth: 0, background: "transparent", border: "none", padding: "6px 4px" }}>
+            <Badge client={current} />
+            <div><div className="nm">{current?.name}</div><div className="sub">פרויקט · תצוגת לקוח</div></div>
+          </div>
+          <div className="adk-portal-search" style={{ maxWidth: 300 }}>
+            <Icon name="search" size={16} />
+            <input value={viewerQ} onChange={(e) => setViewerQ(e.target.value)} placeholder="חיפוש משימה…" />
+          </div>
+          <div style={{ marginInlineStart: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="adk-portal-brief" onClick={() => { const col = columns.find((c) => c.id === "col-brief") || columns[0]; if (col) addCard(col.id, current?.contact || (current?.members && current.members[0]) || "לקוח"); }}><Icon name="plus" size={16} /> בריף חדש</button>
+            <DemoTag text="תצוגת לקוח · הדגמה" />
+            <button className="adk-day-btn" style={{ margin: 0 }} onClick={() => { setViewer(false); setViewerQ(""); }}>יציאה</button>
+          </div>
+        </>) : (<>
+        <div className="adk-csel">
+          <div className="adk-csel-btn" onClick={() => setClientMenu((v) => !v)}>
+            <Badge client={current} />
+            <div><div className="nm">{current?.name || "בחר לקוח"}</div><div className="sub">{clientCards(currentId).length} משימות</div></div>
+            <span className="chev"><Icon name="chevD" size={16} /></span>
+          </div>
+          {clientMenu && (<>
+            <div style={{ position: "fixed", inset: 0, zIndex: 39 }} onClick={() => setClientMenu(false)} />
+            <div className="adk-drop">
+              <div className="adk-drop-item special" onClick={() => { setClientMenu(false); openPage("day"); }}>
+                <div className="adk-day-sun sm"><Icon name="sun" size={17} /></div>
+                <div><div className="nm">היום שלי</div><div className="sub">מבט־על · כל הלקוחות</div></div>
+                {planTasks.length > 0 && <span className="cnt">{planTasks.length}</span>}
+              </div>
+              <div className="adk-drop-sep" />
+              {clients.map((c) => (
+                <div key={c.id} className={"adk-drop-item" + (c.id === currentId ? " active" : "")} onClick={() => { setCurrentId(c.id); setClientMenu(false); }}>
+                  <Badge client={c} size={30} />
+                  <div><div className="nm">{c.name}</div>{c.contact && <div className="sub">{c.contact}</div>}</div>
+                  <span className="cnt">{clientCards(c.id).length}</span>
+                  <button className="edit" title="ערוך" onClick={(e) => { e.stopPropagation(); setClientEdit(c); setClientMenu(false); }}>✎</button>
+                </div>
+              ))}
+              <button className="adk-drop-add" onClick={() => { setClientEdit("new"); setClientMenu(false); }}>+ הוסף לקוח</button>
+            </div>
+          </>)}
+        </div>
+        <div className="adk-stats" style={{ marginInlineStart: "auto" }}>
+          <div className="adk-stat"><b>{openCount}</b><small>משימות</small></div>
+          <div className="adk-stat"><b>{(() => { const m = (profile.settings && profile.settings.timeRound) || "ceil_hour"; if (m === "exact") return fmtShort(curTime); if (m === "decimal") return (curTime / 3600).toFixed(1); return curTime > 0 ? Math.ceil(curTime / 3600) : 0; })()}</b><small>שעות</small></div>
+          {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
+          <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
+          <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
+          <button className="adk-icon-btn" data-label="תצוגת לקוח" onClick={() => setViewer(true)}><Icon name="eye" /></button>
+        </div>
+        </>)}
+      </div>
+
+      {!viewer && (<>
+        <button className="adk-float-av" style={{ background: nameColor(profile.name || identity?.name || identity?.email || "אני") }} title="הדשבורד שלי" onClick={() => openPage("dash")}>
+          {(profile.photo || identity?.photo) ? <img src={profile.photo || identity?.photo || undefined} alt="" /> : <span>{(profile.name || identity?.name) ? initials(profile.name || identity?.name) : (identity?.email ? initials(identity.email) : "אני")}</span>}
+        </button>
+        <button className="adk-float-bell" title="התראות" onClick={() => { setNotifOpen((v) => { const nv = !v; if (nv) setNotifSeen(Date.now()); return nv; }); }}>
+          <Icon name="bell" size={19} />{unreadCount > 0 && <span className="ic-badge">{unreadCount}</span>}
+        </button>
+        {syncErr && <div className="adk-sync-err">הסנכרון לענן נתקל בשגיאה: {syncErr} · השינויים שמורים מקומית וינסו שוב</div>}
+        {notifOpen && (<>
+          <div className="adk-notif-scrim" onClick={() => setNotifOpen(false)} />
+          <div className="adk-notif">
+            <div className="adk-notif-head"><b>התראות</b>{notifs.length > 0 && <button onClick={() => { setNotifSeen(Date.now()); }}>סמן הכל כנקרא</button>}</div>
+            <div className="adk-notif-list">
+              {notifs.length === 0 && <div className="adk-notif-empty">אין תנועות חדשות ✦</div>}
+              {notifs.map((n) => (
+                <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); openPage(null); setEditing(n.cardId); }}>
+                  <span className={"adk-notif-dot " + n.type} />
+                  <span className="adk-notif-body">
+                    <span className="t">{n.type === "draft" ? "טיוטת עוזר" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
+                    <span className="s">{n.text}</span>
+                    <span className="tm">{relTime(n.at)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>)}
+        <div className="adk-rail bare">
+          <button className="adk-rail-btn" data-label="היום שלי" onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
+          <button className="adk-rail-btn" data-label="יומן" onClick={() => openPage("cal")}><Icon name="calendar" /></button>
+          <button className="adk-rail-btn" data-label="דשבורד" onClick={() => openPage("dash")}><Icon name="chart" /></button>
+        </div>
+        <button className="adk-float-gear bare" data-label="הגדרות" onClick={() => openPage("settings")}><Icon name="gear" size={20} /></button>
+      </>)}
+
+      <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={viewer}
+        filter={viewer && viewerQ.trim() ? ((c) => (c.title + " " + (c.description || "")).toLowerCase().includes(viewerQ.trim().toLowerCase())) : undefined}
+        dnd={{ dragId, setDragId, dropCol, setDropCol, moveCard }}
+        onOpenCard={(id) => setEditing(id)} onToggleTimer={toggleTimer} onAddCard={addCard}
+        onRenameCol={renameCol} onDeleteColumn={deleteColumn} onAddColumn={addColumn} />
+      </div>
+
+      {editing && cards[editing] && (<>
+        <div className="adk-scrim" onClick={() => setEditing(null)} />
+        <CardPanel card={cards[editing]} now={now} assets={assets} client={clients.find((c) => c.id === cards[editing].clientId)}
+          giverSuggestions={Array.from(new Set([
+            ...((clients.find((c) => c.id === cards[editing].clientId)?.members) || []),
+            ...Object.values(cards).filter((c) => c.clientId === cards[editing].clientId).flatMap((c) => peopleOf(c)),
+          ].map((s) => (s || "").trim()).filter(Boolean)))}
+          profileName={viewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || "אני")}
+          viewer={viewer}
+          onClose={() => setEditing(null)} onChange={viewer ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, viewer ? "client" : "owner")}
+          onToggleTimer={() => toggleTimer(editing)} onAddFiles={(fl) => addFiles(editing, fl)} onAddLink={() => addLink(editing)}
+          onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
+      </>)}
+
+      {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient} />}
+
+      {dayOpen && (
+        <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard}
+          profileName={profile.name}
+          pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
+          onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}
+          onClose={() => setDayOpen(false)}
+          onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); openPage(null); setEditing(id); } }}
+          onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")} />
+      )}
+
+      {archiveOpen && (<>
+        <div className="adk-scrim" onClick={() => setArchiveOpen(false)} />
+        <ArchivePanel items={archiveList} client={current} now={now}
+          onClose={() => setArchiveOpen(false)}
+          onOpen={(id) => { setArchiveOpen(false); setEditing(id); }}
+          onRestore={restoreCard}
+          onHardDelete={hardDelete} />
+      </>)}
+
+      {reportOpen && (
+        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} onClose={() => setReportOpen(false)} onOpen={(id) => { setReportOpen(false); setEditing(id); }} />
+      )}
+
+
+      {calOpen && (
+        <CalendarPanel clients={clients} cards={cards} now={now}
+          onClose={() => setCalOpen(false)}
+          onOpen={(id) => setEditing(id)} />
+      )}
+
+      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="העוזר שלי"><Icon name="spark" size={24} /></button>}
+
+      {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel} answer={(q) => {
+        const s = q.toLowerCase();
+        const nonArch = Object.values(cards).filter((c) => !c.archived);
+        const monthKey = ymOf(Date.now());
+        const monthSec = nonArch.filter((c) => ymOf(c.createdAt) === monthKey).reduce((a, c) => a + cardSeconds(c, now), 0);
+        const perClient = clients.map((cl) => ({ cl, sec: Object.values(cards).filter((c) => c.clientId === cl.id && !c.archived).reduce((a, c) => a + cardSeconds(c, now), 0), rate: Number(cl.rate) || 0 }));
+        if (s.includes("שעות") && s.includes("חודש")) return `החודש נצברו ${Math.ceil(monthSec / 3600)} שעות עבודה על פני ${perClient.filter((p) => p.sec > 0).length} לקוחות.`;
+        if (s.includes("רווחי") || s.includes("רווח")) { const p = perClient.map((x) => ({ ...x, rev: (x.sec / 3600) * x.rate })).filter((x) => x.rev > 0).sort((a, b) => b.rev - a.rev); return p.length ? `הלקוח הכי רווחי הוא ${p[0].cl.name} — הכנסה משוערת ${fmtMoney(p[0].rev)} (${Math.ceil(p[0].sec / 3600)} שעות × ₪${p[0].rate}).` : "עדיין אין תעריפים מוגדרים ללקוחות, אז אי אפשר לחשב רווחיות. הוסף תעריף שעתי בכרטיס הלקוח."; }
+        if (s.includes("דחוף") || s.includes("היום")) { if (!planTasks.length) return "אין משימות דחופות להיום — נקי! ✦"; const top = planTasks.slice(0, 5).map((t) => `• ${t.card.title || "משימה"}${t.card.time ? ` · ${t.card.time}` : ""}`).join("\n"); return `יש ${planTasks.length} משימות בתוכנית של היום:\n${top}`; }
+        if (s.includes("כמה") && s.includes("משימ")) { const open = nonArch.filter((c) => cardColumn[c.id] !== "col-done").length; return `יש ${open} משימות פתוחות כרגע על פני כל הלקוחות.`; }
+        if (s.includes("לקוח") && s.includes("שעות")) { const p = perClient.filter((x) => x.sec > 0).sort((a, b) => b.sec - a.sec); return p.length ? "שעות לפי לקוח:\n" + p.map((x) => `• ${x.cl.name}: ${Math.ceil(x.sec / 3600)} שעות`).join("\n") : "אין עדיין שעות רשומות."; }
+        return "אני עדיין בהדגמה — בגרסה המחוברת (עם שרת) אענה בשפה חופשית, אזכור שיחות, ואצוף גם בוואטסאפ. בינתיים נסה: \"כמה שעות עבדתי החודש?\", \"מי הלקוח הכי רווחי?\", \"מה דחוף היום?\"";
+      }} />}
+
+      {settingsOpen && (
+        <SettingsPanel profile={profile} account={identity?.email} onSignOut={localMode ? undefined : signOut}
+          onClose={() => setSettingsOpen(false)}
+          onSetName={(name) => setProfile((p) => ({ ...p, name }))}
+          onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}
+          onSetAssistant={(k, v) => setProfile((p) => ({ ...p, assistant: { ...(p.assistant || {}), [k]: v } }))}
+          onSetPref={(k, v) => setProfile((p) => ({ ...p, settings: { ...(p.settings || {}), [k]: v } }))} />
+      )}
+
+      {dashOpen && (
+        <PersonalDashboard clients={clients} cards={cards} cardColumn={cardColumn} now={now} profile={profile}
+          onClose={() => setDashOpen(false)}
+          onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}
+          onSetName={(name) => setProfile((p) => ({ ...p, name }))}
+          onSetAssistant={(k, v) => setProfile((p) => ({ ...p, assistant: { ...(p.assistant || {}), [k]: v } }))}
+          onOpenClient={(id) => { setCurrentId(id); setDashOpen(false); }} />
+      )}
+    </div>
+  );
+}

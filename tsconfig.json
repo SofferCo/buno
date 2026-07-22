@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    /* The code is the prototype as-is, untyped. Strictness comes gradually
+       as modules get typed — do not turn these on wholesale. */
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": ["src"]
+}
