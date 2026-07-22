@@ -20,6 +20,7 @@ import { fmtMoney, fmtShort } from "./lib/format";
 import { setUidMode, uid } from "./lib/id";
 import { supabase } from "./lib/supabase";
 import { loadRemote, SyncEngine } from "./data/remote";
+import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
@@ -128,6 +129,7 @@ export default function App() {
     initedFor.current = initKey;
     (async () => {
       const cloud = !!(supabase && identity);
+      let cloudCards: Record<string, any> | null = null;
       if (cloud) setUidMode("uuid");
       if (cloud) {
         try {
@@ -137,6 +139,7 @@ export default function App() {
             const applied = { ...state, cards: r.cards, order: r.order, lastReset: r.lastReset };
             const eng = attachEngine(colMap, state);
             applyBoard(applied);
+            cloudCards = applied.cards;
             if (r.changed) eng.schedule(applied);
           } else {
             // cloud board is empty — offer to import the local board, or seed
@@ -152,6 +155,7 @@ export default function App() {
               if (again.state) {
                 attachEngine(again.colMap, again.state);
                 applyBoard(again.state);
+                cloudCards = again.state.cards;
               } else {
                 const st = seedState();
                 attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
@@ -172,7 +176,10 @@ export default function App() {
           } else applyBoard(seedState());
         } catch { applyBoard(seedState()); }
       }
-      // assets stay local until the Storage bucket exists
+      // assets: locally-cached dataURLs (may fail if IndexedDB is unavailable),
+      // then signed URLs for anything cloud-stored we don't already have. The
+      // two are independent — a dead local cache must not block cloud images.
+      const map: Record<string, string> = {};
       try {
         const lst = await storage.list(APREFIX);
         const keys = (lst && lst.keys) || [];
@@ -180,8 +187,10 @@ export default function App() {
           const key = typeof k === "string" ? k : (k as any).key;
           try { const r = await storage.get(key); return [key.replace(APREFIX, ""), r?.value]; } catch { return null; }
         }));
-        const map: Record<string, string> = {}; entries.forEach((e) => { if (e && e[1]) map[e[0]] = e[1]; }); setAssets(map);
+        entries.forEach((e) => { if (e && e[1]) map[e[0]] = e[1]; });
       } catch {}
+      if (cloudCards && supabase) { try { Object.assign(map, await signMissingAssets(supabase, cloudCards, map)); } catch {} }
+      setAssets(map);
       setLoaded(true);
     })();
     function seedState() {
@@ -265,7 +274,7 @@ export default function App() {
     setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); (n[tgt] = n[tgt] || []).push(id); return n; });
   }
   function hardDelete(id) { // permanent
-    const c = cards[id]; (c?.attachments || []).forEach((a: any) => { if (a.type !== "link") storage.delete(APREFIX + a.id).catch(() => {}); });
+    const c = cards[id]; (c?.attachments || []).forEach((a: any) => { if (a.type !== "link") { storage.delete(APREFIX + a.id).catch(() => {}); if (supabase && a.storageKey) removeAsset(supabase, a.storageKey); } });
     setOrder((p) => { const n = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); return n; });
     setCards((p) => { const n = { ...p }; delete n[id]; return n; });
   }
@@ -301,11 +310,17 @@ export default function App() {
       try { await storage.set(APREFIX + attId, dataUrl); } catch (e) {}
       setAssets((p) => ({ ...p, [attId]: dataUrl }));
       setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: [...(p[cardId].attachments || []), { id: attId, type: isImg ? "image" : "file", name: file.name, mime: file.type }] } }));
+      // cloud: upload in the background; storageKey lands on the attachment and
+      // the sync engine writes it to the row. Failure = stays local-only.
+      if (supabase && identity) {
+        const projectId = cards[cardId]?.clientId;
+        if (projectId) uploadAsset(supabase, projectId, cardId, attId, dataUrl).then((key) => { if (key) updateAtt(cardId, attId, { storageKey: key }); });
+      }
     }
   }
   function addLink(cardId) { const attId = uid("att"); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: [...(p[cardId].attachments || []), { id: attId, type: "link", name: "", url: "" }] } })); }
   function updateAtt(cardId, attId, patch) { setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.map((a) => (a.id === attId ? { ...a, ...patch } : a)) } })); }
-  function removeAtt(cardId, attId) { const a = cards[cardId]?.attachments?.find((x: any) => x.id === attId); if (a && a.type !== "link") storage.delete(APREFIX + attId).catch(() => {}); setAssets((p) => { const n = { ...p }; delete n[attId]; return n; }); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.filter((x) => x.id !== attId) } })); }
+  function removeAtt(cardId, attId) { const a = cards[cardId]?.attachments?.find((x: any) => x.id === attId); if (a && a.type !== "link") { storage.delete(APREFIX + attId).catch(() => {}); if (supabase && a.storageKey) removeAsset(supabase, a.storageKey); } setAssets((p) => { const n = { ...p }; delete n[attId]; return n; }); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.filter((x) => x.id !== attId) } })); }
 
   function saveClient(c) { setClients((p) => { const i = p.findIndex((x) => x.id === c.id); if (i === -1) return [...p, c]; const n = [...p]; n[i] = c; return n; }); if (!currentId) setCurrentId(c.id); setClientEdit(null); }
   function deleteClient(id) {

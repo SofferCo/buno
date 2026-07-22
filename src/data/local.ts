@@ -13,12 +13,17 @@ const STORE = "kv";
 
 let dbP: Promise<IDBDatabase> | null = null;
 function db(): Promise<IDBDatabase> {
-  if (!dbP) dbP = new Promise((res, rej) => {
+  if (!dbP) dbP = new Promise<IDBDatabase>((res, rej) => {
     const r = indexedDB.open(DB_NAME, 1);
     r.onupgradeneeded = () => r.result.createObjectStore(STORE);
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
-  });
+    // open() can hang indefinitely if another tab holds a versionchange
+    // (or in some private-browsing modes). Never let asset I/O freeze the
+    // whole app — fall through to a rejection so callers degrade gracefully.
+    r.onblocked = () => rej(new Error("indexeddb blocked"));
+    setTimeout(() => rej(new Error("indexeddb open timeout")), 5000);
+  }).catch((e) => { dbP = null; throw e; }); // let a later call retry a fresh open
   return dbP;
 }
 function tx(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest): Promise<any> {
