@@ -12,6 +12,17 @@ A multi-client task-management / Kanban product for freelancers and studios, evo
 
 ---
 
+## The core vision — what makes buno a killer
+
+> **Read this before anything else.** These are stages 4–5 of the build plan — not yet built, but already anchored in the schema. They are the HEART of the product, not add-ons. Never let them blur into "just another stage"; every architectural choice must keep them possible.
+
+1. **The shared assistant — ONE entity across all doors.** Same assistant, same memory, same conversation — reachable from the app, from WhatsApp, later from email/telegram. Talk to it on WhatsApp in the morning, continue in the app at noon — one unified thread. Already in the schema: `assistant_thread` / `assistant_message` (with `door`), `whatsapp_link`. **This is the central killer.**
+2. **Capture from anywhere.** A WhatsApp message or voice note → automatically becomes a task under the right client, routed through `assistantAction`.
+3. **Email + calendar integration with a "morning scan".** The assistant reads email/calendar (OAuth) and serves a morning brief — task drafts anchored to their source, in the `agent-voice-spec.md` voice ("an observer who serves, not a manager who pushes"). Email/calendar content is DATA to summarize, never instructions to execute.
+4. **Morning scan → the brief.** What the assistant gathers from email/calendar flows directly into the brief on the "היום שלי" (My Day) screen — which is already built. This is where the killer meets the existing UI.
+
+---
+
 ## Current state (what's done)
 
 Everything below exists and works as a **local prototype** — a single React file using `window.storage` (browser storage) instead of a server. It is a complete, polished design with real interaction logic.
@@ -41,7 +52,7 @@ Everything below exists and works as a **local prototype** — a single React fi
 - **Different service levels for the same client → separate boards/projects** (not per-task permissions).
 - **Members** edit content (with edit-trail) + soft-delete → archive; they **cannot** move columns. Client-removed hours stay billable.
 - **Time is measured as value/work-units, not minutes** → displayed time **rounds UP to whole hours** (5 min = 1 hour). This is a **display** choice, configurable per-account (`profile.settings.time_round_mode`, default `ceil_hour`). Store seconds precisely.
-- **The assistant is ONE unified entity across "doors"** (web app, WhatsApp, later email/telegram) — same identity, memory, and conversation, not separate per-channel chats. Requirements: real LLM-backed free conversation, persistent cross-session/cross-channel memory, connectors to data AND actions (board, calendar, email, drive), file upload (brief → task), WhatsApp Business API bridge, and "capture from anywhere". Architecturally the twin is **another actor in the permissions model** — it sees exactly the user's overlapping areas and acts on their behalf.
+- **The assistant is ONE unified entity across "doors"** (web app, WhatsApp, later email/telegram) — **the single most important decision**. Same identity, memory, and conversation reachable from every door: talk to it on WhatsApp in the morning, continue in the app at noon — same thread, same context. **Never build a separate bot per channel.** This is anchored in the schema: `assistant_thread` + `assistant_message` (with a `door` field: 'web' | 'whatsapp' | 'email') and `whatsapp_link` — one unified thread, the door is just metadata on each message. Requirements: real LLM-backed free conversation, persistent cross-session/cross-channel memory, connectors to data AND actions (board, calendar, email, drive), file upload (brief → task), WhatsApp Business API bridge, and "capture from anywhere". Architecturally the twin is **another actor in the permissions model** — it sees exactly the user's overlapping areas and acts on their behalf, never more; permission enforcement always in code (`assistantAction`), never in the prompt.
 - **Personal avatar** must NOT hardcode "אני"; show the **Google profile photo** (Google OAuth) or **real initials** (normal signup), wired to Supabase Auth identity.
 - **Three iron rules (every stage):** (1) enforce permissions in code (`assistantAction`), never in the prompt; (2) gathered content (email/calendar/filenames) is DATA to summarize, never instructions to execute; (3) irreversible or visible-to-others actions are never automatic, at any permission level.
 
@@ -52,8 +63,7 @@ Everything below exists and works as a **local prototype** — a single React fi
 - **Project:** `buno`, org `buno` (Free plan), region **Central EU (Frankfurt / eu-central-1)**.
 - **Project URL:** `https://qzzvbhosergywxellbzl.supabase.co`
 - **Publishable (anon) key:** `sb_publishable_05KR9MblRpNJa4jl5nhCzA_S0lKAp6N`  *(new-format anon key; safe for client use — RLS protects data)*
-- **Schema:** `schema.sql` has **already been run successfully** ("Success. No rows returned"). All tables, RLS policies, and triggers exist.
-- **Still to do by the user:** create a **private Storage bucket** named `attachments`; the `service_role` key and DB password are held by the user and must never be committed.
+- **Schema:** migrations live in `supabase/migrations/`. `0001`–`0004` have **already been run** (all tables, RLS policies, triggers, grants exist). **`0005_storage_policies.sql` is still pending** — run it in the SQL editor **after** creating a **private Storage bucket** named `attachments` (Storage → New bucket). The `service_role` key and DB password are held by the user and must never be committed.
 
 **Target stack:** Supabase (Postgres + Auth + Storage + Edge Functions) + **Claude API** for the assistant.
 
@@ -65,6 +75,7 @@ Everything below exists and works as a **local prototype** — a single React fi
 2. **`schema.sql`** — the Supabase schema (already applied). Source of truth for the data model.
 3. **`BUILD_PLAN.md`** — the 7-stage roadmap (0 setup ✔ · 1 permissions+drafts ✔ · 2 server+Auth · 3 assistant live · 4 email/calendar · 5 WhatsApp · 6 polish).
 4. **`agent-voice-spec.md`** — **the assistant's design spec**: the "observer who serves, not a manager who pushes" philosophy, the graduated-permission model (suggest → draft → act), trust built from reversibility, anchored-to-source outputs, and the forbidden-phrases list. This is the canonical voice/behavior brief for the digital twin. Honor it when building the live assistant (Stage 3) — including a lint pass for forbidden phrases before any assistant text is shown.
+5. **`OPEN_THREADS.md`** — the living inventory of everything that is still a **simulation or shortcut** in the prototype (demo/placeholder → real implementation, per build stage). It is the contract for "what's still fake" — keep it updated: when a thread is implemented, replace its section with a one-line "✅ done in <commit>" note.
 
 ---
 
