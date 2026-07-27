@@ -152,6 +152,23 @@ export default function App() {
     engineRef.current = eng;
     return eng;
   }
+  // pull the board fresh from the cloud and re-baseline the sync engine — used
+  // after the assistant writes cards server-side, so its drafts appear locally
+  // without the engine re-inserting them.
+  async function refreshBoardFromCloud(focusId?: string) {
+    if (!cloud) return;
+    try {
+      const { state, colMap, sharing } = await loadRemoteRetry();
+      if (state) { attachEngine(colMap, state); applyBoard({ ...state, currentId: focusId || state.currentId }); applySharing(sharing); }
+    } catch (e: any) { setSyncErr(e.message || String(e)); }
+  }
+  // the ChatPanel's live assistant hook: call the Edge Function, and if it
+  // created cards, refresh so the draft cards (with approve/reject) show up.
+  async function askAssistantLive(message: string, history: any[], threadId?: string) {
+    const res = await askAssistant(message, history, threadId, currentId);
+    if (res?.created?.length) await refreshBoardFromCloud(currentId); // stay on the current board
+    return res;
+  }
 
   const initedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -609,7 +626,7 @@ export default function App() {
       {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="העוזר שלי"><Icon name="spark" size={24} /></button>}
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
-        live={cloud} ask={askAssistant} profileName={profile.name || identity?.name || ""}
+        live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);
