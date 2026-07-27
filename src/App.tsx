@@ -174,6 +174,8 @@ export default function App() {
             applyBoard(applied);
             cloudCards = applied.cards;
             if (r.changed) eng.schedule(applied);
+            storage.delete(KEY).catch(() => {}); // consume any pre-auth local board; cloud is source of truth
+
           } else {
             // cloud board is empty — offer to import the local board, or seed
             let blob: any = null;
@@ -247,7 +249,8 @@ export default function App() {
 
   useEffect(() => {
     if (!loaded) return;
-    (async () => { try { await storage.set(KEY, JSON.stringify({ clients, currentId, columns, cards, order, lastReset, profile })); } catch (e) {} })();
+    const cacheKey = (supabase && identity) ? `${KEY}:${identity.id}` : KEY; // per-user in cloud mode: never pollute another user's local board
+    (async () => { try { await storage.set(cacheKey, JSON.stringify({ clients, currentId, columns, cards, order, lastReset, profile })); } catch (e) {} })();
     engineRef.current?.schedule({ clients, currentId, columns, cards, order, lastReset, profile });
   }, [clients, currentId, columns, cards, order, lastReset, profile, loaded]);
 
@@ -417,6 +420,7 @@ export default function App() {
         attachEngine(colMap, state);
         applyBoard(state);
         const os = ownerSharing(state.clients); setRoles(os.roles); setRosters(os.rosters);
+        storage.delete(KEY).catch(() => {});
         setImportPending(null);
       }}
       onFresh={() => {
@@ -425,6 +429,7 @@ export default function App() {
         attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
         applyBoard(st);
         const os = ownerSharing(st.clients); setRoles(os.roles); setRosters(os.rosters);
+        storage.delete(KEY).catch(() => {});
         engineRef.current!.schedule(st as any);
         setImportPending(null);
       }}
