@@ -4,7 +4,7 @@ import { Icon } from "../ui/Icon";
 import { HE_MONTHS, HE_WD } from "../../lib/constants";
 import { flexDay, todayStr } from "../../lib/date";
 
-export function CalendarPanel({ clients, cards, now, onClose, onOpen }) {
+export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: any) {
   const base = new Date();
   const [view, setView] = useState("month");
   const [vy, setVy] = useState(base.getFullYear());
@@ -27,8 +27,12 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen }) {
   Object.values(cards).forEach((c: any) => { if (c.archived || flexDay(c) || !c.deadline || !visible(c)) return; (tasksByDay[c.deadline] = tasksByDay[c.deadline] || []).push(c); });
   Object.values(tasksByDay).forEach((arr) => arr.sort((a, b) => (a.time || "99").localeCompare(b.time || "99")));
   const off = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); };
+  // Real Google Calendar events (keyed by YYYY-MM-DD) take over once connected;
+  // otherwise fall back to the labelled demo placeholders.
+  const realEvents = events && Object.keys(events).length > 0;
+  const eventsAreDemo = !realEvents;
   const demoEventsAll: Record<string, { t: string; time?: string }[]> = { [off(1)]: [{ t: "פגישת צוות · Google", time: "10:00" }], [off(2)]: [{ t: "בדיקת רופא · מייל", time: "16:30" }], [off(5)]: [{ t: "דדליין ספק · מייל" }] };
-  const demoEvents = showDemo ? demoEventsAll : {};
+  const demoEvents = realEvents ? events : (showDemo ? demoEventsAll : {});
 
   function prevM() { if (vm === 0) { setVm(11); setVy(vy - 1); } else setVm(vm - 1); }
   function nextM() { if (vm === 11) { setVm(0); setVy(vy + 1); } else setVm(vm + 1); }
@@ -60,7 +64,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen }) {
           <div className="adk-pcard-head">
             <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={24} /></button>
             <div className="titleblk">
-              <div><h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>יומן <DemoTag text="סנכרון בהדגמה" /></h2><span>{view === "month" ? `${HE_MONTHS[vm]} ${vy}` : weekTitle}</span></div>
+              <div><h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>יומן {eventsAreDemo ? <DemoTag text="סנכרון בהדגמה" /> : <span style={{ fontSize: 11, color: "var(--accent-d)", fontWeight: 700 }}>· Google</span>}</h2><span>{view === "month" ? `${HE_MONTHS[vm]} ${vy}` : weekTitle}</span></div>
             </div>
             <div className="sp" />
             <div className="adk-cal-seg">
@@ -90,7 +94,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen }) {
                       <div className="adk-cal-items g">
                         {items.slice(0, 4).map((it, k) => it.kind === "task"
                           ? <div className="adk-cal-row" key={k} onClick={() => onOpen(it.c.id)} title={`${it.c.title || "משימה"} · ${nameOf(it.c.clientId)}`}><span className="dot" style={{ background: colorOf(it.c.clientId) }} />{it.c.time && <b>{it.c.time} </b>}<span className="tx">{it.c.title || "משימה"}</span></div>
-                          : <div className="adk-cal-row demo" key={k} title="אירוע מסונכרן (הדגמה)"><span className="dot" style={{ background: "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
+                          : <div className="adk-cal-row demo" key={k} title={(eventsAreDemo ? "אירוע (הדגמה)" : "אירוע מהיומן") + (it.e.location ? " · " + it.e.location : "")}><span className="dot" style={{ background: "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
                         )}
                         {items.length > 4 && <div className="adk-cal-more">{items.length - 4}+ נוספים</div>}
                       </div>
@@ -131,7 +135,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen }) {
                           </div>
                         ); })}
                         {dEv.map((e, k) => { const mn = parseHM(e.time); const top = ((mn - 7 * 60) / 60) * hourH; return top < 0 || top > HOURS.length * hourH ? null : (
-                          <div key={"d" + k} className="adk-wk-ev demo" style={{ top, height: hourH - 6 }} title="אירוע מסונכרן (הדגמה)"><b>{e.time}</b> {e.t}</div>
+                          <div key={"d" + k} className="adk-wk-ev demo" style={{ top, height: hourH - 6 }} title={eventsAreDemo ? "אירוע מסונכרן (הדגמה)" : "אירוע מהיומן"}><b>{e.time}</b> {e.t}</div>
                         ); })}
                         {isToday && nowMin >= 7 * 60 && nowMin <= 20 * 60 && <div className="adk-wk-now" style={{ top: ((nowMin - 7 * 60) / 60) * hourH }} />}
                       </div>

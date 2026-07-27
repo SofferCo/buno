@@ -1,11 +1,18 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Icon } from "../ui/Icon";
 import { resizeImage } from "../../lib/image";
 import { initials, nameColor } from "../../lib/people";
+import { listIntegrations, connectGoogle, disconnectGoogle } from "../../data/integrations";
 
-export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut }: any) {
+export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut, cloud }: any) {
   const photoRef = useRef<any>();
   const timeRound = (profile.settings && profile.settings.timeRound) || "ceil_hour";
+  const [integ, setInteg] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const gcal = integ.find((i) => i.kind === "gcal");
+  useEffect(() => { if (cloud) listIntegrations().then(setInteg).catch(() => {}); }, [cloud]);
+  async function connect() { setBusy(true); try { await connectGoogle(); } catch { setBusy(false); } }
+  async function disconnect() { if (!confirm("לנתק את יומן Google?")) return; await disconnectGoogle(); setInteg((p) => p.filter((i) => i.kind !== "gcal")); }
   async function onPhoto(e) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch {} }
   return (
     <div className="adk-page">
@@ -57,6 +64,22 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             <div className="adk-asst-legend"><span><span className="d s" />מציע: מראה ולא נוגע</span><span><span className="d d" />טיוטה: יוצר וממתין לאישור</span><span><span className="d a" />פועל: מבצע ישירות (הפיך)</span></div>
           </div>
         </div>
+
+        {cloud && (
+          <div className="adk-pcard-foot" style={{ borderBottom: "1px solid var(--border)" }}>
+            <p className="adk-block-title"><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="calendar" size={15} /> חיבורים</span></p>
+            <div className="adk-asst-row" style={{ borderBottom: "none" }}>
+              <div className="adk-asst-info">
+                <b>יומן Google</b>
+                <span>{gcal?.status === "connected" ? `מחובר${gcal.external_id ? ` · ${gcal.external_id}` : ""}` : gcal?.status === "error" ? "החיבור פג — התחבר מחדש" : "קריאת אירועים ל‑”היום שלי” וללוח־השנה"}</span>
+              </div>
+              {gcal?.status === "connected"
+                ? <button className="adk-btn danger" style={{ margin: 0 }} onClick={disconnect}>נתק</button>
+                : <button className="adk-btn primary" disabled={busy} onClick={connect}>{busy ? "מפנה…" : "התחבר"}</button>}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--faint)", fontWeight: 600 }}>קריאה בלבד. הגישה מאובטחת בשרת — הדפדפן לא רואה טוקנים. חיבור מייל יתווסף בהמשך.</div>
+          </div>
+        )}
 
         <div className="adk-pcard-foot">
           <p className="adk-block-title">העדפות</p>

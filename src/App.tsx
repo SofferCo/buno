@@ -24,6 +24,7 @@ import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant } from "./data/assistant";
+import { fetchCalendar } from "./data/integrations";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
 import { initials, nameColor, peopleOf } from "./lib/people";
@@ -99,6 +100,8 @@ export default function App() {
   const engineRef = useRef<SyncEngine | null>(null);
   const [importPending, setImportPending] = useState<any>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
+  const [calEvents, setCalEvents] = useState<Record<string, any[]>>({});
+  const [connectToast, setConnectToast] = useState<string | null>(null);
   const asstLevel = (k) => (profile.assistant && profile.assistant[k]) || "suggest";
 
 
@@ -282,6 +285,34 @@ export default function App() {
       return (name === p.name && photo === p.photo) ? p : { ...p, name, photo };
     });
   }, [loaded, identity]);
+
+  // Google Calendar events → grouped by YYYY-MM-DD for the calendar + My Day.
+  useEffect(() => {
+    if (!cloud || !loaded) return;
+    let alive = true;
+    fetchCalendar().then((r) => {
+      if (!alive || !r.connected) return;
+      const by: Record<string, any[]> = {};
+      for (const e of r.events) {
+        const d = (e.start || "").slice(0, 10);
+        if (!d) continue;
+        const time = e.allDay ? "" : (e.start || "").slice(11, 16);
+        (by[d] = by[d] || []).push({ t: e.title, time, location: e.location });
+      }
+      setCalEvents(by);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [cloud, loaded]);
+
+  // Returning from Google consent (?connected=…) → one-line status toast.
+  useEffect(() => {
+    const c = new URLSearchParams(location.search).get("connected");
+    if (!c) return;
+    setConnectToast(c === "calendar" ? "יומן Google חובר ✓" : c === "denied" ? "החיבור בוטל." : "החיבור נכשל — נסה שוב.");
+    window.history.replaceState({}, "", location.pathname);
+    const t = setTimeout(() => setConnectToast(null), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   const running = Object.values(cards).some((c) => c.timerStart);
   useEffect(() => { if (!running) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [running]);
@@ -520,6 +551,7 @@ export default function App() {
           <Icon name="bell" size={19} />{unreadCount > 0 && <span className="ic-badge">{unreadCount}</span>}
         </button>
         {syncErr && <div className="adk-sync-err">הסנכרון לענן נתקל בשגיאה: {syncErr} · השינויים שמורים מקומית וינסו שוב</div>}
+        {connectToast && <div className="adk-connect-toast">{connectToast}</div>}
         {notifOpen && (<>
           <div className="adk-notif-scrim" onClick={() => setNotifOpen(false)} />
           <div className="adk-notif">
@@ -618,7 +650,7 @@ export default function App() {
 
 
       {calOpen && (
-        <CalendarPanel clients={clients} cards={cards} now={now}
+        <CalendarPanel clients={clients} cards={cards} now={now} events={calEvents}
           onClose={() => setCalOpen(false)}
           onOpen={(id) => setEditing(id)} />
       )}
@@ -642,7 +674,7 @@ export default function App() {
       }} />}
 
       {settingsOpen && (
-        <SettingsPanel profile={profile} account={identity?.email} onSignOut={localMode ? undefined : signOut}
+        <SettingsPanel profile={profile} account={identity?.email} cloud={cloud} onSignOut={localMode ? undefined : signOut}
           onClose={() => setSettingsOpen(false)}
           onSetName={(name) => setProfile((p) => ({ ...p, name }))}
           onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}

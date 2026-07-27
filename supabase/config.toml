@@ -2,3 +2,11 @@ project_id = "qzzvbhosergywxellbzl"
 
 [functions.chat]
 verify_jwt = true
+
+# Google redirect can't carry a Supabase JWT — the user is proven via a
+# service-key-HMAC state string instead (see the function).
+[functions.google-oauth]
+verify_jwt = false
+
+[functions.calendar]
+verify_jwt = true
