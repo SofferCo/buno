@@ -87,22 +87,22 @@ Deno.serve(async (req) => {
         external = (await who.json())?.email || "";
       } catch {}
       const scopes = String(tok.scope || "").split(" ").filter(Boolean);
+      // store the refresh token in the service-role-only secrets table
       if (tok.refresh_token) {
-        const { data: sid } = await admin.rpc("set_integration_token", { p_user: st.uid, p_kind: "gcal", p_token: tok.refresh_token });
-        await admin.from("integration").upsert({
-          user_id: st.uid, kind: "gcal", status: "connected", external_id: external,
-          vault_secret_id: sid, scopes, connected_at: new Date().toISOString(),
-        }, { onConflict: "user_id,kind" });
-      } else {
-        // token exists from a prior consent; just mark connected + scopes
-        await admin.from("integration").upsert({
-          user_id: st.uid, kind: "gcal", status: "connected", external_id: external, scopes,
-          connected_at: new Date().toISOString(),
-        }, { onConflict: "user_id,kind" });
+        const { error: secErr } = await admin.from("integration_secret").upsert(
+          { user_id: st.uid, kind: "gcal", refresh_token: tok.refresh_token, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,kind" },
+        );
+        if (secErr) return Response.redirect(backTo + "err_secret_" + encodeURIComponent(secErr.message).slice(0, 90), 302);
       }
+      const { error: upErr } = await admin.from("integration").upsert({
+        user_id: st.uid, kind: "gcal", status: "connected", external_id: external,
+        scopes, connected_at: new Date().toISOString(),
+      }, { onConflict: "user_id,kind" });
+      if (upErr) return Response.redirect(backTo + "err_row_" + encodeURIComponent(upErr.message).slice(0, 90), 302);
       return Response.redirect(backTo + "calendar", 302);
     } catch (e) {
-      return Response.redirect(backTo + "error", 302);
+      return Response.redirect(backTo + "err_" + encodeURIComponent(String(e)).slice(0, 90), 302);
     }
   }
 

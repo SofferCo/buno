@@ -5,17 +5,18 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export async function freshAccessToken(admin: SupabaseClient, userId: string, kind = "gcal"): Promise<string | null> {
   const { data: integ } = await admin.from("integration")
-    .select("vault_secret_id,status").eq("user_id", userId).eq("kind", kind).maybeSingle();
-  if (!integ?.vault_secret_id || integ.status !== "connected") return null;
-  const { data: refresh } = await admin.rpc("get_integration_token", { p_secret: integ.vault_secret_id });
-  if (!refresh) return null;
+    .select("status").eq("user_id", userId).eq("kind", kind).maybeSingle();
+  if (integ?.status !== "connected") return null;
+  const { data: sec } = await admin.from("integration_secret")
+    .select("refresh_token").eq("user_id", userId).eq("kind", kind).maybeSingle();
+  if (!sec?.refresh_token) return null;
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
       client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: refresh as string,
+      refresh_token: sec.refresh_token as string,
       grant_type: "refresh_token",
     }),
   });
