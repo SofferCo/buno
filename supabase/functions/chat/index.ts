@@ -86,9 +86,33 @@ Deno.serve(async (req) => {
   let payload: any;
   try { payload = await req.json(); } catch { return json({ error: "bad json" }, 400); }
   const userMessage = String(payload?.message || "").trim();
-  const history = Array.isArray(payload?.history) ? payload.history : [];
+  let history = Array.isArray(payload?.history) ? payload.history : [];
   const currentProjectId = payload?.currentProjectId || null;
   if (!userMessage) return json({ error: "empty message" }, 400);
+
+  // ---- ONE unified thread per user (the doors decision) ---------------------
+  // The thread is resolved HERE, not per client session: reuse the user's
+  // existing thread so web / WhatsApp / any device continue one conversation.
+  // A new thread is created only for a user who never had one.
+  let threadId: string | undefined = payload?.threadId || undefined;
+  if (!threadId) {
+    const { data: t } = await supabase.from("assistant_thread")
+      .select("id").eq("user_id", user.id).order("created_at").limit(1);
+    threadId = t?.[0]?.id;
+  }
+  if (!threadId) {
+    const { data: t } = await supabase.from("assistant_thread")
+      .insert({ user_id: user.id }).select("id").single();
+    threadId = t?.id;
+  }
+  // Fresh client (empty history) on an existing thread → continuity comes from
+  // the server: the last turns of the unified conversation, whatever the door.
+  if (!history.length && threadId) {
+    const { data: past } = await supabase.from("assistant_message")
+      .select("role,content").eq("thread_id", threadId)
+      .order("created_at", { ascending: false }).limit(12);
+    history = (past || []).reverse().map((m) => ({ role: m.role, content: m.content }));
+  }
 
   const [proj, cards, cols, prof, asst] = await Promise.all([
     supabase.from("project").select("id,name"),
@@ -161,7 +185,7 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
         tools: [CREATE_CARD_TOOL],
         messages,
       });
-      if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
+      if (res.stop_reason === "refusal") return json({ reply: "אין לי אפשרות לעזור בבקשה הזאת.", refused: true });
       const textNow = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
       if (textNow) reply = textNow;
       const toolUses = res.content.filter((b: any) => b.type === "tool_use");
@@ -181,11 +205,7 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
 
   const lint = voiceLint(reply);
   try {
-    let threadId = payload?.threadId;
-    if (!threadId) {
-      const { data: t } = await supabase.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
-      threadId = t?.id;
-    }
+    // threadId was resolved above — the user's ONE unified thread
     if (threadId) {
       await supabase.from("assistant_message").insert([
         { thread_id: threadId, role: "user", door: "web", content: userMessage },

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
+import { loadThreadHistory } from "../../data/assistant";
 
 export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
@@ -10,6 +11,19 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
+
+  // one unified thread: opening the panel resumes the SAME conversation on
+  // any device (and later — any door). Falls back to the greeting when empty.
+  useEffect(() => {
+    if (!live) return;
+    let on = true;
+    loadThreadHistory().then((h) => {
+      if (!on) return;
+      if (h.threadId) threadRef.current = h.threadId;
+      if (h.msgs.length) setMsgs(h.msgs);
+    }).catch(() => {});
+    return () => { on = false; };
+  }, []); // eslint-disable-line
   const suggestions = live
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];

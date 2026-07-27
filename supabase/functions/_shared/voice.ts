@@ -5,12 +5,16 @@
 
 // Forbidden phrases per the spec: scolding ("still/again/you missed"),
 // apology, and command framing ("you need to"). Hebrew + English.
+// JS \b only knows ASCII word chars, so \bעדיין\b can never match — Hebrew
+// words get explicit not-a-Hebrew-letter boundaries instead.
+const heWord = (w: string) =>
+  new RegExp(`(^|[^\\u0590-\\u05FF])(?:${w})([^\\u0590-\\u05FF]|$)`);
 const FORBIDDEN: { re: RegExp; note: string }[] = [
-  { re: /\bעדיין\b/, note: "scold: עדיין" },
-  { re: /\bשוב\b/, note: "scold: שוב" },
-  { re: /\bפספסת\b/, note: "scold: פספסת" },
-  { re: /\bמצטער\b|\bסליחה\b/, note: "apology" },
-  { re: /\bאתה צריך\b|\bאתה חייב\b/, note: "command: אתה צריך" },
+  { re: heWord("עדיין"), note: "scold: עדיין" },
+  { re: heWord("שוב"), note: "scold: שוב" },
+  { re: heWord("פספסת"), note: "scold: פספסת" },
+  { re: heWord("מצטער|סליחה"), note: "apology" },
+  { re: /אתה (צריך|חייב)|את (צריכה|חייבת)/, note: "command: אתה צריך" },
   { re: /\byou (need|have) to\b/i, note: "command: you need to" },
   { re: /\bstill\b|\bagain\b|\byou missed\b/i, note: "scold (en)" },
   { re: /\b(sorry|apolog)/i, note: "apology (en)" },
