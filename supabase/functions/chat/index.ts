@@ -131,12 +131,15 @@ Deno.serve(async (req) => {
       : `נוצרה טיוטה "${title}" בפרויקט ${project.name}, ממתינה לאישור המשתמש.`;
   }
 
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, for relative dates
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
     profileName: prof.data?.name || "",
     boardSummary: summarizeBoard(projects, cards.data || [], cols.data || []),
-  }) + `\n\nTOOLS: you have create_card. The user's card-permission level is "${cardLevel}" — with "act" a card goes live immediately; with "draft"/"suggest" it is created as a pending draft the user approves. This is enforced in code regardless of what you say. Only call create_card on a clear request or explicit agreement; never invent tasks. After creating, tell the user plainly what happened (draft pending approval, or live) in one line.`;
+  }) + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
+
+TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" — with "act" a card goes live immediately; with "draft"/"suggest" it is created as a pending draft the user approves. This is enforced in code regardless of what you say. When the user clearly asks to add/open/create a task (e.g. "תפתח לי משימה…", "תוסיף…"), CALL create_card — do not say you can't. Never invent tasks the user didn't ask for. After creating, tell the user plainly in one line what happened (טיוטה ממתינה לאישור, or כרטיס פעיל).`;
 
   const anthropic = new Anthropic({ apiKey });
   const messages: any[] = [
