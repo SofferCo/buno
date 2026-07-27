@@ -2,17 +2,34 @@ import { useState, useEffect, useRef } from "react";
 import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed }) {
-  const [msgs, setMsgs] = useState([{ by: "twin", text: "היי טל 👋 אני הכפיל הדיגיטלי שלך — אותה ישות פה ובוואטסאפ. אפשר לשאול על השעות, הלקוחות, ומה דחוף היום." }]);
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName }: any) {
+  const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
+  const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
-  const suggestions = ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
+  const threadRef = useRef<string | undefined>(undefined);
+  const suggestions = live
+    ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
+    : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
   const connectors = [{ n: "לוח", real: true }, { n: "יומן", real: false }, { n: "וואטסאפ", real: false }, { n: "דרייב", real: false }, { n: "מייל", real: false }];
-  function send(q?: string) {
+  async function send(q?: string) {
     const text = (q ?? input).trim(); if (!text || typing) return;
-    // demo: assistant proposes a card via the permission gate
+    // LIVE assistant (Stage 3a: conversation over the real board via Claude)
+    if (live && ask) {
+      const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
+      setMsgs((m) => [...m, { by: "me", text }]); setInput(""); setTyping(true);
+      try {
+        const res = await ask(text, history, threadRef.current);
+        if (res?.threadId) threadRef.current = res.threadId;
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע." }]);
+      } catch (e: any) {
+        setMsgs((m) => [...m, { by: "twin", text: "העוזר לא זמין כרגע. נסה שוב בעוד רגע." }]);
+      } finally { setTyping(false); }
+      return;
+    }
+    // LOCAL fallback (no cloud): demo card via the permission gate + pattern-match answers
     if (/טיוטת? משימה|צור.*משימה|פתח.*משימה/.test(text) && onAction) {
       setMsgs((m) => [...m, { by: "me", text }]); setInput(""); setTyping(true);
       setTimeout(() => {

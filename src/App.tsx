@@ -23,6 +23,7 @@ import { loadRemote, SyncEngine } from "./data/remote";
 import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
+import { askAssistant } from "./data/assistant";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
 import { initials, nameColor, peopleOf } from "./lib/people";
@@ -607,7 +608,9 @@ export default function App() {
 
       {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="העוזר שלי"><Icon name="spark" size={24} /></button>}
 
-      {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel} answer={(q) => {
+      {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
+        live={cloud} ask={askAssistant} profileName={profile.name || identity?.name || ""}
+        answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);
         const monthKey = ymOf(Date.now());
