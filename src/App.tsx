@@ -22,6 +22,7 @@ import { supabase } from "./lib/supabase";
 import { loadRemote, SyncEngine } from "./data/remote";
 import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
+import { peekInvite, acceptInvite } from "./data/invites";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
 import { initials, nameColor, peopleOf } from "./lib/people";
@@ -74,6 +75,25 @@ export default function App() {
   const [chatSeed, setChatSeed] = useState<any>(null);
   const [viewer, setViewer] = useState(false);
   const [viewerQ, setViewerQ] = useState("");
+  const [roles, setRoles] = useState<Record<string, string>>({});
+  const [rosters, setRosters] = useState<Record<string, any[]>>({});
+  const [invitePrompt, setInvitePrompt] = useState<any>(null); // {token, projectName, role, inviter}
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const cloud = !!(supabase && identity);
+  // my role on the current project: local mode / my own projects default to owner
+  const myRole = !cloud ? "owner" : (roles[currentId as string] || "owner");
+  const roleViewer = cloud && myRole === "viewer";
+  const canManageColumns = !cloud || myRole === "owner";
+  function applySharing(sharing: any) {
+    if (sharing) { setRoles(sharing.roles || {}); setRosters(sharing.rosters || {}); }
+  }
+  // fresh import / seed: I own everything I just created
+  function ownerSharing(clientList: any[]) {
+    const roles: Record<string, string> = {}; const rosters: Record<string, any[]> = {};
+    for (const c of clientList) { roles[c.id] = "owner"; rosters[c.id] = [{ userId: identity?.id, name: profile.name || identity?.name || "", photo: identity?.photo, role: "owner", self: true }]; }
+    return { roles, rosters };
+  }
   const [profile, setProfile] = useState<any>({ name: "", photo: null, assistant: { cards: "draft", calendar: "draft", outbound: "suggest" } });
   const engineRef = useRef<SyncEngine | null>(null);
   const [importPending, setImportPending] = useState<any>(null);
@@ -133,7 +153,8 @@ export default function App() {
       if (cloud) setUidMode("uuid");
       if (cloud) {
         try {
-          const { state, colMap } = await loadRemote(supabase!, identity!.id);
+          const { state, colMap, sharing } = await loadRemote(supabase!, identity!.id);
+          applySharing(sharing);
           if (state) {
             const r = applyRoutineReset(state.cards, state.order, state.lastReset);
             const applied = { ...state, cards: r.cards, order: r.order, lastReset: r.lastReset };
@@ -155,15 +176,26 @@ export default function App() {
               if (again.state) {
                 attachEngine(again.colMap, again.state);
                 applyBoard(again.state);
+                applySharing(again.sharing);
                 cloudCards = again.state.cards;
               } else {
                 const st = seedState();
                 attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
                 applyBoard(st);
+                const os = ownerSharing(st.clients); setRoles(os.roles); setRosters(os.rosters);
                 engineRef.current!.schedule(st);
               }
             }
           }
+          // a pending invite in the URL? surface it (email-bound, token-gated)
+          try {
+            const tok = new URLSearchParams(location.search).get("invite");
+            if (tok && supabase) {
+              const info = await peekInvite(supabase, tok);
+              if (info) setInvitePrompt({ token: tok, ...info });
+              else setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת.");
+            }
+          } catch { /* ignore a bad token */ }
         } catch (e: any) { setSyncErr("הטעינה מהענן נכשלה: " + (e.message || e)); }
       } else {
         try {
@@ -296,9 +328,9 @@ export default function App() {
       return n;
     });
   }
-  function renameCol(id, title) { setColumns((p) => p.map((c) => (c.id === id ? { ...c, title } : c))); }
-  function addColumn() { const id = uid("col"); setColumns((p) => [...p, { id, title: "עמודה חדשה" }]); setOrder((p) => ({ ...p, [id]: [] })); }
-  function deleteColumn(id) { setColumns((p) => p.filter((c) => c.id !== id)); setOrder((p) => { const n = { ...p }; delete n[id]; return n; }); }
+  function renameCol(id, title) { if (!canManageColumns) return; setColumns((p) => p.map((c) => (c.id === id ? { ...c, title } : c))); }
+  function addColumn() { if (!canManageColumns) return; const id = uid("col"); setColumns((p) => [...p, { id, title: "עמודה חדשה" }]); setOrder((p) => ({ ...p, [id]: [] })); }
+  function deleteColumn(id) { if (!canManageColumns) return; setColumns((p) => p.filter((c) => c.id !== id)); setOrder((p) => { const n = { ...p }; delete n[id]; return n; }); }
 
   async function addFiles(cardId, fileList: any) {
     for (const file of Array.from(fileList) as any[]) {
@@ -323,6 +355,19 @@ export default function App() {
   function removeAtt(cardId, attId) { const a = cards[cardId]?.attachments?.find((x: any) => x.id === attId); if (a && a.type !== "link") { storage.delete(APREFIX + attId).catch(() => {}); if (supabase && a.storageKey) removeAsset(supabase, a.storageKey); } setAssets((p) => { const n = { ...p }; delete n[attId]; return n; }); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.filter((x) => x.id !== attId) } })); }
 
   function saveClient(c) { setClients((p) => { const i = p.findIndex((x) => x.id === c.id); if (i === -1) return [...p, c]; const n = [...p]; n[i] = c; return n; }); if (!currentId) setCurrentId(c.id); setClientEdit(null); }
+  async function runAcceptInvite(token: string) {
+    if (!supabase || inviteBusy) return;
+    setInviteBusy(true); setInviteError(null);
+    try {
+      const projectId = await acceptInvite(supabase, token);
+      // reload the board — the newly-joined project is now visible
+      const { state, colMap, sharing } = await loadRemote(supabase, identity!.id);
+      if (state) { attachEngine(colMap, state); applyBoard({ ...state, currentId: projectId }); applySharing(sharing); setCurrentId(projectId); }
+      setInvitePrompt(null);
+      window.history.replaceState({}, "", location.pathname); // strip ?invite
+    } catch (e: any) { setInviteError(e.message || String(e)); }
+    finally { setInviteBusy(false); }
+  }
   function deleteClient(id) {
     const ids = Object.values(cards).filter((c) => c.clientId === id).map((c) => c.id);
     setCards((p) => { const n = { ...p }; ids.forEach((x) => delete n[x]); return n; });
@@ -359,6 +404,7 @@ export default function App() {
         const { state, colMap } = await pushImport(supabase!, identity!.id, importPending.blob);
         attachEngine(colMap, state);
         applyBoard(state);
+        const os = ownerSharing(state.clients); setRoles(os.roles); setRosters(os.rosters);
         setImportPending(null);
       }}
       onFresh={() => {
@@ -366,6 +412,7 @@ export default function App() {
         const st = { clients: [], currentId: null, columns: DEFAULT_COLUMNS, cards: {}, order: o, lastReset: todayStr(), profile: null };
         attachEngine({}, { clients: [], currentId: null, columns: [], cards: {}, order: {}, lastReset: "", profile: null });
         applyBoard(st);
+        const os = ownerSharing(st.clients); setRoles(os.roles); setRosters(os.rosters);
         engineRef.current!.schedule(st as any);
         setImportPending(null);
       }}
@@ -464,7 +511,7 @@ export default function App() {
         <button className="adk-float-gear bare" data-label="הגדרות" onClick={() => openPage("settings")}><Icon name="gear" size={20} /></button>
       </>)}
 
-      <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={viewer}
+      <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={viewer || roleViewer} canManageColumns={canManageColumns}
         filter={viewer && viewerQ.trim() ? ((c) => (c.title + " " + (c.description || "")).toLowerCase().includes(viewerQ.trim().toLowerCase())) : undefined}
         dnd={{ dragId, setDragId, dropCol, setDropCol, moveCard }}
         onOpenCard={(id) => setEditing(id)} onToggleTimer={toggleTimer} onAddCard={addCard}
@@ -478,14 +525,37 @@ export default function App() {
             ...((clients.find((c) => c.id === cards[editing].clientId)?.members) || []),
             ...Object.values(cards).filter((c) => c.clientId === cards[editing].clientId).flatMap((c) => peopleOf(c)),
           ].map((s) => (s || "").trim()).filter(Boolean)))}
-          profileName={viewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || "אני")}
-          viewer={viewer}
-          onClose={() => setEditing(null)} onChange={viewer ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, viewer ? "client" : "owner")}
+          profileName={viewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || identity?.name || "אני")}
+          viewer={viewer || roleViewer}
+          onClose={() => setEditing(null)} onChange={(viewer || roleViewer) ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, (viewer || roleViewer) ? "client" : "owner")}
           onToggleTimer={() => toggleTimer(editing)} onAddFiles={(fl) => addFiles(editing, fl)} onAddLink={() => addLink(editing)}
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
       </>)}
 
-      {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient} />}
+      {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient}
+        sharing={cloud && clientEdit !== "new" ? { role: roles[clientEdit.id], roster: rosters[clientEdit.id] || [], projectId: clientEdit.id, supabase, meId: identity?.id, meName: profile.name || identity?.name, origin: location.origin } : null} />}
+
+      {(invitePrompt || inviteError) && (
+        <div className="adk-overlay">
+          <div className="adk-modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <div className="adk-invite-card">
+              {invitePrompt ? (<>
+                <div className="adk-invite-mark">buno</div>
+                <p className="adk-invite-msg"><b>{invitePrompt.inviter}</b> הזמין אותך להצטרף אל<br /><b className="proj">{invitePrompt.projectName}</b><br />בתור {invitePrompt.role === "viewer" ? "צופה" : invitePrompt.role === "member" ? "חבר צוות" : "בעלים"}.</p>
+                {inviteError && <div className="adk-invite-err">{inviteError}</div>}
+                <div className="adk-invite-actions">
+                  <button className="adk-btn primary" disabled={inviteBusy} onClick={() => runAcceptInvite(invitePrompt.token)}>{inviteBusy ? "מצטרף…" : "הצטרף"}</button>
+                  <button className="adk-link" disabled={inviteBusy} onClick={() => { setInvitePrompt(null); window.history.replaceState({}, "", location.pathname); }}>אולי אחר כך</button>
+                </div>
+              </>) : (<>
+                <div className="adk-invite-mark">buno</div>
+                <div className="adk-invite-err">{inviteError}</div>
+                <div className="adk-invite-actions"><button className="adk-btn primary" onClick={() => { setInviteError(null); window.history.replaceState({}, "", location.pathname); }}>הבנתי</button></div>
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {dayOpen && (
         <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard}

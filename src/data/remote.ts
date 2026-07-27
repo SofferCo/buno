@@ -19,8 +19,15 @@ export type BoardState = {
 // ---------------------------------------------------------------------------
 // Load
 // ---------------------------------------------------------------------------
-export async function loadRemote(sb: SupabaseClient, userId: string): Promise<{ state: BoardState | null; colMap: ColMap }> {
-  const [projects, cols, cards, subs, comms, atts, hist, prof, asst] = await Promise.all([
+export type Roster = { userId: string; name: string; photo: string | null; role: string; self: boolean }[];
+export type Sharing = {
+  roles: Record<string, string>;          // projectId -> my role
+  rosters: Record<string, Roster>;         // projectId -> members (with names)
+};
+
+export async function loadRemote(sb: SupabaseClient, userId: string):
+  Promise<{ state: BoardState | null; colMap: ColMap; sharing: Sharing }> {
+  const [projects, cols, cards, subs, comms, atts, hist, prof, asst, members, memberProfiles] = await Promise.all([
     sb.from("project").select("*").order("created_at"),
     sb.from("board_column").select("*").order("position"),
     sb.from("card").select("*"),
@@ -30,10 +37,25 @@ export async function loadRemote(sb: SupabaseClient, userId: string): Promise<{ 
     sb.from("card_history").select("*").order("at"),
     sb.from("profile").select("*").eq("id", userId).maybeSingle(),
     sb.from("assistant_settings").select("*").eq("user_id", userId).maybeSingle(),
+    sb.from("project_member").select("project_id,user_id,role"),
+    sb.from("profile").select("id,name,photo_url"),   // co-members visible via 0006 policy
   ]);
-  const err = [projects, cols, cards, subs, comms, atts, hist, prof, asst].find((r) => r.error);
+  const err = [projects, cols, cards, subs, comms, atts, hist, prof, asst, members, memberProfiles].find((r) => r.error);
   if (err?.error) throw new Error(err.error.message);
-  if (!projects.data?.length) return { state: null, colMap: {} };
+
+  const nameById = new Map<string, { name: string; photo: string | null }>();
+  for (const p of memberProfiles.data || []) nameById.set(p.id, { name: p.name || "", photo: p.photo_url || null });
+  const roles: Record<string, string> = {};
+  const rosters: Record<string, Roster> = {};
+  for (const m of members.data || []) {
+    if (m.user_id === userId) roles[m.project_id] = m.role;
+    const np = nameById.get(m.user_id) || { name: "", photo: null };
+    (rosters[m.project_id] = rosters[m.project_id] || []).push({
+      userId: m.user_id, name: np.name, photo: np.photo, role: m.role, self: m.user_id === userId,
+    });
+  }
+  const sharing: Sharing = { roles, rosters };
+  if (!projects.data?.length) return { state: null, colMap: {}, sharing };
 
   const colMap: ColMap = {};
   const columnsByKey = new Map<string, any>();
@@ -72,6 +94,7 @@ export async function loadRemote(sb: SupabaseClient, userId: string): Promise<{ 
       lastReset: settings.last_reset || "", profile,
     },
     colMap,
+    sharing,
   };
 }
 

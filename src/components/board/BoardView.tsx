@@ -6,7 +6,7 @@ import { fmtClock, fmtShort } from "../../lib/format";
 import { peopleOf } from "../../lib/people";
 import { cardSeconds } from "../../lib/time";
 
-export function BoardView({ columns, order, cards, clientId, assets, now, viewer, filter, dnd, onOpenCard, onToggleTimer, onAddCard, onRenameCol, onDeleteColumn, onAddColumn }) {
+export function BoardView({ columns, order, cards, clientId, assets, now, viewer, canManageColumns = true, filter, dnd, onOpenCard, onToggleTimer, onAddCard, onRenameCol, onDeleteColumn, onAddColumn }: any) {
   const firstImage = (c) => { const a = (c.attachments || []).find((x) => x.type === "image"); return a ? assets[a.id] : null; };
   const d = dnd || {};
   return (
@@ -20,11 +20,11 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
             onDragLeave={viewer ? undefined : (e) => { if (e.currentTarget === e.target) d.setDropCol(null); }}
             onDrop={viewer ? undefined : (e) => { e.preventDefault(); if (d.dragId) d.moveCard(d.dragId, col.id); d.setDropCol(null); d.setDragId(null); }}>
             <div className="adk-col-head">
-              {viewer
+              {viewer || !canManageColumns
                 ? <span className="adk-col-title" style={{ fontWeight: 700, padding: "2px 4px" }}>{col.title}</span>
                 : <input className="adk-col-title" value={col.title} onChange={(e) => onRenameCol(col.id, e.target.value)} spellCheck={false} />}
               <span className="adk-count">{ids.length}</span>
-              {!viewer && (order[col.id] || []).length === 0 && <button className="adk-colmenu" title="מחק עמודה ריקה" onClick={() => onDeleteColumn(col.id)}>×</button>}
+              {!viewer && canManageColumns && (order[col.id] || []).length === 0 && <button className="adk-colmenu" title="מחק עמודה ריקה" onClick={() => onDeleteColumn(col.id)}>×</button>}
             </div>
             {colTime > 0 && <div className="adk-col-time">⏱ {fmtShort(colTime)} בעמודה</div>}
             <div className="adk-cards">
@@ -72,7 +72,7 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
           </div>
         );
       })}
-      {!viewer && <div className="adk-addcol"><button onClick={onAddColumn}><span className="plus">+</span><span className="lbl"> עמודה</span></button></div>}
+      {!viewer && canManageColumns && <div className="adk-addcol"><button onClick={onAddColumn}><span className="plus">+</span><span className="lbl"> עמודה</span></button></div>}
     </div>
   );
 }
