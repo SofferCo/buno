@@ -132,6 +132,18 @@ export default function App() {
     setCards(st.cards); setOrder(st.order); setLastReset(st.lastReset || todayStr());
     if (st.profile) setProfile(st.profile);
   }
+  // A stored access token whose `iat` is slightly ahead of Supabase's clock
+  // (clock skew) is rejected with "JWT issued at future" / "expired". Refresh
+  // the session once to mint a fresh token, then retry — instead of surfacing
+  // a scary sync error for something self-healing.
+  const isAuthSkew = (e: any) => /jwt|issued at future|token|expired/i.test(e?.message || "");
+  async function loadRemoteRetry() {
+    try { return await loadRemote(supabase!, identity!.id); }
+    catch (e) {
+      if (isAuthSkew(e)) { await supabase!.auth.refreshSession(); return await loadRemote(supabase!, identity!.id); }
+      throw e;
+    }
+  }
   function attachEngine(colMap: any, baseline: any) {
     const eng = new SyncEngine(supabase!, identity!.id, colMap, baseline);
     eng.onError = (e) => setSyncErr(e.message);
@@ -153,7 +165,7 @@ export default function App() {
       if (cloud) setUidMode("uuid");
       if (cloud) {
         try {
-          const { state, colMap, sharing } = await loadRemote(supabase!, identity!.id);
+          const { state, colMap, sharing } = await loadRemoteRetry();
           applySharing(sharing);
           if (state) {
             const r = applyRoutineReset(state.cards, state.order, state.lastReset);
@@ -172,7 +184,7 @@ export default function App() {
               // several open tabs race to seed a brand-new account; re-check
               // emptiness right before pushing, and let the losing tab load
               // whatever the winner already wrote
-              const again = await loadRemote(supabase!, identity!.id);
+              const again = await loadRemoteRetry();
               if (again.state) {
                 attachEngine(again.colMap, again.state);
                 applyBoard(again.state);
@@ -361,7 +373,7 @@ export default function App() {
     try {
       const projectId = await acceptInvite(supabase, token);
       // reload the board — the newly-joined project is now visible
-      const { state, colMap, sharing } = await loadRemote(supabase, identity!.id);
+      const { state, colMap, sharing } = await loadRemoteRetry();
       if (state) { attachEngine(colMap, state); applyBoard({ ...state, currentId: projectId }); applySharing(sharing); setCurrentId(projectId); }
       setInvitePrompt(null);
       window.history.replaceState({}, "", location.pathname); // strip ?invite

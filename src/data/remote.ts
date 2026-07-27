@@ -145,6 +145,10 @@ export class SyncEngine {
       this.next = null;
       this.onDirty?.(false);
     } catch (e: any) {
+      // clock-skew / stale token: refresh once so the queued retry succeeds
+      if (/jwt|issued at future|token|expired/i.test(e?.message || "")) {
+        try { await this.sb.auth.refreshSession(); } catch {}
+      }
       this.onError?.(e); // keep this.last; the next schedule() retries the same diff
     } finally { this.pushing = false; }
   }
