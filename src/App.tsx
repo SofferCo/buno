@@ -240,10 +240,11 @@ export default function App() {
       setLoaded(true);
     })();
     function seedState() {
-      const air = { id: uid("cl"), name: "Air Doctor", color: "#0E8F8C", contact: "", email: "", notes: "", logo: null };
+      // every new user gets only the personal board; the first real project is
+      // created later (onboarding — future work). No demo/example project.
       const home = { id: uid("cl"), name: "אישי / בית", color: "#8E54C4", home: true, contact: "", email: "", notes: "", logo: null };
       const o: Record<string, string[]> = {}; DEFAULT_COLUMNS.forEach((c) => (o[c.id] = []));
-      return { clients: [air, home], currentId: air.id, columns: DEFAULT_COLUMNS, cards: {}, order: o, lastReset: todayStr(), profile: null };
+      return { clients: [home], currentId: home.id, columns: DEFAULT_COLUMNS, cards: {}, order: o, lastReset: todayStr(), profile: null };
     }
   }, [identity?.id]);
 
