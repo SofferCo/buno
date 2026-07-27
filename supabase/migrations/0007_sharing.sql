@@ -1,7 +1,8 @@
--- 0006 — Stage D: sharing (projects · invites · roles).
+-- 0007 — Stage D: sharing (projects · invites · roles).
 -- Adds: co-member profile visibility, a secure invite-accept RPC, and a
 -- self-service "leave project". RLS stays the boundary; nothing here lets a
 -- user touch a project they aren't entitled to.
+-- Complements 0006_viewer_card_guard.sql (DB-level field guard for viewers).
 
 -- ---------------------------------------------------------------------------
 -- 1. Co-member profile visibility
