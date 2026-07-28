@@ -308,6 +308,7 @@ export default function App() {
   useEffect(() => {
     const c = new URLSearchParams(location.search).get("connected");
     if (!c) return;
+    try { localStorage.setItem("__lastConnected", c); } catch {}
     setConnectToast(c === "calendar" ? "יומן Google חובר ✓" : c === "denied" ? "החיבור בוטל." : "החיבור נכשל — נסה שוב.");
     window.history.replaceState({}, "", location.pathname);
     const t = setTimeout(() => setConnectToast(null), 4000);
