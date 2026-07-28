@@ -6,4 +6,13 @@ export function fmtDate(ts) { const d = new Date(ts); return `${d.getDate()}.${d
 
 export function fmtHours(sec) { return (Math.round(sec / 360) / 10).toString(); }
 
+// Print an hours figure consistently with the active rounding mode. Used by BOTH
+// the board header stat and the revenue report so their numbers always agree.
+// `hours` must already be mode-aware (from sumHours) — this only formats it.
+export function fmtModeHours(hours, mode) {
+  if (mode === "ceil_hour") return String(Math.round(hours));   // whole hours
+  if (mode === "decimal") return hours.toFixed(1);              // one decimal
+  return fmtShort(Math.round(hours * 3600));                    // exact → "5ש 30ד"
+}
+
 export function fmtMoney(n) { return "₪" + Math.round(n).toLocaleString("he-IL"); }

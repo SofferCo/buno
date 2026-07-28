@@ -21,13 +21,32 @@ export function voiceLint(text: string): { ok: boolean; hits: string[] } {
   return { ok: hits.length === 0, hits };
 }
 
-// The canonical system prompt (agent-voice-spec.md §8). Step 3a is
-// conversation-only: the board is READ context, no tools yet. The permission
-// model + pipeline lines stay so the voice is consistent when tools arrive.
-export function systemPrompt(opts: { productName: string; language: string; boardSummary: string; profileName: string }): string {
+// The canonical system prompt (agent-voice-spec.md §8). The capabilities line
+// is built DYNAMICALLY from what this specific request actually grants (tools +
+// context), so the prompt can never deny a tool it also sends. Iron rule #1
+// (honesty) applies to the model itself, not just the user.
+export type AssistantCapabilities = {
+  createCard?: boolean;      // create_card tool is sent
+  organizeCards?: boolean;   // move_card / complete_card / archive_card tools are sent
+  calendar?: boolean;        // the user's calendar is included as read-only context
+  email?: boolean;           // email content is available in this request
+};
+
+export function systemPrompt(opts: { productName: string; language: string; boardSummary: string; profileName: string; capabilities?: AssistantCapabilities }): string {
+  const caps = opts.capabilities || {};
+  const can: string[] = ["see the user's board (below) and talk about it"];
+  if (caps.createCard) can.push("create task cards (create_card tool)");
+  if (caps.organizeCards) can.push("move / complete / archive an existing card on the user's request (move_card, complete_card, archive_card tools)");
+  if (caps.calendar) can.push("read the user's calendar for the asked window (read-only context below)");
+  if (caps.email) can.push("read the email content provided in this request");
+  const cant: string[] = [];
+  if (!caps.calendar) cant.push("touch or read the calendar");
+  if (!caps.email) cant.push("read email in this conversation");
+  const cantLine = cant.length ? `\nYou cannot: ${cant.join(", ")}. If asked for one of these, say so plainly in one line and offer what you can.` : "";
   return `You are the in-board assistant ("הכפיל הדיגיטלי") of ${opts.productName}, a Kanban task manager. You speak ${opts.language} with the user (${opts.profileName || "the user"}), in masculine Hebrew, RTL.
 
-You can SEE the user's board (below) and talk about it, and you can CREATE task cards via the create_card tool (see TOOLS at the end). You cannot yet move/archive cards, read email, or touch the calendar — those arrive in a later step. If asked for something you genuinely can't do yet, say so plainly in one line and offer what you can. Never pretend an action happened that didn't.
+You can: ${can.join("; ")}.${cantLine}
+Never claim an action happened that didn't, and never claim a capability that isn't listed above for this request.
 
 VOICE — hard rules, every sentence:
 - Observe, don't command: not "you need to reply" but "נועם שאל ולא קיבל תשובה מיום שני".

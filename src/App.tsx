@@ -16,7 +16,7 @@ import { APREFIX, DEFAULT_COLUMNS, KEY, PRI_ORDER, SWATCHES } from "./lib/consta
 import { storage } from "./data/local";
 import { useAuth } from "./auth/AuthProvider";
 import { addPeriod, daysUntil, flexDay, relTime, routineKind, todayStr, ymOf } from "./lib/date";
-import { fmtMoney, fmtShort } from "./lib/format";
+import { fmtMoney, fmtShort, fmtModeHours } from "./lib/format";
 import { setUidMode, uid } from "./lib/id";
 import { supabase } from "./lib/supabase";
 import { loadRemote, SyncEngine } from "./data/remote";
@@ -30,7 +30,7 @@ import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
 import { initials, nameColor, peopleOf } from "./lib/people";
-import { cardSeconds } from "./lib/time";
+import { cardSeconds, sumHours } from "./lib/time";
 
 export default function App() {
   const { identity, signOut, localMode } = useAuth();
@@ -115,7 +115,7 @@ export default function App() {
     setEventOpen(null);
     setConnectToast(`נוצרה טיוטת הכנה תחת ${project.name}`); setTimeout(() => setConnectToast(null), 4000);
   }
-  const asstLevel = (k) => (profile.assistant && profile.assistant[k]) || "suggest";
+  const asstLevel = (k) => (profile.assistant && profile.assistant[k]) || "draft"; // align with server default (draft)
 
 
   // routine daily reset — shared by the local and cloud load paths
@@ -463,6 +463,7 @@ export default function App() {
   const curCards = clientCards(currentId);
   const openCount = curCards.filter((c) => !c.archived && cardColumn[c.id] !== "col-done").length;
   const curTime = curCards.reduce((a, c) => a + cardSeconds(c, now), 0);
+  const roundMode = (profile.settings && profile.settings.timeRound) || "ceil_hour"; // system rounding principle
   const archiveList = curCards.filter((c) => c.archived || cardColumn[c.id] === "col-done")
     .map((c) => ({ ...c, reason: c.archived ? (c.removedBy === "client" ? "client" : "deleted") : "done", when: c.archivedAt || c.createdAt }))
     .sort((a, b) => b.when - a.when);
@@ -549,7 +550,7 @@ export default function App() {
         </div>
         <div className="adk-stats" style={{ marginInlineStart: "auto" }}>
           <div className="adk-stat"><b>{openCount}</b><small>משימות</small></div>
-          <div className="adk-stat"><b>{(() => { const m = (profile.settings && profile.settings.timeRound) || "ceil_hour"; if (m === "exact") return fmtShort(curTime); if (m === "decimal") return (curTime / 3600).toFixed(1); return curTime > 0 ? Math.ceil(curTime / 3600) : 0; })()}</b><small>שעות</small></div>
+          <div className="adk-stat"><b>{fmtModeHours(sumHours(curCards, now, roundMode), roundMode)}</b><small>שעות</small></div>
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
           <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
@@ -669,7 +670,7 @@ export default function App() {
       </>)}
 
       {reportOpen && (
-        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} onClose={() => setReportOpen(false)} onOpen={(id) => { setReportOpen(false); setEditing(id); }} />
+        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} onClose={() => setReportOpen(false)} onOpen={(id) => { setReportOpen(false); setEditing(id); }} />
       )}
 
 
@@ -692,13 +693,13 @@ export default function App() {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);
         const monthKey = ymOf(Date.now());
-        const monthSec = nonArch.filter((c) => ymOf(c.createdAt) === monthKey).reduce((a, c) => a + cardSeconds(c, now), 0);
-        const perClient = clients.map((cl) => ({ cl, sec: Object.values(cards).filter((c) => c.clientId === cl.id && !c.archived).reduce((a, c) => a + cardSeconds(c, now), 0), rate: Number(cl.rate) || 0 }));
-        if (s.includes("שעות") && s.includes("חודש")) return `החודש נצברו ${Math.ceil(monthSec / 3600)} שעות עבודה על פני ${perClient.filter((p) => p.sec > 0).length} לקוחות.`;
-        if (s.includes("רווחי") || s.includes("רווח")) { const p = perClient.map((x) => ({ ...x, rev: (x.sec / 3600) * x.rate })).filter((x) => x.rev > 0).sort((a, b) => b.rev - a.rev); return p.length ? `הלקוח הכי רווחי הוא ${p[0].cl.name} — הכנסה משוערת ${fmtMoney(p[0].rev)} (${Math.ceil(p[0].sec / 3600)} שעות × ₪${p[0].rate}).` : "עדיין אין תעריפים מוגדרים ללקוחות, אז אי אפשר לחשב רווחיות. הוסף תעריף שעתי בכרטיס הלקוח."; }
+        const monthHours = sumHours(nonArch.filter((c) => ymOf(c.createdAt) === monthKey), now, roundMode);
+        const perClient = clients.map((cl) => { const cc = Object.values(cards).filter((c) => c.clientId === cl.id && !c.archived); return { cl, sec: cc.reduce((a, c) => a + cardSeconds(c, now), 0), hours: sumHours(cc, now, roundMode), rate: Number(cl.rate) || 0 }; });
+        if (s.includes("שעות") && s.includes("חודש")) return `החודש נצברו ${fmtModeHours(monthHours, roundMode)} שעות עבודה על פני ${perClient.filter((p) => p.sec > 0).length} לקוחות.`;
+        if (s.includes("רווחי") || s.includes("רווח")) { const p = perClient.map((x) => ({ ...x, rev: x.hours * x.rate })).filter((x) => x.rev > 0).sort((a, b) => b.rev - a.rev); return p.length ? `הלקוח הכי רווחי הוא ${p[0].cl.name} — הכנסה משוערת ${fmtMoney(p[0].rev)} (${fmtModeHours(p[0].hours, roundMode)} שעות × ₪${p[0].rate}).` : "עדיין אין תעריפים מוגדרים ללקוחות, אז אי אפשר לחשב רווחיות. הוסף תעריף שעתי בכרטיס הלקוח."; }
         if (s.includes("דחוף") || s.includes("היום")) { if (!planTasks.length) return "אין משימות דחופות להיום — נקי! ✦"; const top = planTasks.slice(0, 5).map((t) => `• ${t.card.title || "משימה"}${t.card.time ? ` · ${t.card.time}` : ""}`).join("\n"); return `יש ${planTasks.length} משימות בתוכנית של היום:\n${top}`; }
         if (s.includes("כמה") && s.includes("משימ")) { const open = nonArch.filter((c) => cardColumn[c.id] !== "col-done").length; return `יש ${open} משימות פתוחות כרגע על פני כל הלקוחות.`; }
-        if (s.includes("לקוח") && s.includes("שעות")) { const p = perClient.filter((x) => x.sec > 0).sort((a, b) => b.sec - a.sec); return p.length ? "שעות לפי לקוח:\n" + p.map((x) => `• ${x.cl.name}: ${Math.ceil(x.sec / 3600)} שעות`).join("\n") : "אין עדיין שעות רשומות."; }
+        if (s.includes("לקוח") && s.includes("שעות")) { const p = perClient.filter((x) => x.sec > 0).sort((a, b) => b.sec - a.sec); return p.length ? "שעות לפי לקוח:\n" + p.map((x) => `• ${x.cl.name}: ${fmtModeHours(x.hours, roundMode)} שעות`).join("\n") : "אין עדיין שעות רשומות."; }
         return "אני עדיין בהדגמה — בגרסה המחוברת (עם שרת) אענה בשפה חופשית, אזכור שיחות, ואצוף גם בוואטסאפ. בינתיים נסה: \"כמה שעות עבדתי החודש?\", \"מי הלקוח הכי רווחי?\", \"מה דחוף היום?\"";
       }} />}
 

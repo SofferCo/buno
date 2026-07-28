@@ -39,7 +39,7 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
     else { const cn = clientOf(firstTimed.t.card.clientId)?.name; briefLines.push(`הראשון בתור: "${firstTimed.t.card.title || "משימה"}" ב־${firstTimed.time}${cn ? ` · ${cn}` : ""}.`); }
   }
   if (pending?.requests) briefLines.push(`${pending.requests === 1 ? "בקשת תזמון אחת" : `${pending.requests} בקשות תזמון`} בתיבה.`);
-  if (pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מהעוזר ממתינות למבט.`);
+  if (pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מבונו ממתינות למבט.`);
 
   // a calendar event row — opens the event panel; colored by inferred project
   const EventRow = ({ e }: any) => {

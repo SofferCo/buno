@@ -290,6 +290,10 @@ Deno.serve(async (req) => {
     language: "Hebrew",
     profileName: prof.data?.name || "",
     boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()),
+    // capabilities reflect exactly what THIS request sends: the create + organize
+    // tools are always attached; calendar is context-only when we have events;
+    // email is never available in the chat. Keeps the prompt honest to itself.
+    capabilities: { createCard: true, organizeCards: true, calendar: !!calendarSummary, email: false },
   }) + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `
 
 === כללי־יסוד (מעל הכל — שבירתם שוברת אמון) ===

@@ -141,7 +141,6 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="שאל את הכפיל…" />
           <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={17} /></button>
         </div>
-        <div className="adk-chat-wa"><Icon name="comment" size={12} /> השיחה מסונכרנת עם וואטסאפ <DemoTag /></div>
       </div>
     </>
   );
