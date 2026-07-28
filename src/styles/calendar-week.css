@@ -83,3 +83,12 @@
 .adk-bc-bar.hl{background:var(--accent-d);}
 .adk-bc-x{font-size:10px;color:var(--faint);font-weight:700;white-space:nowrap;}
 .adk-pcard-foot{padding:24px 28px;border-top:1px solid var(--border);}
+
+/* fit the month view to the shell — no calendar scroll (loaded last so it
+   overrides .adk-pcard.cal{overflow-y:auto} from chat.css). Rows share the
+   available height; packed days clip to their "+N נוספים" affordance. */
+.adk-pcard.cal{overflow:hidden;display:flex;flex-direction:column;}
+.adk-pcard.cal .adk-cal-main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.adk-pcard.cal .adk-cal.g{flex:1;min-height:0;display:flex;flex-direction:column;}
+.adk-pcard.cal .adk-cal-grid.g{flex:1;min-height:0;}
+.adk-pcard.cal .adk-cal-cell.g{min-height:0;overflow:hidden;}

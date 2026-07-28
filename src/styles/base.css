@@ -1,3 +1,8 @@
+/* no page scroll, ever — the shell is a fixed-height surface that fits the
+   viewport; only inner surfaces scroll. Kills the stray outer scrollbar/white
+   frame from the default body margin. */
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
+#root{height:100%;overflow:hidden;}
 .adk,.adk *{box-sizing:border-box;font-family:'Google Sans','Assistant',system-ui,sans-serif;}
 .adk{--canvas:#EEF1F2;--surface:#FFFFFF;--surface-2:#F7F9F9;--ink:#17282F;--muted:#647079;--faint:#93A0A6;--border:#E1E7E9;--accent:#0E8F8C;--accent-d:#0A6F6D;--accent-soft:#E1F1F0;--rec:#E8664A;--rec-soft:#FBE7E1;direction:rtl;background:var(--canvas);color:var(--ink);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;}
 .adk-top{display:flex;align-items:center;gap:14px;padding:13px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30;flex-wrap:wrap;}

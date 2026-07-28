@@ -157,11 +157,17 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: 
                 <span className="sw" style={{ background: c.color }} />{c.name}
               </label>
             ))}
-            <div className="adk-cal-side-t" style={{ marginTop: 14 }}>מקורות</div>
-            <label className="adk-cal-chk">
-              <input type="checkbox" checked={showDemo} onChange={() => setShowDemo((v) => !v)} style={{ accentColor: "#C9821A" }} />
-              <span className="sw" style={{ background: "#C9821A" }} />יומן/מייל <DemoTag />
-            </label>
+            {eventsAreDemo && (<>
+              <div className="adk-cal-side-t" style={{ marginTop: 14 }}>מקורות</div>
+              <label className="adk-cal-chk">
+                <input type="checkbox" checked={showDemo} onChange={() => setShowDemo((v) => !v)} style={{ accentColor: "#C9821A" }} />
+                <span className="sw" style={{ background: "#C9821A" }} />יומן/מייל <DemoTag />
+              </label>
+            </>)}
+            {!eventsAreDemo && (<>
+              <div className="adk-cal-side-t" style={{ marginTop: 14 }}>מקורות</div>
+              <div className="adk-cal-chk" style={{ cursor: "default" }}><span className="sw" style={{ background: "#0E8F8C" }} />Google — יומן</div>
+            </>)}
           </div>
 
           {view === "month" && (
