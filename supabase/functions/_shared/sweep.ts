@@ -8,7 +8,7 @@
 // amber DRAFTS the user approves; every card anchors to origin.ref (dedupe).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
-import { freshAccessToken, listGmailCandidates, listCalendarEvents } from "./google.ts";
+import { freshAccessToken, listGmailCandidates, listCalendarEvents, fetchEmailRefs } from "./google.ts";
 import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "./orgboard.ts";
 
 const SUBMIT_TOOL = {
@@ -104,7 +104,21 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
           title, creator: "buno", description: String(cand?.context || ""),
           origin: { type: "email", ref: threadId, quote: String(cand?.context || "").slice(0, 140) }, draft,
         }).select("id,title").single();
-        if (!error && row) created.push({ id: row.id, title: row.title, project: project.name });
+        if (!error && row) {
+          created.push({ id: row.id, title: row.title, project: project.name });
+          // attach the email's reference links + a deep-link to the original
+          // message, so the actual image/file is one click away (best-effort).
+          try {
+            const msgId = byThread.get(threadId)?.id;
+            if (msgId) {
+              const refs = await fetchEmailRefs(access, msgId);
+              const hasImg = refs.attachments.some((a) => /image\//i.test(a.mime));
+              const rows: any[] = [{ card_id: row.id, type: "link", name: hasImg ? "המייל המקורי (כולל התמונה) ב‑Gmail" : "המייל המקורי ב‑Gmail", url: refs.gmailUrl }];
+              for (const l of refs.links) rows.push({ card_id: row.id, type: "link", name: (l.match(/^https?:\/\/([^/]+)/i)?.[1] || "קישור").replace(/^www\./, ""), url: l });
+              await admin.from("attachment").insert(rows);
+            }
+          } catch { /* attachments best-effort */ }
+        }
       }
     } catch { /* triage optional */ }
   }

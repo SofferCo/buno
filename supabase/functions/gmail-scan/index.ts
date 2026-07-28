@@ -10,7 +10,7 @@
 // integration_secret, server-side only).
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { freshAccessToken, listGmailCandidates } from "../_shared/google.ts";
+import { freshAccessToken, listGmailCandidates, fetchEmailRefs } from "../_shared/google.ts";
 import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "../_shared/orgboard.ts";
 import { voiceLint } from "../_shared/voice.ts";
 
@@ -148,6 +148,18 @@ ${escaped}`;
     }).select("id,title").single();
     if (error) { skipped++; continue; } // unique(origin.ref) violation = already exists → skip
     created.push({ id: row.id, title: row.title, project: project.name });
+    // pull the email's reference links + a deep-link to the original message, so
+    // the actual image/file the sender attached is one click away (best-effort).
+    try {
+      const msgId = byThread.get(threadId)?.id;
+      if (msgId) {
+        const refs = await fetchEmailRefs(access, msgId);
+        const hasImg = refs.attachments.some((a) => /image\//i.test(a.mime));
+        const rows: any[] = [{ card_id: row.id, type: "link", name: hasImg ? "המייל המקורי (כולל התמונה) ב‑Gmail" : "המייל המקורי ב‑Gmail", url: refs.gmailUrl }];
+        for (const l of refs.links) rows.push({ card_id: row.id, type: "link", name: (l.match(/^https?:\/\/([^/]+)/i)?.[1] || "קישור").replace(/^www\./, ""), url: l });
+        await admin.from("attachment").insert(rows);
+      }
+    } catch { /* attachments best-effort */ }
   }
 
   return json({ connected: true, considered: candidates.length, proposed: proposed.length, created, skipped, level: cardLevel });

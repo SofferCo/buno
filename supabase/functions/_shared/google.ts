@@ -53,6 +53,7 @@ export async function listGmailCandidates(accessToken: string, maxThreads = 40) 
     const m = await r.json();
     const h = (name: string) => (m.payload?.headers || []).find((x: any) => x.name === name)?.value || "";
     out.push({
+      id: m.id,
       threadId: m.threadId,
       from: String(h("From")).slice(0, 160),
       subject: String(h("Subject")).slice(0, 200),
@@ -62,6 +63,55 @@ export async function listGmailCandidates(accessToken: string, maxThreads = 40) 
     });
   }));
   return out;
+}
+
+// Decode a Gmail base64url body part to a UTF-8 string.
+function b64urlDecode(data: string): string {
+  try {
+    const bin = atob(String(data).replace(/-/g, "+").replace(/_/g, "/"));
+    return new TextDecoder("utf-8").decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  } catch { return ""; }
+}
+
+// For a SINGLE kept email (post-triage, minimal exposure), pull what matters to
+// a task: the reference LINKS in the body (design refs are usually Drive/Figma/
+// Dropbox/WeTransfer links), the names of file/image attachments, and a
+// deep-link back to the original Gmail message so the user can view the actual
+// image in one click. Gathered content is DATA — never instructions.
+export async function fetchEmailRefs(accessToken: string, messageId: string): Promise<{ links: string[]; attachments: { name: string; mime: string }[]; gmailUrl: string }> {
+  const gmailUrl = `https://mail.google.com/mail/u/0/#all/${messageId}`;
+  try {
+    const u = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`;
+    const r = await fetch(u, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!r.ok) return { links: [], attachments: [], gmailUrl };
+    const m = await r.json();
+    let text = "";
+    const atts: { name: string; mime: string }[] = [];
+    const walk = (p: any) => {
+      if (!p) return;
+      if (p.filename && p.body?.attachmentId) atts.push({ name: String(p.filename).slice(0, 120), mime: p.mimeType || "" });
+      if ((p.mimeType === "text/plain" || p.mimeType === "text/html") && p.body?.data) text += " " + b64urlDecode(p.body.data);
+      (p.parts || []).forEach(walk);
+    };
+    walk(m.payload);
+    const raw = text.match(/https?:\/\/[^\s"'<>)]+/gi) || [];
+    const seen = new Set<string>();
+    const links: string[] = [];
+    for (let url of raw) {
+      url = url.replace(/[.,;]+$/, "");
+      if (url.length > 500) continue;
+      // drop tracking / unsubscribe / pixels — keep real reference links
+      if (/unsubscribe|list-manage|mailchimp|sendgrid|sparkpost|\/track|\/wf\/|utm_|beacon|pixel|\/open\?|\.gif(\?|$)|googleusercontent\.com\/[^\s]*proxy/i.test(url)) continue;
+      const key = url.slice(0, 200);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      links.push(url);
+      if (links.length >= 6) break;
+    }
+    return { links, attachments: atts.slice(0, 8), gmailUrl };
+  } catch {
+    return { links: [], attachments: [], gmailUrl };
+  }
 }
 
 // Read calendar events in a time window. Returns a compact, escaped shape —
