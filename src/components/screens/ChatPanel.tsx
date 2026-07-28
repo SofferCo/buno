@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
+import { loadAssistantThread } from "../../data/assistant";
 
 export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
@@ -10,6 +11,15 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
+  // one continuous conversation: on open, load the ongoing twin thread so the
+  // chat isn't empty each time. Falls back to the greeting for a first-timer.
+  useEffect(() => {
+    if (!live) return;
+    loadAssistantThread().then((r) => {
+      threadRef.current = r.threadId;
+      if (r.messages.length) setMsgs(r.messages as any);
+    }).catch(() => {});
+  }, [live]);
   const suggestions = live
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];

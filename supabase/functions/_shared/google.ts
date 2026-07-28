@@ -81,6 +81,19 @@ export async function listCalendarEvents(accessToken: string, timeMinISO: string
       start: e.start?.dateTime || e.start?.date || null,
       end: e.end?.dateTime || e.end?.date || null,
       allDay: !e.start?.dateTime,
-      location: e.location ? String(e.location).slice(0, 120) : null,
+      location: e.location ? String(e.location).slice(0, 160) : null,
+      description: e.description ? String(e.description).slice(0, 600) : null,
+      meetLink: e.hangoutLink || null,
+      recurring: !!e.recurringEventId,
+      organizer: e.organizer?.email || null,
+      // attendees: email + name + response — the signal for project inference.
+      // DATA only; never treated as instructions.
+      attendees: (e.attendees || []).slice(0, 20).map((a: any) => ({
+        email: String(a.email || "").slice(0, 160),
+        name: a.displayName ? String(a.displayName).slice(0, 80) : null,
+        status: a.responseStatus || "needsAction",
+        organizer: !!a.organizer,
+        self: !!a.self,
+      })),
     }));
 }

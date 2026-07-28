@@ -15,6 +15,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
+import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -100,6 +101,26 @@ Deno.serve(async (req) => {
   const projects = proj.data || [];
   const cardLevel = (asst.data?.cards || "draft") as "suggest" | "draft" | "act"; // server-side matrix
 
+  // ---- calendar context: the twin must see the schedule, not just the board.
+  // Read-only, next 7 days, summarized as DATA. Uses the service role only to
+  // fetch the user's token (server-side); the browser never sees it.
+  let calendarSummary = "";
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const access = await freshAccessToken(admin, user.id, "gcal");
+    if (access) {
+      const now = new Date();
+      const events = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
+      if (events.length) {
+        calendarSummary = events.slice(0, 30).map((e: any) => {
+          const when = e.allDay ? (e.start || "").slice(0, 10) : (e.start || "").replace("T", " ").slice(0, 16);
+          const who = (e.attendees || []).filter((a: any) => !a.self).map((a: any) => a.email).slice(0, 6).join(", ");
+          return `• ${when} · ${e.title}${who ? ` · עם: ${who}` : ""}${e.meetLink ? " · Meet" : ""}`;
+        }).join("\n");
+      }
+    }
+  } catch { /* calendar optional */ }
+
   // ---- server-side card creation (the enforcement point) --------------------
   const created: { id: string; title: string; project: string; level: string }[] = [];
   async function doCreateCard(input: any): Promise<string> {
@@ -137,7 +158,7 @@ Deno.serve(async (req) => {
     language: "Hebrew",
     profileName: prof.data?.name || "",
     boardSummary: summarizeBoard(projects, cards.data || [], cols.data || []),
-  }) + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
+  }) + (calendarSummary ? `\n\n=== היומן שלך (7 ימים קרובים, קריאה בלבד — DATA) ===\n${calendarSummary}\n=== סוף היומן ===\nכשנשאל על "היום", פגישות, או מה קורה — שקלל גם את היומן, לא רק את הלוח. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 
 TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" — with "act" a card goes live immediately; with "draft"/"suggest" it is created as a pending draft the user approves. This is enforced in code regardless of what you say. When the user clearly asks to add/open/create a task (e.g. "תפתח לי משימה…", "תוסיף…"), CALL create_card — do not say you can't. Never invent tasks the user didn't ask for. After creating, tell the user plainly in one line what happened (טיוטה ממתינה לאישור, or כרטיס פעיל).`;
 
@@ -181,7 +202,13 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
 
   const lint = voiceLint(reply);
   try {
+    // one continuous conversation: reuse the passed thread, else the user's
+    // latest, else create the first one. The twin is a single entity.
     let threadId = payload?.threadId;
+    if (!threadId) {
+      const { data: existing } = await supabase.from("assistant_thread").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      threadId = existing?.id;
+    }
     if (!threadId) {
       const { data: t } = await supabase.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
       threadId = t?.id;

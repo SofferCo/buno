@@ -4,7 +4,7 @@ import { Icon } from "../ui/Icon";
 import { HE_MONTHS, HE_WD } from "../../lib/constants";
 import { flexDay, todayStr } from "../../lib/date";
 
-export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: any) {
+export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEvent, events }: any) {
   const base = new Date();
   const [view, setView] = useState("month");
   const [vy, setVy] = useState(base.getFullYear());
@@ -52,7 +52,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: 
   const td = new Date();
   const todayItems: any[] = [
     ...(tasksByDay[today] || []).map((c) => ({ kind: "task", time: c.time || "", title: c.title || "משימה", card: c })),
-    ...(demoEvents[today] || []).map((e) => ({ kind: "demo", time: e.time || "", title: e.t })),
+    ...(demoEvents[today] || []).map((e) => ({ kind: "demo", time: e.time || "", title: e.t, e })),
   ].sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
 
   const weekTitle = (() => { const a = weekDays[0], b = weekDays[6]; return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} ${HE_MONTHS[a.getMonth()]}` : `${a.getDate()} ${HE_MONTHS[a.getMonth()]} – ${b.getDate()} ${HE_MONTHS[b.getMonth()]}`; })();
@@ -94,7 +94,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: 
                       <div className="adk-cal-items g">
                         {items.slice(0, 4).map((it, k) => it.kind === "task"
                           ? <div className="adk-cal-row" key={k} onClick={() => onOpen(it.c.id)} title={`${it.c.title || "משימה"} · ${nameOf(it.c.clientId)}`}><span className="dot" style={{ background: colorOf(it.c.clientId) }} />{it.c.time && <b>{it.c.time} </b>}<span className="tx">{it.c.title || "משימה"}</span></div>
-                          : <div className="adk-cal-row demo" key={k} title={(eventsAreDemo ? "אירוע (הדגמה)" : "אירוע מהיומן") + (it.e.location ? " · " + it.e.location : "")}><span className="dot" style={{ background: "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
+                          : <div className={"adk-cal-row demo" + (eventsAreDemo ? "" : " ev")} key={k} onClick={(e) => { if (!eventsAreDemo) { e.stopPropagation(); onOpenEvent?.(it.e); } }} title={(eventsAreDemo ? "אירוע (הדגמה)" : "אירוע מהיומן") + (it.e.location ? " · " + it.e.location : "")}><span className="dot" style={{ background: (it.e.projectId && colorOf(it.e.projectId)) || "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
                         )}
                         {items.length > 4 && <div className="adk-cal-more">{items.length - 4}+ נוספים</div>}
                       </div>
@@ -135,7 +135,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: 
                           </div>
                         ); })}
                         {dEv.map((e, k) => { const mn = parseHM(e.time); const top = ((mn - 7 * 60) / 60) * hourH; return top < 0 || top > HOURS.length * hourH ? null : (
-                          <div key={"d" + k} className="adk-wk-ev demo" style={{ top, height: hourH - 6 }} title={eventsAreDemo ? "אירוע מסונכרן (הדגמה)" : "אירוע מהיומן"}><b>{e.time}</b> {e.t}</div>
+                          <div key={"d" + k} className="adk-wk-ev demo" style={{ top, height: hourH - 6, cursor: eventsAreDemo ? "default" : "pointer", ...(e.projectId && colorOf(e.projectId) ? { background: colorOf(e.projectId) + "22", borderInlineStart: `3px solid ${colorOf(e.projectId)}` } : {}) }} onClick={() => { if (!eventsAreDemo) onOpenEvent?.(e); }} title={eventsAreDemo ? "אירוע מסונכרן (הדגמה)" : "אירוע מהיומן"}><b>{e.time}</b> {e.t}</div>
                         ); })}
                         {isToday && nowMin >= 7 * 60 && nowMin <= 20 * 60 && <div className="adk-wk-now" style={{ top: ((nowMin - 7 * 60) / 60) * hourH }} />}
                       </div>
@@ -179,10 +179,10 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, events }: 
               <div className="adk-cal-agenda">
                 {todayItems.length === 0 && <div className="adk-cal-empty">אין משימות להיום ✦</div>}
                 {todayItems.map((it, k) => (
-                  <div className={"adk-agenda-row" + (it.kind === "demo" ? " demo" : "")} key={k} onClick={it.card ? () => onOpen(it.card.id) : undefined}>
+                  <div className={"adk-agenda-row" + (it.kind === "demo" ? " demo" : "")} key={k} onClick={it.card ? () => onOpen(it.card.id) : (!eventsAreDemo && it.e ? () => onOpenEvent?.(it.e) : undefined)}>
                     <div className="tm">{it.time || "—"}</div>
-                    <div className="bar" style={{ background: it.kind === "task" ? colorOf(it.card.clientId) : "#C9821A" }} />
-                    <div className="ttl">{it.title}{it.kind === "task" && <span className="cl">{nameOf(it.card.clientId)}</span>}</div>
+                    <div className="bar" style={{ background: it.kind === "task" ? colorOf(it.card.clientId) : ((it.e?.projectId && colorOf(it.e.projectId)) || "#C9821A") }} />
+                    <div className="ttl">{it.title}{it.kind === "task" && <span className="cl">{nameOf(it.card.clientId)}</span>}{it.kind === "demo" && it.e?.projectId && <span className="cl">{nameOf(it.e.projectId)}</span>}</div>
                   </div>
                 ))}
               </div>

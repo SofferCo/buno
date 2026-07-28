@@ -25,6 +25,8 @@ import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant } from "./data/assistant";
 import { fetchCalendar } from "./data/integrations";
+import { inferEventProjectId } from "./lib/inferProject";
+import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
 import { initials, nameColor, peopleOf } from "./lib/people";
@@ -102,6 +104,15 @@ export default function App() {
   const [syncErr, setSyncErr] = useState<string | null>(null);
   const [calEvents, setCalEvents] = useState<Record<string, any[]>>({});
   const [connectToast, setConnectToast] = useState<string | null>(null);
+  const [eventOpen, setEventOpen] = useState<any>(null); // {ev, projectId}
+  function openEvent(item: any) { setEventOpen({ ev: item.ev || item, projectId: item.projectId }); }
+  function prepTaskFromEvent(ev: any, project: any) {
+    const when = ev.start ? new Date(ev.start) : null;
+    const dl = when ? `${when.getFullYear()}-${String(when.getMonth()+1).padStart(2,"0")}-${String(when.getDate()).padStart(2,"0")}` : todayStr();
+    assistantAction("create_card", { clientId: project.id, title: `הכנה ל${ev.title}`, description: `לקראת הפגישה ביומן${(ev.attendees||[]).length?` · עם ${ev.attendees.filter((a:any)=>!a.self).map((a:any)=>a.email).slice(0,4).join(", ")}`:""}`, deadline: dl, origin: { type: "calendar", ref: "cal-" + (ev.id||when?.getTime()) } });
+    setEventOpen(null);
+    setConnectToast(`נוצרה טיוטת הכנה תחת ${project.name}`); setTimeout(() => setConnectToast(null), 4000);
+  }
   const asstLevel = (k) => (profile.assistant && profile.assistant[k]) || "suggest";
 
 
@@ -297,12 +308,13 @@ export default function App() {
         const d = (e.start || "").slice(0, 10);
         if (!d) continue;
         const time = e.allDay ? "" : (e.start || "").slice(11, 16);
-        (by[d] = by[d] || []).push({ t: e.title, time, location: e.location });
+        const projectId = inferEventProjectId(e.attendees || [], clients);
+        (by[d] = by[d] || []).push({ t: e.title, time, location: e.location, ev: e, projectId });
       }
       setCalEvents(by);
     }).catch(() => {});
     return () => { alive = false; };
-  }, [cloud, loaded]);
+  }, [cloud, loaded, clients.length]); // re-run once projects are loaded so inference has them
 
   // Returning from Google consent (?connected=…) → one-line status toast.
   useEffect(() => {
@@ -600,6 +612,8 @@ export default function App() {
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
       </>)}
 
+      {eventOpen && <EventPanel ev={eventOpen.ev} project={clients.find((c) => c.id === eventOpen.projectId) || null} onClose={() => setEventOpen(null)} onPrepTask={prepTaskFromEvent} />}
+
       {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient}
         sharing={cloud && clientEdit !== "new" ? { role: roles[clientEdit.id], roster: rosters[clientEdit.id] || [], projectId: clientEdit.id, supabase, meId: identity?.id, meName: profile.name || identity?.name, origin: location.origin } : null} />}
 
@@ -626,7 +640,7 @@ export default function App() {
       )}
 
       {dayOpen && (
-        <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard} events={calEvents}
+        <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
           profileName={profile.name}
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
           onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}
@@ -652,7 +666,7 @@ export default function App() {
       {calOpen && (
         <CalendarPanel clients={clients} cards={cards} now={now} events={calEvents}
           onClose={() => setCalOpen(false)}
-          onOpen={(id) => setEditing(id)} />
+          onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}
 
       {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="העוזר שלי"><Icon name="spark" size={24} /></button>}

@@ -28,3 +28,26 @@
 .adk-invite-err{margin:10px 0;background:var(--rec-soft);color:var(--rec);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;line-height:1.5;}
 .adk-invite-actions{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:18px;}
 .adk-invite-actions .adk-btn{width:100%;}
+
+/* calendar event detail panel */
+.adk-ev-badge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--accent-d);background:var(--accent-soft);padding:4px 10px;border-radius:8px;}
+.adk-ev-title{font-size:21px;font-weight:800;color:var(--ink);margin:0;letter-spacing:-.01em;}
+.adk-ev-when{font-size:13.5px;color:var(--muted);font-weight:600;margin-top:-6px;}
+.adk-ev-row{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink);}
+.adk-ev-row .lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);min-width:56px;}
+.adk-ev-proj{display:inline-flex;align-items:center;gap:7px;font-weight:700;}
+.adk-ev-proj .dot{width:10px;height:10px;border-radius:3px;}
+.adk-ev-proj.none{color:var(--faint);font-weight:600;}
+.adk-ev-join{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border-radius:11px;padding:10px 16px;font-weight:700;font-size:14px;text-decoration:none;width:fit-content;}
+.adk-ev-join:hover{background:var(--accent-d);}
+.adk-ev-sec{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px;}
+.adk-ev-attendees{border-top:1px solid var(--border);padding-top:14px;}
+.adk-ev-att{display:flex;align-items:center;gap:10px;padding:5px 0;}
+.adk-ev-att .who{flex:1;min-width:0;display:flex;flex-direction:column;}
+.adk-ev-att .who b{font-size:13.5px;font-weight:700;color:var(--ink);}
+.adk-ev-att .who span{font-size:11.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.adk-ev-att .resp{font-size:12px;font-weight:700;flex:none;}
+.adk-ev-desc{border-top:1px solid var(--border);padding-top:14px;}
+.adk-ev-desc .txt{font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow-y:auto;}
+.adk-cal-row.ev{cursor:pointer;}
+.adk-cal-row.ev:hover{background:var(--surface-2);}
