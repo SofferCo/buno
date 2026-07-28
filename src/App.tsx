@@ -652,7 +652,7 @@ export default function App() {
 
       {dayOpen && (
         <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
-          profileName={profile.name}
+          profileName={profile.name} roundMode={roundMode} capacity={(profile.settings && profile.settings.dailyCapacity) || 6}
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
           onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}
           onClose={() => setDayOpen(false)}

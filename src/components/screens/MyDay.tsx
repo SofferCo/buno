@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Icon } from "../ui/Icon";
 import { PRIORITY } from "../../lib/constants";
 import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
-import { fmtClock } from "../../lib/format";
-import { cardSeconds } from "../../lib/time";
+import { fmtClock, fmtModeHours } from "../../lib/format";
+import { cardSeconds, sumHours } from "../../lib/time";
 
-export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, onOpenEvent, onAsk, onClose, onOpenCard, onToggleTimer, onDone }: any) {
+export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onAsk, onClose, onOpenCard, onToggleTimer, onDone }: any) {
   const clientOf = (id) => clients.find((c) => c.id === id);
   const [q, setQ] = useState("");
   function ask() { const t = q.trim(); if (!t) return; onAsk(t); setQ(""); }
@@ -40,6 +40,9 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
   }
   if (pending?.requests) briefLines.push(`${pending.requests === 1 ? "בקשת תזמון אחת" : `${pending.requests} בקשות תזמון`} בתיבה.`);
   if (pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מבונו ממתינות למבט.`);
+  // הרא האצ'י בו (P1.7): מעל 80% מהקיבולת היומית — לציין שהיום צפוף (אותה בדיקה כמו ב־sweep)
+  const planHours = sumHours(planTasks.map((t: any) => t.card), now, roundMode);
+  if (capacity && planHours > 0.8 * capacity) briefLines.push(`היום מתוכנן ל־${fmtModeHours(planHours, roundMode)} שעות מתוך ${capacity} — צפוף. יש משהו שיכול לחכות למחר?`);
 
   // a calendar event row — opens the event panel; colored by inferred project
   const EventRow = ({ e }: any) => {

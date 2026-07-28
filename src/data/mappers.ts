@@ -99,6 +99,7 @@ export function profileToRow(profile: any, lastReset: string, currentId: string 
     photo_url: profile.photo || null,
     settings: {
       time_round_mode: profile.settings?.timeRound || "ceil_hour",
+      daily_capacity_hours: Number(profile.settings?.dailyCapacity) || 6,
       last_reset: lastReset || null,
       current_project: currentId || null,
     },
@@ -111,6 +112,6 @@ export function rowToProfile(r: any, asst: any) {
     assistant: asst
       ? { cards: asst.cards, calendar: asst.calendar, outbound: asst.outbound }
       : { cards: "draft", calendar: "draft", outbound: "suggest" },
-    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour" },
+    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour", dailyCapacity: Number(r?.settings?.daily_capacity_hours) || 6 },
   };
 }

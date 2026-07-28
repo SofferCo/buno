@@ -7,6 +7,7 @@ import { listIntegrations, connectGoogle, disconnectGoogle, scanGmail, hasGmailS
 export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut, cloud, onScanned }: any) {
   const photoRef = useRef<any>();
   const timeRound = (profile.settings && profile.settings.timeRound) || "ceil_hour";
+  const capacity = Number(profile.settings && profile.settings.dailyCapacity) || 6;
   const [integ, setInteg] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -119,6 +120,14 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--faint)", fontWeight: 600 }}>עבודה נמדדת כערך, לא כדקות — לכן ברירת המחדל מעגלת כלפי מעלה לשעה שלמה.</div>
+          <div className="adk-asst-row" style={{ borderBottom: "none" }}>
+            <div className="adk-asst-info"><b>קיבולת יומית</b><span>מעל 80% מהיום — בונו יציין שהיום צפוף</span></div>
+            <div className="adk-asst-seg">
+              <button className="lvl" onClick={() => onSetPref("dailyCapacity", Math.max(1, capacity - 1))}>−</button>
+              <b style={{ minWidth: 44, textAlign: "center" }}>{capacity} ש׳</b>
+              <button className="lvl" onClick={() => onSetPref("dailyCapacity", Math.min(16, capacity + 1))}>+</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
