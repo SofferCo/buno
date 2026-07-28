@@ -4,7 +4,7 @@
 import { supabase } from "../lib/supabase";
 
 export type CreatedCard = { id: string; title: string; project: string; level: string };
-export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; events?: any[] };
+export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[] };
 
 export async function askAssistant(
   message: string,

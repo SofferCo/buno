@@ -3,7 +3,24 @@ import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { loadAssistantThread } from "../../data/assistant";
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent }: any) {
+// buno writes plain Hebrew, but the model still occasionally emits Markdown
+// (**bold**, #, *). Render **bold** as bold and strip the rest so the bubble
+// reads clean — no raw asterisks (self-audit: "כל הכוכביות האלה — לא נעים").
+function renderLine(line: string, k: number) {
+  const s = line.replace(/^\s*#{1,6}\s*/, "").replace(/^\s*[-*]\s+/, "• ");
+  const parts = s.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <div key={k}>
+      {parts.map((p, i) => {
+        const b = p.match(/^\*\*([^*]+)\*\*$/);
+        if (b) return <b key={i}>{b[1]}</b>;
+        return <span key={i}>{p.replace(/[*_`]/g, "")}</span>;
+      })}
+    </div>
+  );
+}
+
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno, הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -83,14 +100,15 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             <div key={i} className={"adk-msg " + m.by}>
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="spark" size={13} /></div>}
               <div className="adk-bubble">
-                {m.text.split("\n").map((l, k) => <div key={k}>{l}</div>)}
+                {m.text.split("\n").map((l: string, k: number) => renderLine(l, k))}
                 {m.events && m.events.length > 0 && (
                   <div className="adk-chat-cards">
                     {m.events.map((e: any, ei: number) => {
                       const t = e.allDay ? "כל היום" : (e.start || "").slice(11, 16);
+                      const col = eventColor?.(e);
                       return (
                         <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}>
-                          <span className="ic cal"><Icon name="calendar" size={12} /></span>
+                          <span className="ic cal" style={col ? { background: col } : undefined}><Icon name="calendar" size={12} /></span>
                           <span className="tx"><b>{e.title}</b><em>{t}{(e.attendees || []).some((a: any) => !a.self) ? " · פגישה" : ""}</em></span>
                           <span className="go">›</span>
                         </button>
@@ -100,13 +118,16 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                 )}
                 {m.cards && m.cards.length > 0 && (
                   <div className="adk-chat-cards">
-                    {m.cards.map((c: any) => (
-                      <button key={c.id} className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
-                        <span className="ic"><Icon name="spark" size={12} /></span>
-                        <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
-                        <span className="go">›</span>
-                      </button>
-                    ))}
+                    {m.cards.map((c: any) => {
+                      const col = cardColor?.(c);
+                      return (
+                        <button key={c.id} className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
+                          <span className="ic" style={col ? { background: col } : undefined}><Icon name="spark" size={12} /></span>
+                          <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
+                          <span className="go">›</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

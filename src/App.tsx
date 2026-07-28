@@ -182,7 +182,7 @@ export default function App() {
   // created cards, refresh so the draft cards (with approve/reject) show up.
   async function askAssistantLive(message: string, history: any[], threadId?: string) {
     const res = await askAssistant(message, history, threadId, currentId);
-    if (res?.created?.length) await refreshBoardFromCloud(currentId); // stay on the current board
+    if (res?.created?.length || res?.changed) await refreshBoardFromCloud(currentId); // stay on the current board
     return res;
   }
 
@@ -679,6 +679,8 @@ export default function App() {
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
+        eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}
+        cardColor={(c: any) => clients.find((x) => x.name === c.project)?.color || null}
         answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);

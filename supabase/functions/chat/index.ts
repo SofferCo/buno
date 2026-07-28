@@ -25,7 +25,7 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-function summarizeBoard(projects: any[], cards: any[], cols: any[]): string {
+function summarizeBoard(projects: any[], cards: any[], cols: any[], commentsByCard: Map<string, any[]>, attachByCard: Map<string, any[]>, todayStr: string, nowMs: number): string {
   const colTitle = new Map<string, string>();
   for (const c of cols) colTitle.set(c.id, c.title);
   const projName = new Map<string, string>();
@@ -33,6 +33,17 @@ function summarizeBoard(projects: any[], cards: any[], cols: any[]): string {
   const active = cards.filter((c) => !c.archived);
   const head = `הפרויקטים: ${projects.map((p) => p.name).join(" · ") || "—"}`;
   if (!active.length) return head + "\n(אין משימות פעילות.)";
+  const DAY = 864e5;
+  const ageStr = (iso: string) => {
+    if (!iso) return "";
+    const d = Math.floor((nowMs - new Date(iso).getTime()) / DAY);
+    return d <= 0 ? "נפתח היום" : d === 1 ? "פתוח יום" : `פתוח ${d} ימים`;
+  };
+  const dueStr = (dl: string) => {
+    if (!dl) return "";
+    const diff = Math.round((new Date(dl + "T00:00:00").getTime() - new Date(todayStr + "T00:00:00").getTime()) / DAY);
+    return diff < 0 ? `דדליין עבר לפני ${-diff} ${-diff === 1 ? "יום" : "ימים"}` : diff === 0 ? "דדליין היום" : diff === 1 ? "דדליין מחר" : `דדליין בעוד ${diff} ימים`;
+  };
   const byProject: Record<string, any[]> = {};
   for (const c of active) (byProject[c.project_id] = byProject[c.project_id] || []).push(c);
   const lines: string[] = [head];
@@ -41,9 +52,17 @@ function summarizeBoard(projects: any[], cards: any[], cols: any[]): string {
     for (const c of byProject[pid].slice(0, 40)) {
       const parts = [`• ${c.title || "ללא כותרת"}`];
       if (c.column_id && colTitle.get(c.column_id)) parts.push(`[${colTitle.get(c.column_id)}]`);
-      if (c.deadline) parts.push(`דדליין ${c.deadline}`);
+      const due = dueStr(c.deadline); if (due) parts.push(due);
+      const age = ageStr(c.created_at); if (age) parts.push(age);
       if (c.priority && c.priority !== "regular") parts.push(c.priority === "critical" ? "קריטי" : "חשוב");
-      lines.push(parts.join(" "));
+      const cs = commentsByCard.get(c.id) || [];
+      if (cs.length) {
+        const last = cs[cs.length - 1];
+        parts.push(`${cs.length} תגובות (אחרונה — ${last.by_name}: ${String(last.text || "").replace(/\s+/g, " ").slice(0, 50)})`);
+      }
+      const as = attachByCard.get(c.id) || [];
+      if (as.length) parts.push(`${as.length} קבצים${as.some((a: any) => a.name) ? ` (${as.map((a: any) => a.name).filter(Boolean).slice(0, 3).join(", ")})` : ""}`);
+      lines.push(parts.join(" · "));
     }
   }
   return lines.join("\n");
@@ -63,6 +82,39 @@ const CREATE_CARD_TOOL = {
       priority: { type: "string", enum: ["regular", "important", "critical"], description: "Optional priority; default regular." },
     },
     required: ["title"],
+  },
+};
+
+const MOVE_CARD_TOOL = {
+  name: "move_card",
+  description: "Move an existing card to another column on its board (e.g. to 'בעבודה' / 'לבדיקה'). Use ONLY when the user explicitly asks to move or advance a specific task. Reversible.",
+  input_schema: {
+    type: "object",
+    properties: {
+      card: { type: "string", description: "The card's title (or closest match) to move." },
+      column: { type: "string", description: "Target column name, e.g. 'בעבודה', 'לבדיקה / אישור', 'הושלם'." },
+    },
+    required: ["card", "column"],
+  },
+};
+
+const COMPLETE_CARD_TOOL = {
+  name: "complete_card",
+  description: "Mark a card as done — moves it to the board's Done column. Use ONLY when the user explicitly says a specific task is finished. Reversible.",
+  input_schema: {
+    type: "object",
+    properties: { card: { type: "string", description: "The card's title to mark done." } },
+    required: ["card"],
+  },
+};
+
+const ARCHIVE_CARD_TOOL = {
+  name: "archive_card",
+  description: "Archive a card (remove it from the active board — it can be restored). Use ONLY when the user explicitly asks to remove/archive a specific task.",
+  input_schema: {
+    type: "object",
+    properties: { card: { type: "string", description: "The card's title to archive." } },
+    required: ["card"],
   },
 };
 
@@ -91,14 +143,24 @@ Deno.serve(async (req) => {
   const currentProjectId = payload?.currentProjectId || null;
   if (!userMessage) return json({ error: "empty message" }, 400);
 
-  const [proj, cards, cols, prof, asst] = await Promise.all([
+  const [proj, cards, cols, prof, asst, comm, att] = await Promise.all([
     supabase.from("project").select("id,name"),
-    supabase.from("card").select("id,project_id,column_id,title,deadline,priority,time_spent,archived"),
+    supabase.from("card").select("id,project_id,column_id,title,deadline,priority,time_spent,archived,created_at"),
     supabase.from("board_column").select("id,project_id,key,title,position"),
     supabase.from("profile").select("name").eq("id", user.id).maybeSingle(),
     supabase.from("assistant_settings").select("cards").eq("user_id", user.id).maybeSingle(),
+    supabase.from("comment").select("card_id,by_name,text,created_at"),
+    supabase.from("attachment").select("card_id,type,name"),
   ]);
   const projects = proj.data || [];
+  // group comments/attachments per card so buno sees the real content, not just
+  // titles (self-audit weakness B) — comments sorted oldest→newest for "last".
+  const commentsByCard = new Map<string, any[]>();
+  for (const c of (comm.data || []).sort((a: any, b: any) => String(a.created_at).localeCompare(String(b.created_at)))) {
+    (commentsByCard.get(c.card_id) || commentsByCard.set(c.card_id, []).get(c.card_id))!.push(c);
+  }
+  const attachByCard = new Map<string, any[]>();
+  for (const a of att.data || []) (attachByCard.get(a.card_id) || attachByCard.set(a.card_id, []).get(a.card_id))!.push(a);
   const cardLevel = (asst.data?.cards || "draft") as "suggest" | "draft" | "act"; // server-side matrix
 
   // ---- calendar context: the twin must see the schedule, not just the board.
@@ -173,15 +235,75 @@ Deno.serve(async (req) => {
       : `נוצרה טיוטה "${title}" בפרויקט ${project.name}, ממתינה לאישור המשתמש.`;
   }
 
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, for relative dates
+  // ---- board organization (agency): reversible ops on explicit request -------
+  const changed: string[] = [];
+  const activeCards = () => (cards.data || []).filter((c: any) => !c.archived);
+  function findCard(q: string): any | null {
+    const s = String(q || "").toLowerCase().trim();
+    if (!s) return null;
+    const list = activeCards();
+    return list.find((c: any) => (c.title || "").toLowerCase() === s)
+      || list.find((c: any) => (c.title || "").toLowerCase().includes(s))
+      || list.find((c: any) => c.title && s.includes((c.title || "").toLowerCase()))
+      || null;
+  }
+  async function moveTo(card: any, col: any, verb: string): Promise<string> {
+    const { error } = await supabase.from("card").update({ column_id: col.id, active_column_key: col.key }).eq("id", card.id);
+    if (error) return `לא הצלחתי ${verb} (שגיאה): ${error.message}`;
+    card.column_id = col.id; changed.push(card.id);
+    return "";
+  }
+  async function doMoveCard(input: any): Promise<string> {
+    const card = findCard(input?.card);
+    if (!card) return `לא מצאתי כרטיס פעיל בשם "${input?.card}".`;
+    const projCols = (cols.data || []).filter((c: any) => c.project_id === card.project_id);
+    const q = String(input?.column || "").toLowerCase().trim();
+    const target = projCols.find((c: any) => (c.title || "").toLowerCase() === q)
+      || projCols.find((c: any) => (c.title || "").toLowerCase().includes(q))
+      || projCols.find((c: any) => c.key === q);
+    if (!target) return `לא מצאתי עמודה "${input?.column}" בלוח של "${card.title}".`;
+    const err = await moveTo(card, target, "להזיז");
+    return err || `הזזתי את "${card.title}" ל"${target.title}".`;
+  }
+  async function doCompleteCard(input: any): Promise<string> {
+    const card = findCard(input?.card);
+    if (!card) return `לא מצאתי כרטיס פעיל בשם "${input?.card}".`;
+    const projCols = (cols.data || []).filter((c: any) => c.project_id === card.project_id);
+    const done = projCols.find((c: any) => c.key === "col-done") || projCols.find((c: any) => /done|הושלם|בוצע/i.test(c.title || ""));
+    if (!done) return `לא מצאתי עמודת "הושלם" בלוח של "${card.title}".`;
+    const err = await moveTo(card, done, "לסמן כבוצע");
+    return err || `סימנתי את "${card.title}" כבוצע.`;
+  }
+  async function doArchiveCard(input: any): Promise<string> {
+    const card = findCard(input?.card);
+    if (!card) return `לא מצאתי כרטיס פעיל בשם "${input?.card}".`;
+    const { error } = await supabase.from("card").update({ archived: true, archived_at: new Date().toISOString() }).eq("id", card.id);
+    if (error) return `לא הצלחתי לארכב (שגיאה): ${error.message}`;
+    card.archived = true; changed.push(card.id);
+    return `ארכבתי את "${card.title}" — אפשר לשחזר מהארכיון.`;
+  }
+
+  const today = todayStr2; // YYYY-MM-DD in IL, for relative dates
+  const nowIL = new Intl.DateTimeFormat("he-IL", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(nowD);
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
     profileName: prof.data?.name || "",
-    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || []),
-  }) + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
+    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()),
+  }) + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `
 
-TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" — with "act" a card goes live immediately; with "draft"/"suggest" it is created as a pending draft the user approves. This is enforced in code regardless of what you say. When the user clearly asks to add/open/create a task (e.g. "תפתח לי משימה…", "תוסיף…"), CALL create_card — do not say you can't. Never invent tasks the user didn't ask for. After creating, tell the user plainly in one line what happened (טיוטה ממתינה לאישור, or כרטיס פעיל).`;
+=== כללי־יסוד (מעל הכל — שבירתם שוברת אמון) ===
+1. כנות מוחלטת: לעולם אל תדווח על פעולה שלא ביצעת בפועל דרך הכלים שלך. לא סרקת מייל? אל תגיד שסרקת. לא יצרת/הזזת כרטיס? אל תגיד שכן. אין לך גישה למייל בשיחה הזו — אל תמציא "מצאתי במייל".
+2. בלי המצאות: אם נתון לא מופיע בקונטקסט שקיבלת (תוכן מייל, מי אמר מה, שעה) — אמור בפשטות שאין לך אותו, אל תנחש.
+3. זמן אמיתי: כרגע בישראל ${nowIL}. הסתמך על זה ועל "פתוח X ימים"/"דדליין" שבקונטקסט — אל תמציא "עומד שבוע" אם לא ידוע.
+4. סגנון: כתוב עברית זורמת וטבעית, טקסט רגיל בלבד. בלי Markdown, בלי כוכביות (** או *), בלי כותרות #. אם צריך רשימה — תבליט • קצר. משפטים קצרים.
+
+Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
+
+=== TOOLS ===
+create_card — the card-permission level is "${cardLevel}" ("act" = card goes live immediately; "draft"/"suggest" = pending draft the user approves — enforced in code). Call it when the user clearly asks to add/open/create a task. Never invent tasks the user didn't ask for.
+move_card / complete_card / archive_card — organize the board on the user's EXPLICIT request only (e.g. "העבר ל'בעבודה'", "סמן שסיימתי", "תארכב"). These act directly (reversible). Identify the card by its title. Never move/complete/archive a card the user didn't clearly name.
+After any tool call, tell the user plainly in one line what actually happened. If a tool reported it couldn't find the card/column, say so honestly — don't pretend it worked.`;
 
   const anthropic = new Anthropic({ apiKey });
   const messages: any[] = [
@@ -200,7 +322,7 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
         max_tokens: 1024,
         output_config: { effort: "low" },
         system: sys,
-        tools: [CREATE_CARD_TOOL],
+        tools: [CREATE_CARD_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
         messages,
       });
       if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
@@ -213,6 +335,9 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
       for (const tu of toolUses) {
         let out = "כלי לא מוכר.";
         if (tu.name === "create_card") out = await doCreateCard(tu.input);
+        else if (tu.name === "move_card") out = await doMoveCard(tu.input);
+        else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
+        else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });
@@ -241,8 +366,8 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created, events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created, changed: changed.length, events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
-    return json({ reply, created, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, created, changed: changed.length, voiceOk: lint.ok, voiceHits: lint.hits });
   }
 });
