@@ -105,14 +105,15 @@ Deno.serve(async (req) => {
   // Read-only, next 7 days, summarized as DATA. Uses the service role only to
   // fetch the user's token (server-side); the browser never sees it.
   let calendarSummary = "";
+  let calEventsRaw: any[] = [];
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const access = await freshAccessToken(admin, user.id, "gcal");
     if (access) {
       const now = new Date();
-      const events = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
-      if (events.length) {
-        calendarSummary = events.slice(0, 30).map((e: any) => {
+      calEventsRaw = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
+      if (calEventsRaw.length) {
+        calendarSummary = calEventsRaw.slice(0, 30).map((e: any) => {
           const when = e.allDay ? (e.start || "").slice(0, 10) : (e.start || "").replace("T", " ").slice(0, 16);
           const who = (e.attendees || []).filter((a: any) => !a.self).map((a: any) => a.email).slice(0, 6).join(", ");
           return `• ${when} · ${e.title}${who ? ` · עם: ${who}` : ""}${e.meetLink ? " · Meet" : ""}`;
@@ -120,6 +121,10 @@ Deno.serve(async (req) => {
       }
     }
   } catch { /* calendar optional */ }
+  // when the user asks about the schedule, surface the relevant events as
+  // clickable chips in the chat (not just prose). Heuristic intent match.
+  const scheduleIntent = /יומן|פגיש|מתי|היום|מחר|מחרתיים|השבוע|לו"?ז|לוח.?זמנ|meeting|schedule|calendar|agenda/i.test(userMessage);
+  const responseEvents = scheduleIntent ? calEventsRaw.slice(0, 12) : [];
 
   // ---- server-side card creation (the enforcement point) --------------------
   const created: { id: string; title: string; project: string; level: string }[] = [];
@@ -213,13 +218,14 @@ TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" 
       const { data: t } = await supabase.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
       threadId = t?.id;
     }
+    const meta = (created.length || responseEvents.length) ? { created, events: responseEvents } : null;
     if (threadId) {
       await supabase.from("assistant_message").insert([
         { thread_id: threadId, role: "user", door: "web", content: userMessage },
-        { thread_id: threadId, role: "assistant", door: "web", content: reply, meta: created.length ? { created } : null },
+        { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created, events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
     return json({ reply, created, voiceOk: lint.ok, voiceHits: lint.hits });
   }

@@ -677,6 +677,7 @@ export default function App() {
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
+        onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);

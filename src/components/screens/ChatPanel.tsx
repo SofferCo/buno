@@ -3,7 +3,7 @@ import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { loadAssistantThread } from "../../data/assistant";
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -33,7 +33,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       try {
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
-        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", cards: res?.created?.length ? res.created : undefined }]);
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined }]);
       } catch (e: any) {
         setMsgs((m) => [...m, { by: "twin", text: "העוזר לא זמין כרגע. נסה שוב בעוד רגע." }]);
       } finally { setTyping(false); }
@@ -84,6 +84,20 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="spark" size={13} /></div>}
               <div className="adk-bubble">
                 {m.text.split("\n").map((l, k) => <div key={k}>{l}</div>)}
+                {m.events && m.events.length > 0 && (
+                  <div className="adk-chat-cards">
+                    {m.events.map((e: any, ei: number) => {
+                      const t = e.allDay ? "כל היום" : (e.start || "").slice(11, 16);
+                      return (
+                        <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}>
+                          <span className="ic cal"><Icon name="calendar" size={12} /></span>
+                          <span className="tx"><b>{e.title}</b><em>{t}{(e.attendees || []).some((a: any) => !a.self) ? " · פגישה" : ""}</em></span>
+                          <span className="go">›</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {m.cards && m.cards.length > 0 && (
                   <div className="adk-chat-cards">
                     {m.cards.map((c: any) => (
