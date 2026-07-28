@@ -2,7 +2,8 @@ import { AV_COLORS } from "./constants";
 
 export function initials(n) { const w = (n || "?").trim().split(/\s+/).filter(Boolean); if (w.length >= 2) return (w[0][0] + w[1][0]).toUpperCase(); return (w[0] || "?").slice(0, 2).toUpperCase(); }
 
-export function creatorOf(c) { return c.creator ?? c.briefFrom ?? ""; }
+// the assistant is named buno; older cards were stamped "העוזר" — show buno.
+export function creatorOf(c) { const v = c.creator ?? c.briefFrom ?? ""; return v === "העוזר" ? "buno" : v; }
 
 export function ccOf(c) { return c.cc || []; }
 

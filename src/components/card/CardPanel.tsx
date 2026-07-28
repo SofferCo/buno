@@ -15,11 +15,15 @@ import { uid } from "../../lib/id";
 import { ccOf, creatorOf } from "../../lib/people";
 import { cardSeconds, subHours } from "../../lib/time";
 
-export function CardPanel({ card, now, assets, client, giverSuggestions, profileName, viewer, onClose, onChange, onDelete, onToggleTimer, onAddFiles, onAddLink, onUpdateAtt, onRemoveAtt }) {
+export function CardPanel({ card, now, assets, client, projects, onMoveProject, onCreateProject, giverSuggestions, profileName, viewer, onClose, onChange, onDelete, onToggleTimer, onAddFiles, onAddLink, onUpdateAtt, onRemoveAtt }) {
   const isRun = !!card.timerStart, secs = cardSeconds(card, now);
   const directHours = Math.round((card.timeSpent || 0) / 3600);
   const subTotal = subHours(card);
   const fileRef = useRef<any>(); const [over, setOver] = useState(false); const [keb, setKeb] = useState(false);
+  const [projOpen, setProjOpen] = useState(false); const [newProj, setNewProj] = useState("");
+  const canPickProject = !viewer && !!onMoveProject;
+  function pickProject(pid) { if (pid !== card.clientId) onMoveProject(pid); setProjOpen(false); }
+  function makeProject() { const n = newProj.trim(); if (!n || !onCreateProject) return; onCreateProject(n); setNewProj(""); setProjOpen(false); }
   const [ccInput, setCcInput] = useState(""); const [commentInput, setCommentInput] = useState(""); const [replyTo, setReplyTo] = useState(null); const [trailOpen, setTrailOpen] = useState(false);
   const creator = creatorOf(card); const cc = ccOf(card); const comments = card.comments || [];
   const mentionPeople = Array.from(new Set([creator, ...cc, ...((client?.members) || [])].map((s) => (s || "").trim()).filter(Boolean)));
@@ -37,7 +41,30 @@ export function CardPanel({ card, now, assets, client, giverSuggestions, profile
       <div className="adk-phead">
         <div className="ctx">
           <Badge client={client} size={22} />
-          <span className="nm">{client?.name}</span>
+          {canPickProject ? (
+            <div className="adk-projpick">
+              <button className="nm as-btn" onClick={() => setProjOpen((o) => !o)} title="העבר לפרויקט אחר">{client?.name || "בחר פרויקט"} <span className="car">▾</span></button>
+              {projOpen && (<>
+                <button className="adk-projpick-scrim" onClick={() => setProjOpen(false)} aria-label="סגור" />
+                <div className="adk-projpick-menu">
+                  <div className="adk-projpick-t">שייך לפרויקט</div>
+                  {(projects || []).map((p) => (
+                    <button key={p.id} className={"adk-projpick-item" + (p.id === card.clientId ? " on" : "")} onClick={() => pickProject(p.id)}>
+                      <span className="dot" style={{ background: p.color }} /><span className="pn">{p.name}</span>{p.home && <span className="tag">בית</span>}{p.id === card.clientId && <span className="chk">✓</span>}
+                    </button>
+                  ))}
+                  {onCreateProject && (
+                    <div className="adk-projpick-new">
+                      <input value={newProj} onChange={(e) => setNewProj(e.target.value)} placeholder="שם פרויקט חדש…" onKeyDown={(e) => { if (e.key === "Enter") makeProject(); }} />
+                      <button className="mk" disabled={!newProj.trim()} onClick={makeProject}>+ פתח</button>
+                    </div>
+                  )}
+                </div>
+              </>)}
+            </div>
+          ) : (
+            <span className="nm">{client?.name}</span>
+          )}
           {rkind !== "none" && <span className="adk-rchip">↻ {ROUTINE_LABEL[rkind]}</span>}
           {isRun && <span className="clk"><span className="rec-dot" />{fmtClock(secs)}</span>}
           <button className="adk-x" style={{ marginInlineStart: "auto" }} onClick={onClose}>×</button>
@@ -50,7 +77,7 @@ export function CardPanel({ card, now, assets, client, giverSuggestions, profile
           <div className="adk-draft-banner">
             <div className="adk-draft-txt"><Icon name="spark" size={15} /> {card.draft.level === "suggest" ? "buno מציע את הכרטיס הזה" : "טיוטת buno — ממתינה לאישורך"}</div>
             <div className="adk-req-act">
-              <button className="ok" onClick={() => onChange({ draft: undefined, creator: profileName })}>אשר</button>
+              <button className="ok" onClick={() => onChange({ draft: undefined, cc: Array.from(new Set([...cc, profileName].map((s) => (s || "").trim()).filter(Boolean).filter((n) => n !== creator))) })}>אשר</button>
               <button className="no" onClick={onDelete}>דחה</button>
             </div>
           </div>

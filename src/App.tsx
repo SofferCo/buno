@@ -12,7 +12,7 @@ import { SettingsPanel } from "./components/screens/SettingsPanel";
 import { Badge } from "./components/ui/Badge";
 import { DemoTag } from "./components/ui/DemoTag";
 import { Icon } from "./components/ui/Icon";
-import { APREFIX, DEFAULT_COLUMNS, KEY, PRI_ORDER } from "./lib/constants";
+import { APREFIX, DEFAULT_COLUMNS, KEY, PRI_ORDER, SWATCHES } from "./lib/constants";
 import { storage } from "./data/local";
 import { useAuth } from "./auth/AuthProvider";
 import { addPeriod, daysUntil, flexDay, relTime, routineKind, todayStr, ymOf } from "./lib/date";
@@ -604,6 +604,13 @@ export default function App() {
       {editing && cards[editing] && (<>
         <div className="adk-scrim" onClick={() => setEditing(null)} />
         <CardPanel card={cards[editing]} now={now} assets={assets} client={clients.find((c) => c.id === cards[editing].clientId)}
+          projects={clients}
+          onMoveProject={(viewer || roleViewer) ? undefined : (pid) => updateCard(editing, { clientId: pid })}
+          onCreateProject={(viewer || roleViewer) ? undefined : (name) => {
+            const color = SWATCHES.find((s) => !clients.some((c) => c.color === s)) || SWATCHES[clients.length % SWATCHES.length];
+            const nc = { id: uid("cl"), name, color, home: false, contact: "", email: "", notes: "", logo: null };
+            saveClient(nc); updateCard(editing, { clientId: nc.id });
+          }}
           giverSuggestions={Array.from(new Set([
             ...((clients.find((c) => c.id === cards[editing].clientId)?.members) || []),
             ...Object.values(cards).filter((c) => c.clientId === cards[editing].clientId).flatMap((c) => peopleOf(c)),
