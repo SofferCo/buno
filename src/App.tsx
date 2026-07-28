@@ -24,7 +24,7 @@ import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant } from "./data/assistant";
-import { fetchCalendar } from "./data/integrations";
+import { fetchCalendar, listIntegrations, hasGmailScope } from "./data/integrations";
 import { inferEventProjectId } from "./lib/inferProject";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
@@ -105,6 +105,7 @@ export default function App() {
   const [calEvents, setCalEvents] = useState<Record<string, any[]>>({});
   const [connectToast, setConnectToast] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState<any>(null); // {ev, projectId}
+  const [gcalInteg, setGcalInteg] = useState<any>(null);
   function openEvent(item: any) { setEventOpen({ ev: item.ev || item, projectId: item.projectId }); }
   function prepTaskFromEvent(ev: any, project: any) {
     const when = ev.start ? new Date(ev.start) : null;
@@ -301,6 +302,7 @@ export default function App() {
   useEffect(() => {
     if (!cloud || !loaded) return;
     let alive = true;
+    listIntegrations().then((list) => { if (alive) setGcalInteg(list.find((i) => i.kind === "gcal") || null); }).catch(() => {});
     fetchCalendar().then((r) => {
       if (!alive || !r.connected) return;
       const by: Record<string, any[]> = {};
@@ -673,6 +675,7 @@ export default function App() {
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
+        calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
         answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);

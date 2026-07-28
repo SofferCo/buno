@@ -3,7 +3,7 @@ import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { loadAssistantThread } from "../../data/assistant";
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -23,7 +23,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const suggestions = live
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
-  const connectors = [{ n: "לוח", real: true }, { n: "יומן", real: false }, { n: "וואטסאפ", real: false }, { n: "דרייב", real: false }, { n: "מייל", real: false }];
+  const connectors = [{ n: "לוח", real: true }, { n: "יומן", real: !!calConnected }, { n: "מייל", real: !!mailConnected }, { n: "וואטסאפ", real: false }, { n: "דרייב", real: false }];
   async function send(q?: string) {
     const text = (q ?? input).trim(); if (!text || typing) return;
     // LIVE assistant (Stage 3a: conversation over the real board via Claude)
