@@ -25,13 +25,13 @@ export const assistantLive = !!supabase;
 // Load the user's ongoing twin conversation (one entity, continuous across
 // open/close and — later — across doors). Returns the latest thread + its
 // messages, mapped to the ChatPanel's shape.
-export async function loadAssistantThread(): Promise<{ threadId?: string; messages: { by: "me" | "twin"; text: string; cards?: CreatedCard[]; events?: any[] }[] }> {
+export async function loadAssistantThread(): Promise<{ threadId?: string; messages: { by: "me" | "twin"; text: string; at?: number; cards?: CreatedCard[]; events?: any[] }[] }> {
   if (!supabase) return { messages: [] };
   const { data: t } = await supabase.from("assistant_thread").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!t) return { messages: [] };
-  const { data: m } = await supabase.from("assistant_message").select("role,content,meta").eq("thread_id", t.id).order("created_at");
+  const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at");
   return {
     threadId: t.id,
-    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, cards: x.meta?.created || undefined, events: x.meta?.events || undefined })),
+    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined })),
   };
 }

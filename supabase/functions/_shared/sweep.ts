@@ -71,6 +71,7 @@ function fmtHoursNudge(hours: number, mode: string): string {
   const total = Math.round(hours * 3600); const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60);
   return h > 0 ? `${h}ש ${m}ד` : `${m}ד`;
 }
+function hasTitle(c: any): boolean { return !!String(c.title || "").trim(); }
 function isAliveCard(c: any, ctx: NudgeCtx): boolean {
   if (c.archived || c.draft) return false;           // alive = not draft, not archived,
   const col = ctx.colById.get(c.column_id);
@@ -95,7 +96,7 @@ const kaizenRule: NudgeRule = {
   run: (ctx) => {
     let best: any = null; let bestActivity = Infinity;
     for (const c of ctx.cards) {
-      if (!isAliveCard(c, ctx)) continue;
+      if (!isAliveCard(c, ctx) || !hasTitle(c)) continue;   // never surface a titleless card
       const moved = new Date(c.column_changed_at || c.created_at).getTime();
       const commented = ctx.lastCommentMs.get(c.id) || 0;
       const lastActivity = Math.max(moved, commented, new Date(c.created_at).getTime());
@@ -114,7 +115,7 @@ const draftAgingRule: NudgeRule = {
   run: (ctx) => {
     let best: any = null; let bestAt = Infinity;
     for (const c of ctx.cards) {
-      if (!c.draft || c.archived) continue;
+      if (!c.draft || c.archived || !hasTitle(c)) continue;   // never surface a titleless draft
       const at = c.draft.at ? Number(c.draft.at) : new Date(c.created_at).getTime();
       const ageDays = (ctx.nowMs - at) / DAY_MS;
       if (ageDays >= 5 && ageDays < 7 && !ctx.alreadyNudged.has(`draft-aging:${c.id}`) && at < bestAt) { best = c; bestAt = at; }
@@ -265,12 +266,22 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges };
 }
 
+// Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say
+// "בוקר טוב". Bucketed to morning/noon/evening/night.
+function greetingFor(nowMs: number): string {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", hour12: false }).format(new Date(nowMs)));
+  if (hour >= 5 && hour < 12) return "בוקר טוב";
+  if (hour >= 12 && hour < 17) return "צהריים טובים";
+  if (hour >= 17 && hour < 22) return "ערב טוב";
+  return "לילה טוב";
+}
+
 // One-line day snapshot in the assistant's voice (observe, don't command).
 export function daySnapshot(r: SweepResult): string {
   const lines: string[] = [];
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
   const shape = r.events.length >= 4 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";
-  lines.push(`בוקר טוב${r.profileName ? ` ${r.profileName}` : ""}. ${shape}.`);
+  lines.push(`${greetingFor(Date.now())}${r.profileName ? ` ${r.profileName}` : ""}. ${shape}.`);
   if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
   if (r.created.length) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת" : `${r.created.length} טיוטות`} לאישורך על הלוח.`);
   else lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");

@@ -20,6 +20,15 @@ function renderLine(line: string, k: number) {
   );
 }
 
+// message timestamp: HH:MM for today, "DD.MM · HH:MM" otherwise — so an evening
+// sweep (or one from another day) is never mistaken for "now".
+function fmtMsgTime(ms: number): string {
+  const d = new Date(ms); const now = new Date();
+  const hm = d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
+}
+
 export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno, הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
@@ -46,13 +55,13 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     // LIVE assistant (Stage 3a: conversation over the real board via Claude)
     if (live && ask) {
       const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
-      setMsgs((m) => [...m, { by: "me", text }]); setInput(""); setTyping(true);
+      setMsgs((m) => [...m, { by: "me", text, at: Date.now() }]); setInput(""); setTyping(true);
       try {
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
-        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined }]);
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined }]);
       } catch (e: any) {
-        setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע." }]);
+        setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע.", at: Date.now() }]);
       } finally { setTyping(false); }
       return;
     }
@@ -101,6 +110,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="spark" size={13} /></div>}
               <div className="adk-bubble">
                 {m.text.split("\n").map((l: string, k: number) => renderLine(l, k))}
+                {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}</div>}
                 {m.events && m.events.length > 0 && (
                   <div className="adk-chat-cards">
                     {m.events.map((e: any, ei: number) => {
