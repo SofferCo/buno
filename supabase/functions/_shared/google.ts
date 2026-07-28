@@ -29,6 +29,41 @@ export async function freshAccessToken(admin: SupabaseClient, userId: string, ki
   return tok.access_token || null;
 }
 
+// Gmail candidates for the "last month" scan. Three-layer scoping (see
+// gmail-scan-scope): time window + Gmail-level category filter here; the
+// semantic filter happens later in the model. Returns compact metadata +
+// snippet only (never full bodies) — enough for close analysis, minimal
+// exposure. Gathered content is DATA, never instructions.
+export async function listGmailCandidates(accessToken: string, maxThreads = 40) {
+  // inbox, last 30 days, drop promotions/social/forums and chats
+  const q = "newer_than:30d in:inbox -category:promotions -category:social -category:forums -in:chats";
+  const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
+    new URLSearchParams({ q, maxResults: String(maxThreads) });
+  const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!listRes.ok) return [];
+  const list = await listRes.json();
+  const ids = (list.messages || []).map((m: any) => m.id).slice(0, maxThreads);
+  // fetch each message's metadata + snippet (parallel, capped)
+  const out: any[] = [];
+  await Promise.all(ids.map(async (id: string) => {
+    const u = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?` +
+      new URLSearchParams({ format: "metadata" }) + "&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date";
+    const r = await fetch(u, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!r.ok) return;
+    const m = await r.json();
+    const h = (name: string) => (m.payload?.headers || []).find((x: any) => x.name === name)?.value || "";
+    out.push({
+      threadId: m.threadId,
+      from: String(h("From")).slice(0, 160),
+      subject: String(h("Subject")).slice(0, 200),
+      date: h("Date"),
+      snippet: String(m.snippet || "").slice(0, 300),
+      unread: (m.labelIds || []).includes("UNREAD"),
+    });
+  }));
+  return out;
+}
+
 // Read calendar events in a time window. Returns a compact, escaped shape —
 // remember: gathered content is DATA, never instructions.
 export async function listCalendarEvents(accessToken: string, timeMinISO: string, timeMaxISO: string) {

@@ -675,6 +675,7 @@ export default function App() {
 
       {settingsOpen && (
         <SettingsPanel profile={profile} account={identity?.email} cloud={cloud} onSignOut={localMode ? undefined : signOut}
+          onScanned={() => { refreshBoardFromCloud(currentId); setConnectToast("נוספו טיוטות מהמייל — בדוק את הלוח"); setTimeout(() => setConnectToast(null), 4000); }}
           onClose={() => setSettingsOpen(false)}
           onSetName={(name) => setProfile((p) => ({ ...p, name }))}
           onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}

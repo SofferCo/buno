@@ -34,3 +34,15 @@ export async function fetchCalendar(timeMin?: string, timeMax?: string): Promise
   if (error) return { connected: false, events: [] };
   return data as { connected: boolean; events: CalEvent[] };
 }
+
+export type ScanResult = { connected: boolean; considered?: number; proposed?: number; created?: { id: string; title: string; project: string }[]; skipped?: number; error?: string };
+
+// "Scan my last month" — triage recent email into draft task cards (server-side).
+export async function scanGmail(): Promise<ScanResult> {
+  if (!supabase) return { connected: false };
+  const { data, error } = await supabase.functions.invoke("gmail-scan", { body: {} });
+  if (error) return { connected: false, error: error.message };
+  return data as ScanResult;
+}
+
+export const hasGmailScope = (i?: Integration) => !!i?.scopes?.some((s) => s.includes("gmail"));

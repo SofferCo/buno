@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.calendar]
 verify_jwt = true
+
+[functions.gmail-scan]
+verify_jwt = true
