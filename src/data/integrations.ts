@@ -4,8 +4,13 @@
 import { supabase } from "../lib/supabase";
 
 export type Integration = { kind: string; status: string; external_id: string | null; scopes: string[]; connected_at: string | null };
-export type CalAttendee = { email: string; name: string | null; status: string; organizer: boolean; self: boolean };
-export type CalEvent = { id: string; title: string; start: string | null; end: string | null; allDay: boolean; location: string | null; description?: string | null; meetLink?: string | null; recurring?: boolean; organizer?: string | null; attendees?: CalAttendee[] };
+export type CalAttendee = { email: string; name: string | null; status: string; organizer: boolean; optional?: boolean; self: boolean };
+export type CalEvent = {
+  id: string; title: string; start: string | null; end: string | null; allDay: boolean;
+  location: string | null; description?: string | null; meetLink?: string | null; htmlLink?: string | null;
+  recurring?: boolean; status?: string | null; organizer?: string | null; organizerName?: string | null;
+  myStatus?: string | null; reminders?: any; phone?: { label: string; uri: string }[]; attendees?: CalAttendee[];
+};
 
 export async function listIntegrations(): Promise<Integration[]> {
   if (!supabase) return [];

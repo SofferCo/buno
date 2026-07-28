@@ -7,11 +7,11 @@ const PERSONAL = new Set(["gmail.com", "googlemail.com", "outlook.com", "hotmail
 const domainOf = (email: string) => (email || "").split("@")[1]?.toLowerCase().trim() || "";
 const core = (domain: string) => domain.split(".")[0]; // codata.io → codata
 
-export function inferEventProjectId(attendees: any[], clients: any[]): string | null {
-  const domains = (attendees || [])
-    .filter((a) => !a.self)
-    .map((a) => domainOf(a.email))
-    .filter((d) => d && !PERSONAL.has(d));
+export function inferEventProjectId(attendees: any[], clients: any[], organizer?: string | null): string | null {
+  const domains = [
+    ...(organizer ? [domainOf(organizer)] : []),        // organizer is the strongest signal
+    ...(attendees || []).filter((a) => !a.self).map((a) => domainOf(a.email)),
+  ].filter((d) => d && !PERSONAL.has(d));
   if (!domains.length) return null;
   for (const d of domains) {
     const c = core(d);

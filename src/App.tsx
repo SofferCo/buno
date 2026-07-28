@@ -308,7 +308,7 @@ export default function App() {
         const d = (e.start || "").slice(0, 10);
         if (!d) continue;
         const time = e.allDay ? "" : (e.start || "").slice(11, 16);
-        const projectId = inferEventProjectId(e.attendees || [], clients);
+        const projectId = inferEventProjectId(e.attendees || [], clients, e.organizer);
         (by[d] = by[d] || []).push({ t: e.title, time, location: e.location, ev: e, projectId });
       }
       setCalEvents(by);

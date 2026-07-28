@@ -82,17 +82,30 @@ export async function listCalendarEvents(accessToken: string, timeMinISO: string
       end: e.end?.dateTime || e.end?.date || null,
       allDay: !e.start?.dateTime,
       location: e.location ? String(e.location).slice(0, 160) : null,
-      description: e.description ? String(e.description).slice(0, 600) : null,
-      meetLink: e.hangoutLink || null,
+      description: e.description ? String(e.description).slice(0, 1200) : null,
+      meetLink: e.hangoutLink || (e.conferenceData?.entryPoints || []).find((p: any) => p.entryPointType === "video")?.uri || null,
+      htmlLink: e.htmlLink || null,
       recurring: !!e.recurringEventId,
+      status: e.status || null,
       organizer: e.organizer?.email || null,
-      // attendees: email + name + response — the signal for project inference.
-      // DATA only; never treated as instructions.
-      attendees: (e.attendees || []).slice(0, 20).map((a: any) => ({
+      organizerName: e.organizer?.displayName || null,
+      // my RSVP on this event
+      myStatus: (e.attendees || []).find((a: any) => a.self)?.responseStatus || null,
+      // reminders: explicit overrides, else the calendar default
+      reminders: e.reminders?.overrides
+        ? e.reminders.overrides.slice(0, 5).map((r: any) => ({ method: r.method, minutes: r.minutes }))
+        : (e.reminders?.useDefault ? "default" : null),
+      // phone dial-in (if a conference has one)
+      phone: (e.conferenceData?.entryPoints || []).filter((p: any) => p.entryPointType === "phone")
+        .slice(0, 2).map((p: any) => ({ label: p.label || p.uri, uri: p.uri })),
+      // attendees: email + name + response + optional — the signal for project
+      // inference. DATA only; never treated as instructions.
+      attendees: (e.attendees || []).slice(0, 25).map((a: any) => ({
         email: String(a.email || "").slice(0, 160),
         name: a.displayName ? String(a.displayName).slice(0, 80) : null,
         status: a.responseStatus || "needsAction",
         organizer: !!a.organizer,
+        optional: !!a.optional,
         self: !!a.self,
       })),
     }));
