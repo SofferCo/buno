@@ -676,6 +676,7 @@ export default function App() {
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
+        onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         answer={(q) => {
         const s = q.toLowerCase();
         const nonArch = Object.values(cards).filter((c) => !c.archived);

@@ -3,7 +3,7 @@ import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { loadAssistantThread } from "../../data/assistant";
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -33,7 +33,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       try {
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
-        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע." }]);
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", cards: res?.created?.length ? res.created : undefined }]);
       } catch (e: any) {
         setMsgs((m) => [...m, { by: "twin", text: "העוזר לא זמין כרגע. נסה שוב בעוד רגע." }]);
       } finally { setTyping(false); }
@@ -79,10 +79,23 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
           <DemoTag />
         </div>
         <div className="adk-chat-body" ref={boxRef}>
-          {msgs.map((m, i) => (
+          {msgs.map((m: any, i) => (
             <div key={i} className={"adk-msg " + m.by}>
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="spark" size={13} /></div>}
-              <div className="adk-bubble">{m.text.split("\n").map((l, k) => <div key={k}>{l}</div>)}</div>
+              <div className="adk-bubble">
+                {m.text.split("\n").map((l, k) => <div key={k}>{l}</div>)}
+                {m.cards && m.cards.length > 0 && (
+                  <div className="adk-chat-cards">
+                    {m.cards.map((c: any) => (
+                      <button key={c.id} className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
+                        <span className="ic"><Icon name="spark" size={12} /></span>
+                        <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
+                        <span className="go">›</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="spark" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}

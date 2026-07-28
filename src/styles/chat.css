@@ -75,3 +75,14 @@
 .adk-cal-chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink);padding:5px 0;cursor:pointer;}
 .adk-cal-chk input{width:15px;height:15px;cursor:pointer;}
 .adk-cal-chk .sw{width:10px;height:10px;border-radius:3px;flex:none;}
+
+/* mini task cards inside a chat message — click opens the card panel for a
+   quick review, keeping the chat open */
+.adk-chat-cards{display:flex;flex-direction:column;gap:6px;margin-top:9px;}
+.adk-chat-card{display:flex;align-items:center;gap:8px;width:100%;text-align:start;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-family:inherit;transition:border-color .12s,background .12s;}
+.adk-chat-card:hover{border-color:var(--accent);background:var(--accent-soft);}
+.adk-chat-card .ic{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#8E54C4,#5a3a9c);color:#fff;flex:none;}
+.adk-chat-card .tx{flex:1;min-width:0;display:flex;flex-direction:column;}
+.adk-chat-card .tx b{font-size:12.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.adk-chat-card .tx em{font-style:normal;font-size:11px;color:var(--faint);font-weight:600;}
+.adk-chat-card .go{color:var(--faint);font-size:16px;font-weight:700;flex:none;}
