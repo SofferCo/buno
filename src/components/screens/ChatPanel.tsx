@@ -5,7 +5,7 @@ import { loadAssistantThread } from "../../data/assistant";
 
 export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
-  const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
+  const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno, הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const boxRef = useRef<any>();
@@ -35,7 +35,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         if (res?.threadId) threadRef.current = res.threadId;
         setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined }]);
       } catch (e: any) {
-        setMsgs((m) => [...m, { by: "twin", text: "העוזר לא זמין כרגע. נסה שוב בעוד רגע." }]);
+        setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע." }]);
       } finally { setTyping(false); }
       return;
     }
@@ -67,7 +67,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       <div className="adk-scrim" onClick={onClose} />
       <div className="adk-chat">
         <div className="adk-chat-head">
-          <div className="adk-chat-id"><div className="adk-chat-av"><Icon name="spark" size={18} /></div><div><b>העוזר שלי</b><span>כפיל דיגיטלי · אחד בכל הדלתות</span></div></div>
+          <div className="adk-chat-id"><div className="adk-chat-av"><Icon name="spark" size={18} /></div><div><b>buno</b><span>כפיל דיגיטלי · אחד בכל הדלתות</span></div></div>
           <div className="sp" style={{ flex: 1 }} />
           <button className="adk-x" onClick={onClose}>×</button>
         </div>

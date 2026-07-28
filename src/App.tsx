@@ -65,11 +65,12 @@ export default function App() {
     Object.values(cards).forEach((c) => {
       if (c.archived) return;
       const cn = clients.find((x) => x.id === c.clientId)?.name || "";
-      if (c.draft) out.push({ id: "d" + c.id, type: "draft", at: c.draft.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: "טיוטת העוזר ממתינה לאישור" });
-      if (c.proposed) out.push({ id: "p" + c.id, type: "request", at: c.proposed.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: `בקשת תזמון מ${c.proposed.by || "לקוח"}` });
+      const col = clients.find((x) => x.id === c.clientId)?.color || null;
+      if (c.draft) out.push({ id: "d" + c.id, type: "draft", at: c.draft.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: "טיוטת buno ממתינה לאישור" });
+      if (c.proposed) out.push({ id: "p" + c.id, type: "request", at: c.proposed.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: `בקשת תזמון מ${c.proposed.by || "לקוח"}` });
       (c.comments || []).forEach((cm) => {
         const mention = /@\S/.test(cm.text || "");
-        out.push({ id: "c" + cm.id, type: mention ? "mention" : "comment", at: cm.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, text: `${cm.by}: ${(cm.text || "").replace(/\s+/g, " ").slice(0, 44)}` });
+        out.push({ id: "c" + cm.id, type: mention ? "mention" : "comment", at: cm.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: `${cm.by}: ${(cm.text || "").replace(/\s+/g, " ").slice(0, 44)}` });
       });
     });
     return out.sort((a, b) => b.at - a.at).slice(0, 30);
@@ -340,8 +341,8 @@ export default function App() {
       const colId = payload.colId || (columns.find((c) => c.id === "col-brief") || columns[0])?.id;
       if (!colId) return null;
       const id = uid("card");
-      const draft = level === "act" ? null : { by: "העוזר", at: Date.now(), level };
-      setCards((p) => ({ ...p, [id]: { id, clientId: payload.clientId || currentId, title: payload.title || "", creator: "העוזר", cc: [], comments: [], attachments: [], subtasks: payload.subtasks || [], description: payload.description || "", deadline: payload.deadline || todayStr(), priority: payload.priority || "regular", routine: "none", dayFlex: false, time: payload.time || "", activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: payload.origin || { type: "chat", ref: "chat-" + id }, draft } }));
+      const draft = level === "act" ? null : { by: "buno", at: Date.now(), level };
+      setCards((p) => ({ ...p, [id]: { id, clientId: payload.clientId || currentId, title: payload.title || "", creator: "buno", cc: [], comments: [], attachments: [], subtasks: payload.subtasks || [], description: payload.description || "", deadline: payload.deadline || todayStr(), priority: payload.priority || "regular", routine: "none", dayFlex: false, time: payload.time || "", activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: payload.origin || { type: "chat", ref: "chat-" + id }, draft } }));
       setOrder((p) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
       return id;
     }
@@ -574,9 +575,9 @@ export default function App() {
               {notifs.length === 0 && <div className="adk-notif-empty">אין תנועות חדשות ✦</div>}
               {notifs.map((n) => (
                 <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); openPage(null); setEditing(n.cardId); }}>
-                  <span className={"adk-notif-dot " + n.type} />
+                  <span className={"adk-notif-dot " + n.type} style={n.color ? { background: n.color } : undefined} />
                   <span className="adk-notif-body">
-                    <span className="t">{n.type === "draft" ? "טיוטת עוזר" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
+                    <span className="t">{n.type === "draft" ? "טיוטת buno" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
                     <span className="s">{n.text}</span>
                     <span className="tm">{relTime(n.at)}</span>
                   </span>
@@ -671,7 +672,7 @@ export default function App() {
           onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}
 
-      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="העוזר שלי"><Icon name="spark" size={24} /></button>}
+      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><Icon name="spark" size={24} /></button>}
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}

@@ -102,29 +102,45 @@ Deno.serve(async (req) => {
   const cardLevel = (asst.data?.cards || "draft") as "suggest" | "draft" | "act"; // server-side matrix
 
   // ---- calendar context: the twin must see the schedule, not just the board.
-  // Read-only, next 7 days, summarized as DATA. Uses the service role only to
-  // fetch the user's token (server-side); the browser never sees it.
+  // We scope to the window the user actually asked about — TODAY by default,
+  // tomorrow, or the week — so "מה פתוח היום?" answers about today alone instead
+  // of dumping a noisy 7-day list. Events are ordered (timed by hour, then
+  // all-day). Read-only; the browser never sees the Google token.
+  const nowD = new Date();
+  const TZ = "Asia/Jerusalem";
+  const fmtDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d); // YYYY-MM-DD in IL
+  const todayStr2 = fmtDay(nowD);
+  const tomorrowStr = fmtDay(new Date(nowD.getTime() + 864e5));
+  const dateOf = (e: any) => String(e.start || "").slice(0, 10);
+  const orderEvents = (list: any[]) => [...list].sort((a, b) =>
+    a.allDay === b.allDay ? String(a.start || "").localeCompare(String(b.start || "")) : (a.allDay ? 1 : -1));
+
+  const scheduleIntent = /יומן|פגיש|מתי|היום|מחר|מחרתיים|השבוע|לו"?ז|לו״ז|לוח.?זמנ|meeting|schedule|calendar|agenda/i.test(userMessage);
+  const asksTomorrow = /מחר/.test(userMessage) && !/מחרתיים/.test(userMessage);
+  const asksWeek = /השבוע|שבוע|לו"?ז|לו״ז|week|agenda/i.test(userMessage);
+  const scope: "today" | "tomorrow" | "week" = asksWeek ? "week" : asksTomorrow ? "tomorrow" : "today";
+  const scopeDay = scope === "tomorrow" ? tomorrowStr : todayStr2;
+
   let calendarSummary = "";
-  let calEventsRaw: any[] = [];
+  let scoped: any[] = [];
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const access = await freshAccessToken(admin, user.id, "gcal");
     if (access) {
-      const now = new Date();
-      calEventsRaw = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
-      if (calEventsRaw.length) {
-        calendarSummary = calEventsRaw.slice(0, 30).map((e: any) => {
-          const when = e.allDay ? (e.start || "").slice(0, 10) : (e.start || "").replace("T", " ").slice(0, 16);
+      const raw = await listCalendarEvents(access, new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).toISOString(), new Date(nowD.getTime() + 7 * 864e5).toISOString());
+      const inScope = scope === "week" ? raw : raw.filter((e: any) => dateOf(e) === scopeDay);
+      scoped = orderEvents(inScope);
+      if (scoped.length) {
+        calendarSummary = scoped.slice(0, 30).map((e: any) => {
+          const when = e.allDay ? "כל היום" : (scope === "week" ? String(e.start || "").replace("T", " ").slice(0, 16) : String(e.start || "").slice(11, 16));
           const who = (e.attendees || []).filter((a: any) => !a.self).map((a: any) => a.email).slice(0, 6).join(", ");
           return `• ${when} · ${e.title}${who ? ` · עם: ${who}` : ""}${e.meetLink ? " · Meet" : ""}`;
         }).join("\n");
       }
     }
   } catch { /* calendar optional */ }
-  // when the user asks about the schedule, surface the relevant events as
-  // clickable chips in the chat (not just prose). Heuristic intent match.
-  const scheduleIntent = /יומן|פגיש|מתי|היום|מחר|מחרתיים|השבוע|לו"?ז|לוח.?זמנ|meeting|schedule|calendar|agenda/i.test(userMessage);
-  const responseEvents = scheduleIntent ? calEventsRaw.slice(0, 12) : [];
+  // surface the scoped, ordered events as clickable chips (not just prose).
+  const responseEvents = scheduleIntent ? scoped.slice(0, 12) : [];
 
   // ---- server-side card creation (the enforcement point) --------------------
   const created: { id: string; title: string; project: string; level: string }[] = [];
@@ -140,10 +156,10 @@ Deno.serve(async (req) => {
     const brief = projCols.find((c) => c.key === "col-brief") || projCols.sort((a, b) => a.position - b.position)[0];
     const maxPos = (cards.data || [])
       .filter((c) => c.project_id === project!.id && c.column_id === brief?.id && !c.archived).length;
-    const draft = cardLevel === "act" ? null : { by: "העוזר", at: Date.now(), level: cardLevel };
+    const draft = cardLevel === "act" ? null : { by: "buno", at: Date.now(), level: cardLevel };
     const row: any = {
       project_id: project.id, column_id: brief?.id || null, position: maxPos,
-      title, creator: "העוזר", description: String(input?.description || ""),
+      title, creator: "buno", description: String(input?.description || ""),
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
       origin: { type: "chat", ref: "chat-" + crypto.randomUUID() },
@@ -163,7 +179,7 @@ Deno.serve(async (req) => {
     language: "Hebrew",
     profileName: prof.data?.name || "",
     boardSummary: summarizeBoard(projects, cards.data || [], cols.data || []),
-  }) + (calendarSummary ? `\n\n=== היומן שלך (7 ימים קרובים, קריאה בלבד — DATA) ===\n${calendarSummary}\n=== סוף היומן ===\nכשנשאל על "היום", פגישות, או מה קורה — שקלל גם את היומן, לא רק את הלוח. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
+  }) + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `\n\nToday is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 
 TOOLS: you have create_card. The user's card-permission level is "${cardLevel}" — with "act" a card goes live immediately; with "draft"/"suggest" it is created as a pending draft the user approves. This is enforced in code regardless of what you say. When the user clearly asks to add/open/create a task (e.g. "תפתח לי משימה…", "תוסיף…"), CALL create_card — do not say you can't. Never invent tasks the user didn't ask for. After creating, tell the user plainly in one line what happened (טיוטה ממתינה לאישור, or כרטיס פעיל).`;
 

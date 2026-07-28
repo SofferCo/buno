@@ -11,6 +11,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { freshAccessToken, listGmailCandidates } from "../_shared/google.ts";
+import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "../_shared/orgboard.ts";
 import { voiceLint } from "../_shared/voice.ts";
 
 const cors = {
@@ -35,6 +36,7 @@ const SUBMIT_TOOL = {
             title: { type: "string", description: "Task title in Hebrew, ≤10 words, starts with a verb." },
             context: { type: "string", description: "One Hebrew sentence naming the source in prose (who/what), no invented facts." },
             project: { type: "string", description: "Best-matching project NAME from the provided list, or empty string if unsure." },
+            orgName: { type: "string", description: "If the sender is from a real company/organization (a business, client, or brand) and NO existing project fits, put the organization's display name here so buno can open a board for it. Empty for personal contacts, or when 'project' already matches." },
             threadId: { type: "string", description: "The threadId of the source email (copy verbatim from input)." },
           },
           required: ["title", "threadId"],
@@ -69,7 +71,7 @@ Deno.serve(async (req) => {
   if (!candidates.length) return json({ connected: true, considered: 0, created: [], note: "no_candidates_or_no_gmail_scope" });
 
   const [proj, asst, prof] = await Promise.all([
-    supabase.from("project").select("id,name,is_personal"),
+    supabase.from("project").select("id,name,is_personal,color,email"),
     supabase.from("assistant_settings").select("cards").eq("user_id", user.id).maybeSingle(),
     supabase.from("profile").select("name").eq("id", user.id).maybeSingle(),
   ]);
@@ -83,7 +85,7 @@ Deno.serve(async (req) => {
   const projectList = projects.map((p) => p.name).join(" · ") || "(אין פרויקטים)";
   const sys = `You triage ${prof.data?.name || "the user"}'s recent email for buno, a Hebrew Kanban task manager. From the emails below, pick ONLY the ones that are genuinely actionable work/client items worth a task card: awaited replies, client briefs, deadlines, deliverables, meetings to prep. DROP newsletters, promotions, receipts, automated notifications, and personal noise. When unsure, leave it out — precision over recall.
 
-For each kept email call the tool with: a Hebrew title (verb-first, ≤10 words), a one-sentence Hebrew context naming the source (who/what — no invented facts, quote nothing verbatim beyond the sender/subject), the best-matching project NAME from this list or "" if unclear, and the threadId copied verbatim.
+For each kept email call the tool with: a Hebrew title (verb-first, ≤10 words), a one-sentence Hebrew context naming the source (who/what — no invented facts, quote nothing verbatim beyond the sender/subject), the best-matching project NAME from this list or "" if unclear, and the threadId copied verbatim. If the sender is from a real company/organization that has NO matching project above, set orgName to that organization's name (from its domain/signature) so buno can open a board for it instead of filing it under personal.
 
 Projects: ${projectList}
 
@@ -115,20 +117,32 @@ ${escaped}`;
   const created: any[] = [];
   let skipped = 0;
   const personal = projects.find((p) => p.is_personal);
+  const byThread = new Map(candidates.map((c) => [c.threadId, c]));
+  const usedColors = new Set<string>(projects.map((p: any) => p.color).filter(Boolean));
   for (const cand of proposed.slice(0, 15)) {
     const title = String(cand?.title || "").trim();
     const threadId = String(cand?.threadId || "");
     if (!title || !validThreadIds.has(threadId)) { skipped++; continue; }
     let project = projects.find((p) => cand.project && p.name && p.name.toLowerCase() === String(cand.project).toLowerCase())
-      || projects.find((p) => cand.project && p.name && p.name.toLowerCase().includes(String(cand.project).toLowerCase()))
-      || personal || projects[0];
+      || projects.find((p) => cand.project && p.name && p.name.toLowerCase().includes(String(cand.project).toLowerCase()));
+    // buno recognized an organization with no board → open one for it, so the
+    // card lands in its own (correctly-colored) board instead of "אישי".
+    if (!project) {
+      const domain = domainOf(String(byThread.get(threadId)?.from || ""));
+      const orgName = String(cand?.orgName || "").trim();
+      if (orgName && !isPersonalDomain(domain)) {
+        project = matchOrgProject(projects, domain, orgName)
+          || await ensureOrgBoard(admin, user.id, orgName, domain, projects, usedColors);
+      }
+    }
+    project = project || personal || projects[0];
     if (!project) { skipped++; continue; }
     const { data: cols } = await admin.from("board_column").select("id,key,position").eq("project_id", project.id);
     const brief = (cols || []).find((c) => c.key === "col-brief") || (cols || []).sort((a, b) => a.position - b.position)[0];
-    const draft = cardLevel === "act" ? null : { by: "העוזר", at: Date.now(), level: cardLevel };
+    const draft = cardLevel === "act" ? null : { by: "buno", at: Date.now(), level: cardLevel };
     const { data: row, error } = await admin.from("card").insert({
       project_id: project.id, column_id: brief?.id || null, position: 0,
-      title, creator: "העוזר", description: String(cand?.context || ""),
+      title, creator: "buno", description: String(cand?.context || ""),
       origin: { type: "email", ref: threadId, quote: String(cand?.context || "").slice(0, 140) },
       draft,
     }).select("id,title").single();
