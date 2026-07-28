@@ -1,24 +1,29 @@
 import { useState } from "react";
-import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { PRIORITY } from "../../lib/constants";
 import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
 import { fmtClock } from "../../lib/format";
 import { cardSeconds } from "../../lib/time";
 
-export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, onAsk, onClose, onOpenCard, onToggleTimer, onDone }) {
+export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, onAsk, onClose, onOpenCard, onToggleTimer, onDone }: any) {
   const clientOf = (id) => clients.find((c) => c.id === id);
   const [q, setQ] = useState("");
   function ask() { const t = q.trim(); if (!t) return; onAsk(t); setQ(""); }
-  const dateLabel = new Date().toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
-  // chronological: timed tasks by time first, then day-flex / untimed
-  const chrono = [...planTasks].sort((a, b) => {
-    const ta = a.card.time || "", tb = b.card.time || "";
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  // today's real Google Calendar events → timeline items
+  const eventItems = ((events && events[todayKey]) || []).map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location }));
+  // chronological: timed items by time, then untimed. Tasks + calendar events merged.
+  const taskItems = planTasks.map((t: any) => ({ kind: "task", id: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
+  const chrono = [...taskItems, ...eventItems].sort((a, b) => {
+    const ta = a.time || "", tb = b.time || "";
     if (ta && tb) return ta.localeCompare(tb);
     if (ta) return -1; if (tb) return 1; return 0;
   });
   const overdue = planTasks.filter((t) => deadlineInfo(t.card.deadline)?.tone === "over").length;
-  const firstTimed = chrono.find((t) => t.card.time);
+  const firstTimed = chrono.find((x) => x.time);
   const top = planTasks[0]?.card;
 
   // brief — voice: observe & hand over. no command / scold / apology / padding / emoji.
@@ -29,9 +34,24 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
   else if (top) headline = <>היום נשען על <span className="clay">"{top.title || "משימה"}"</span>.</>;
   else headline = `${dayClass}, ${planTasks.length} על השולחן.`;
   const briefLines = [];
-  if (firstTimed) { const cn = clientOf(firstTimed.card.clientId)?.name; briefLines.push(`הראשון בתור: "${firstTimed.card.title || "משימה"}" ב־${firstTimed.card.time}${cn ? ` · ${cn}` : ""}.`); }
+  if (firstTimed) {
+    if (firstTimed.kind === "event") briefLines.push(`הראשון בתור: ${firstTimed.title} ב־${firstTimed.time} (יומן).`);
+    else { const cn = clientOf(firstTimed.t.card.clientId)?.name; briefLines.push(`הראשון בתור: "${firstTimed.t.card.title || "משימה"}" ב־${firstTimed.time}${cn ? ` · ${cn}` : ""}.`); }
+  }
   if (pending?.requests) briefLines.push(`${pending.requests === 1 ? "בקשת תזמון אחת" : `${pending.requests} בקשות תזמון`} בתיבה.`);
   if (pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מהעוזר ממתינות למבט.`);
+
+  // a calendar event row — read-only, distinct from task rows
+  const EventRow = ({ e }: any) => (
+    <div className="adk-tl-row adk-tl-event" style={{ cursor: "default" }}>
+      <div className={"adk-tl-time" + (e.time ? "" : " flex")}>{e.time || "כל היום"}</div>
+      <div className="adk-tl-dot" style={{ background: "#C6613F" }} />
+      <div className="adk-tl-body">
+        <div className="ttl">{e.title}</div>
+        <div className="meta"><span className="cname">יומן{e.location ? ` · ${e.location}` : ""}</span></div>
+      </div>
+    </div>
+  );
 
   const TLRow = ({ t }) => {
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], dl = deadlineInfo(c.deadline), isRun = !!c.timerStart, timed = !!c.time && !flexDay(c);
@@ -63,7 +83,7 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
         <div className="adk-day2">
           <aside className="adk-day2-brief">
             <div className="adk-brief2-scroll">
-              <div className="adk-brief2-tag"><span className="adk-brief2-av"><Icon name="spark" size={13} /></span> העוזר שלך <DemoTag /></div>
+              <div className="adk-brief2-tag"><span className="adk-brief2-av"><Icon name="spark" size={13} /></span> העוזר שלך</div>
               <div className="adk-brief2-hl">{headline}</div>
               {briefLines.map((l, i) => <div key={i} className="adk-brief2-line">{l}</div>)}
               {runningCard && <div className="adk-brief2-now"><span className="rec-dot" /> טיימר פעיל · {runningCard.title || "משימה"} · {fmtClock(cardSeconds(runningCard, now))}</div>}
@@ -76,9 +96,9 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
           </aside>
 
           <div className="adk-day2-tasks">
-            {chrono.length === 0 && <div className="adk-day-empty">אין משימות בתוכנית של היום.</div>}
+            {chrono.length === 0 && <div className="adk-day-empty">אין משימות או אירועים בתוכנית של היום.</div>}
             {chrono.length > 0 && <div className="adk-tl-head">סדר היום</div>}
-            {chrono.map((t) => <TLRow key={t.card.id} t={t} />)}
+            {chrono.map((x) => x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />)}
             {upcoming.length > 0 && (<>
               <div className="adk-tl-head up">בקרוב · 7 ימים</div>
               {upcoming.map((t) => <TLRow key={t.card.id} t={t} />)}
