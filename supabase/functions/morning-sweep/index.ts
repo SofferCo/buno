@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
         await admin.from("assistant_message").insert({
           thread_id: threadId, role: "assistant", door: "sweep",
           content: snapshot,
-          meta: (r.created.length || r.reviewCount) ? { created: r.created.length ? r.created : undefined, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : undefined } : null,
+          meta: (r.created.length || r.reviewCount) ? { created: (r.created.length && !r.draftsWalked) ? r.created : undefined, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : undefined } : null,
         });
       }
       // also push the morning brief over WhatsApp, if the user linked & verified a number

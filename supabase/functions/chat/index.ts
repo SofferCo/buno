@@ -17,7 +17,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
-import { handleAction } from "../_shared/review.ts";
+import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -379,6 +379,7 @@ Deno.serve(async (req) => {
 4. בלי המצאות: נתון שלא בקונטקסט — אמור שאין לך אותו, אל תנחש. במיוחד: אל תסיק את תאריך המייל מגיל הכרטיס ("פתוח 6 ימים" ≠ "המייל מהיום"). זמן אמיתי: כרגע בישראל ${nowIL}.
 5. סגנון: עברית טבעית, טקסט רגיל בלבד. בלי Markdown, בלי כוכביות (** או *), בלי כותרות #. תבליט • קצר רק אם חייבים רשימה.
 6. עדיפות: כשנשאל "מה הכי דחוף/חשוב" — קריטי ראשון, אחריו חשוב, ורק אז דדליין (בעקביות עם "היום שלי").
+7. החלטה = הודעה משלה: אל תבלע שאלת כן/לא בתוך פסקת טקסט (למשל "רוצה שאתעד את X כהושלם?"). אם המשתמש לא ביקש פעולה — אל תבצע ואל תשאל בפרוזה; דווח קצר מה עשית ותעצור. הבקשה של המשתמש היא הטריגר, לא ניחוש שלך.
 
 Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 
@@ -436,6 +437,19 @@ After any tool call, tell the user plainly in one line what actually happened. I
   // guard: if the loop ended with tools but no closing text, still say something real
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים את הבקשה — נסה שוב.";
 
+  // unify (threshold): 1–2 drafts stay chips; 3+ become a guided one-by-one walk.
+  let reviewActions: any = null;
+  let showCards = created;
+  if (created.length >= 3) {
+    try {
+      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const queue = created.map((c) => ({ kind: "draft", cardId: c.id, title: c.title, project: c.project }));
+      await setSession(admin, user.id, queue as any, 0);
+      const opening = draftsOpening(queue as any);
+      reply = opening.text; reviewActions = opening.actions; showCards = []; // the walk replaces the chip dump
+    } catch { /* fall back to chips */ }
+  }
+
   const lint = voiceLint(reply);
   try {
     // one continuous conversation: reuse the passed thread, else the user's
@@ -449,15 +463,15 @@ After any tool call, tell the user plainly in one line what actually happened. I
       const { data: t } = await supabase.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
       threadId = t?.id;
     }
-    const meta = (created.length || responseEvents.length) ? { created, events: responseEvents } : null;
+    const meta = reviewActions ? { actions: reviewActions } : ((showCards.length || responseEvents.length) ? { created: showCards, events: responseEvents } : null);
     if (threadId) {
       await supabase.from("assistant_message").insert([
         { thread_id: threadId, role: "user", door: "web", content: userMessage },
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created, changed: changed.length + (boardChanged ? 1 : 0), events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
-    return json({ reply, created, changed: changed.length + (boardChanged ? 1 : 0), voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), voiceOk: lint.ok, voiceHits: lint.hits });
   }
 });

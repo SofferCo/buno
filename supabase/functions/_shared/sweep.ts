@@ -168,7 +168,7 @@ const SUBMIT_UPDATES_TOOL = {
 };
 
 export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
-export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null; waChannelDown: boolean };
+export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null; waChannelDown: boolean; draftsWalked: boolean };
 
 export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: string): Promise<SweepResult | null> {
   const access = await freshAccessToken(admin, userId, "gcal");
@@ -177,7 +177,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   // the user's projects (owner/member only — where a card may be created)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
-  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null, waChannelDown: false };
+  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null, waChannelDown: false, draftsWalked: false };
   // WhatsApp channel health — 3+ consecutive send failures ⇒ warn (likely token)
   let waChannelDown = false;
   try { const { data: waLink } = await admin.from("whatsapp_link").select("wa_fail_streak,verified").eq("user_id", userId).maybeSingle(); if (waLink?.verified && (Number(waLink.wa_fail_streak) || 0) >= 3) waChannelDown = true; } catch { /* pre-0016 */ }
@@ -342,6 +342,9 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     }
   } catch { /* nudges are best-effort — never block the snapshot */ }
 
+  // threshold: 3+ new drafts join the guided walk (else 1–2 stay chips)
+  const draftsWalked = created.length >= 3;
+  if (draftsWalked) for (const c of [...created].reverse()) reviewQueue.unshift({ kind: "draft", cardId: c.id, title: c.title, project: c.project });
   // calendar invites (pending RSVP) get their own review items — not filtered
   for (const e of events) {
     if (e.myStatus === "needsAction" && e.title) {
@@ -355,7 +358,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     else await clearSession(admin, userId);
   } catch { /* review_session may not exist before 0015 — degrade */ }
 
-  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening, waChannelDown };
+  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening, waChannelDown, draftsWalked };
 }
 
 // Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say
@@ -376,11 +379,10 @@ export function daySnapshot(r: SweepResult): string {
   const firstName = String(r.profileName || "").trim().split(/\s+/)[0]; // first name only, not "Tal Soffer"
   lines.push(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}. ${shape}.`);
   if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
-  if (r.created.length) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
+  if (r.created.length && !r.draftsWalked) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
   else if (!r.reviewCount) lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
-  // the opening stays ONE paragraph; thread updates/invites become a single
-  // offer line — the guided walk starts only when the user engages.
-  const offer = r.reviewCount ? `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?` : "";
+  // the opening stays ONE paragraph; the guided walk starts only on engagement.
+  const offer = r.reviewCount ? (r.draftsWalked ? `יש ${r.reviewCount} דברים לעבור עליהם — נעבור?` : `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?`) : "";
   const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
   // proactive nudges (P1.5–P1.7) get their own lines under the opening brief.
   return [lines.join(" "), waWarn, offer, ...(r.nudges || [])].filter(Boolean).join("\n");

@@ -77,7 +77,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       try {
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
-        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined }]);
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined, actions: res?.actions?.length ? res.actions : undefined }]);
       } catch (e: any) {
         setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע.", at: Date.now() }]);
       } finally { setTyping(false); }

@@ -7,7 +7,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type ReviewItem =
   | { kind: "update"; updateId: string; cardId: string; cardTitle: string; from: string; summary: string }
-  | { kind: "invite"; title: string; from: string; when: string; url: string };
+  | { kind: "invite"; title: string; from: string; when: string; url: string }
+  | { kind: "draft"; cardId: string; title: string; project: string };
 
 export type Action = { id: string; label: string; url?: string };
 export type Render = { text: string; actions: Action[]; done?: boolean };
@@ -31,7 +32,15 @@ function renderItem(item: ReviewItem, idx: number, total: number): Render {
   if (item.kind === "invite") {
     return { text: `${n}התקבלה הזמנה מ־${item.from} ל"${item.title}"${item.when ? ` · ${item.when}` : ""}.`, actions: [{ id: "rv:open_cal", label: "פתח ביומן", url: item.url }, { id: "rv:skip", label: "הבא ›" }] };
   }
+  if (item.kind === "draft") {
+    return { text: `${n}טיוטה: "${item.title}"${item.project ? ` · ${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }] };
+  }
   return { text: `${n}עדכון על "${item.cardTitle}" — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }] };
+}
+// immediate opening for a multi-draft walk (3+): preamble + the first item.
+export function draftsOpening(queue: ReviewItem[]): Render {
+  const first = currentRender({ queue, cursor: 0 });
+  return { text: `קלטתי ${queue.length} דברים — נעבור אחד־אחד:\n${first.text}`, actions: first.actions };
 }
 export function offerRender(count: number): Render {
   return { text: `סרקתי — יש ${count} עדכונים בשרשורים קיימים. בוא נעבור עליהם.`, actions: [{ id: "rv:start", label: "בוא נעבור" }] };
@@ -74,6 +83,10 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
       else if (actionId === "rv:new") { await createFromUpdate(admin, item); ack = "נפתחה משימה ✓"; }
       else ack = "דילגתי.";
       if (item.updateId) await admin.from("card_thread_update").delete().eq("id", item.updateId);
+    } else if (item.kind === "draft") {
+      if (actionId === "rv:approve") { await admin.from("card").update({ draft: null }).eq("id", item.cardId); ack = "אושר ✓"; }
+      else if (actionId === "rv:reject") { await admin.from("card").update({ archived: true, archived_at: new Date().toISOString(), removed_by: "assistant" }).eq("id", item.cardId); ack = "נדחה ✓"; }
+      else ack = "";
     } else {
       ack = actionId === "rv:skip" ? "" : "";
     }

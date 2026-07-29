@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     threadId = t?.id;
   }
   // scan-framed message; thread updates/invites are offered as a guided walk (buttons)
-  const base = r.created.length
+  const base = (r.created.length && !r.draftsWalked)
     ? `סרקתי שוב — ${r.created.length === 1 ? "יש טיוטה אחת חדשה" : `יש ${r.created.length} טיוטות חדשות`} על הלוח.`
     : (r.reviewCount ? "סרקתי שוב." : "סרקתי שוב — לא נראים דברים חדשים באופק.");
   const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
@@ -67,5 +67,5 @@ Deno.serve(async (req) => {
       { thread_id: threadId, role: "assistant", door: "sweep", content: snapshot, meta: r.created.length ? { created: r.created } : null },
     ]);
   }
-  return json({ ok: true, snapshot, created: r.created, considered: r.considered, nudges: r.nudges, review: r.reviewOpening });
+  return json({ ok: true, snapshot, created: r.draftsWalked ? [] : r.created, considered: r.considered, nudges: r.nudges, review: r.reviewOpening });
 });
