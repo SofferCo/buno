@@ -21,6 +21,26 @@ export async function sendWhatsApp(to: string, text: string): Promise<{ ok: bool
   return { ok: res.ok, status: res.status, body };
 }
 
+// Human-readable reason for a failed send — the Graph error code + message
+// (e.g. "code 190: Error validating access token: expired").
+export function waErrorReason(sent: { ok: boolean; status: number; body: string }): string | null {
+  if (sent?.ok) return null;
+  try { const e = JSON.parse(sent.body || "{}")?.error; if (e) return `code ${e.code}: ${e.message}`; } catch { /* not json */ }
+  return `HTTP ${sent?.status}`;
+}
+
+// Record send health on whatsapp_link: reset the streak on success, increment +
+// store the reason on failure. Returns the current consecutive-failure streak.
+export async function noteWaSend(admin: any, userId: string, sent: { ok: boolean; status: number; body: string }): Promise<number> {
+  try {
+    if (sent?.ok) { await admin.from("whatsapp_link").update({ wa_fail_streak: 0, wa_last_error: null, wa_last_at: new Date().toISOString() }).eq("user_id", userId); return 0; }
+    const { data } = await admin.from("whatsapp_link").select("wa_fail_streak").eq("user_id", userId).maybeSingle();
+    const streak = (Number(data?.wa_fail_streak) || 0) + 1;
+    await admin.from("whatsapp_link").update({ wa_fail_streak: streak, wa_last_error: waErrorReason(sent), wa_last_at: new Date().toISOString() }).eq("user_id", userId);
+    return streak;
+  } catch { return 0; }
+}
+
 async function post(payload: any): Promise<{ ok: boolean; status: number; body: string }> {
   const token = Deno.env.get("WA_ACCESS_TOKEN");
   if (!token) return { ok: false, status: 500, body: "WA_ACCESS_TOKEN missing" };

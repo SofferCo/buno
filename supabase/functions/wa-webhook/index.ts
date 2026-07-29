@@ -8,7 +8,7 @@
 // buno conversation (shared thread, door='whatsapp') → reply via sendWhatsApp.
 // Unknown number → one short onboarding line.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature } from "../_shared/whatsapp.ts";
+import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
 import { assistantReply, getThread } from "../_shared/assistantCore.ts";
 import { getSession, currentRender, handleAction } from "../_shared/review.ts";
 
@@ -26,7 +26,8 @@ async function recordOutbound(admin: any, userId: string, text: string, extraMet
     if (meta.actions && !meta.actions.length) delete meta.actions;
     if (sent && !sent.ok) { meta.waSendFailed = true; meta.waStatus = sent.status; }
     await admin.from("assistant_message").insert({ thread_id: threadId, role: "assistant", door: "whatsapp", content: text, meta: Object.keys(meta).length ? meta : null });
-    if (sent && !sent.ok) console.error("wa: review SEND FAILED", sent.status, String(sent.body || "").slice(0, 200));
+    const streak = await noteWaSend(admin, userId, sent);
+    if (sent && !sent.ok) console.error("wa: SEND FAILED (review)", sent.status, waErrorReason(sent), "streak", streak);
   } catch { /* recording best-effort */ }
 }
 
@@ -99,7 +100,8 @@ Deno.serve(async (req) => {
             if (!sent.ok) { meta.waSendFailed = true; meta.waStatus = sent.status; }
             await admin.from("assistant_message").insert({ thread_id: out.threadId, role: "assistant", door: "whatsapp", content: out.reply, meta: Object.keys(meta).length ? meta : null });
           }
-          if (!sent.ok) console.error("wa: SEND FAILED", sent.status, sent.body.slice(0, 300));
+          const streak = await noteWaSend(admin, userId, sent);
+          if (!sent.ok) console.error("wa: SEND FAILED", sent.status, waErrorReason(sent), "streak", streak);
         } catch (e) {
           console.error("wa: handler error", String((e as any)?.message || e));
           try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more */ }

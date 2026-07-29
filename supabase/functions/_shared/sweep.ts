@@ -168,7 +168,7 @@ const SUBMIT_UPDATES_TOOL = {
 };
 
 export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
-export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null };
+export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null; waChannelDown: boolean };
 
 export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: string): Promise<SweepResult | null> {
   const access = await freshAccessToken(admin, userId, "gcal");
@@ -177,7 +177,10 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   // the user's projects (owner/member only — where a card may be created)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
-  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null };
+  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null, waChannelDown: false };
+  // WhatsApp channel health — 3+ consecutive send failures ⇒ warn (likely token)
+  let waChannelDown = false;
+  try { const { data: waLink } = await admin.from("whatsapp_link").select("wa_fail_streak,verified").eq("user_id", userId).maybeSingle(); if (waLink?.verified && (Number(waLink.wa_fail_streak) || 0) >= 3) waChannelDown = true; } catch { /* pre-0016 */ }
   const [{ data: projects }, { data: prof }, { data: asst }] = await Promise.all([
     admin.from("project").select("id,name,is_personal").in("id", writeIds),
     admin.from("profile").select("name,settings").eq("id", userId).maybeSingle(),
@@ -352,7 +355,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     else await clearSession(admin, userId);
   } catch { /* review_session may not exist before 0015 — degrade */ }
 
-  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening };
+  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening, waChannelDown };
 }
 
 // Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say
@@ -378,6 +381,7 @@ export function daySnapshot(r: SweepResult): string {
   // the opening stays ONE paragraph; thread updates/invites become a single
   // offer line — the guided walk starts only when the user engages.
   const offer = r.reviewCount ? `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?` : "";
+  const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
   // proactive nudges (P1.5–P1.7) get their own lines under the opening brief.
-  return [lines.join(" "), offer, ...(r.nudges || [])].filter(Boolean).join("\n");
+  return [lines.join(" "), waWarn, offer, ...(r.nudges || [])].filter(Boolean).join("\n");
 }

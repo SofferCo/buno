@@ -7,7 +7,7 @@
 // snapshot is a private chat message, gathered content is DATA.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sweepUser, daySnapshot } from "../_shared/sweep.ts";
-import { sendWhatsApp, sendRender } from "../_shared/whatsapp.ts";
+import { sendWhatsApp, sendRender, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -61,8 +61,10 @@ Deno.serve(async (req) => {
         const { data: link } = await admin.from("whatsapp_link").select("phone,verified").eq("user_id", userId).maybeSingle();
         if (link?.verified && link.phone) {
           const s = await sendWhatsApp(link.phone, snapshot); waSent = s.ok;
+          const streak = await noteWaSend(admin, userId, s);
+          if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waErrorReason(s), "streak", streak);
           // if there are thread updates/invites, offer the guided walk with a button
-          if (r.reviewOpening) await sendRender(link.phone, r.reviewOpening);
+          if (s.ok && r.reviewOpening) await sendRender(link.phone, r.reviewOpening);
         }
       } catch { /* whatsapp push best-effort */ }
       results.push({ userId, created: r.created.length, considered: r.considered, waSent });

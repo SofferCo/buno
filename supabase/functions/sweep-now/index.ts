@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
   const base = r.created.length
     ? `סרקתי שוב — ${r.created.length === 1 ? "יש טיוטה אחת חדשה" : `יש ${r.created.length} טיוטות חדשות`} על הלוח.`
     : (r.reviewCount ? "סרקתי שוב." : "סרקתי שוב — לא נראים דברים חדשים באופק.");
-  const snapshot = [base, ...(r.nudges || [])].join("\n");
+  const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
+  const snapshot = [base, waWarn, ...(r.nudges || [])].filter(Boolean).join("\n");
   if (threadId) {
     await admin.from("assistant_message").insert([
       { thread_id: threadId, role: "user", door: "web", content: "סרוק עכשיו" },
