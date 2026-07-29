@@ -48,36 +48,32 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+  const debug: any[] = []; // Step-A: surfaced in the response body (Meta ignores it) so we can see send results without dashboard logs
   for (const entry of payload?.entry || []) {
     for (const change of entry?.changes || []) {
       const value = change?.value || {};
-      if (value.statuses) { console.log("wa: status update, ignoring"); continue; }
+      if (value.statuses) { debug.push({ stage: "status", ignored: true }); continue; }
       for (const msg of value.messages || []) {
         const from = digits(msg.from);
         try {
-          if (msg.type !== "text") { console.log("wa: non-text", msg.type); await sendWhatsApp(from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂"); continue; }
+          if (msg.type !== "text") { const r = await sendWhatsApp(from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂"); debug.push({ stage: "non-text", send: r.status, body: r.body.slice(0, 200) }); continue; }
           const text = String(msg.text?.body || "").trim();
-          console.log("wa: text from", from, "len", text.length);
-          if (!text) continue;
+          if (!text) { debug.push({ stage: "empty-text" }); continue; }
 
           const { data: links, error: linkErr } = await admin.from("whatsapp_link").select("user_id,phone");
-          if (linkErr) console.error("wa: whatsapp_link query error", linkErr.message);
           const link = (links || []).find((l: any) => digits(l.phone) === from);
-          console.log("wa: link match", !!link, "known phones", (links || []).map((l: any) => digits(l.phone)));
-          if (!link) { const r = await sendWhatsApp(from, ONBOARD); console.log("wa: onboarding sent", r.status, r.body.slice(0, 200)); continue; }
+          if (!link) { const r = await sendWhatsApp(from, ONBOARD); debug.push({ stage: "unknown-user", from, known: (links || []).map((l: any) => digits(l.phone)), linkErr: linkErr?.message, send: r.status, body: r.body.slice(0, 200) }); continue; }
 
           const reply = apiKey ? await assistantReply(admin, link.user_id, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
-          console.log("wa: reply ready, len", reply.length);
           const sent = await sendWhatsApp(from, reply);
-          console.log("wa: sendWhatsApp", sent.status, sent.ok, sent.body.slice(0, 300));
-          if (!sent.ok) { console.error("wa: SEND FAILED — likely WA_ACCESS_TOKEN expired or recipient not allow-listed"); }
+          debug.push({ stage: "reply", user: link.user_id, replyLen: reply.length, send: sent.status, ok: sent.ok, body: sent.body.slice(0, 400) });
         } catch (e) {
-          console.error("wa: handler error", String((e as any)?.message || e));
+          debug.push({ stage: "error", err: String((e as any)?.message || e) });
           try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more to do */ }
         }
       }
     }
   }
 
-  return new Response("ok", { status: 200 });
+  return new Response(JSON.stringify({ ok: true, debug }), { status: 200, headers: { "Content-Type": "application/json" } });
 });
