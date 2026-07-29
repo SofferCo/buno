@@ -33,8 +33,14 @@ Deno.serve(async (req) => {
   // ---- POST: verify signature over the RAW body ---------------------------
   const raw = await req.text();
   const appSecret = Deno.env.get("WA_APP_SECRET") || "";
-  const ok = await verifyWaSignature(raw, req.headers.get("x-hub-signature-256"), appSecret);
-  if (!ok) return new Response("bad signature", { status: 401 });
+  const sigHeader = req.headers.get("x-hub-signature-256");
+  console.log("wa: POST received, bytes=", raw.length, "hasSecret=", !!appSecret, "hasSig=", !!sigHeader);
+  if (appSecret) {
+    const ok = await verifyWaSignature(raw, sigHeader, appSecret);
+    if (!ok) { console.warn("wa: SIGNATURE MISMATCH — check WA_APP_SECRET matches Meta App Secret"); return new Response("bad signature", { status: 401 }); }
+  } else {
+    console.warn("wa: WA_APP_SECRET not set — skipping signature check (Step A only; set it!)");
+  }
 
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return new Response("bad json", { status: 400 }); }
@@ -42,32 +48,36 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  try {
-    for (const entry of payload?.entry || []) {
-      for (const change of entry?.changes || []) {
-        const value = change?.value || {};
-        // delivery/read statuses — acknowledge and ignore
-        if (value.statuses) continue;
-        for (const msg of value.messages || []) {
-          if (msg.type !== "text") { // Step A handles text only
-            await sendWhatsApp(msg.from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂");
-            continue;
-          }
-          const from = digits(msg.from);
+  for (const entry of payload?.entry || []) {
+    for (const change of entry?.changes || []) {
+      const value = change?.value || {};
+      if (value.statuses) { console.log("wa: status update, ignoring"); continue; }
+      for (const msg of value.messages || []) {
+        const from = digits(msg.from);
+        try {
+          if (msg.type !== "text") { console.log("wa: non-text", msg.type); await sendWhatsApp(from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂"); continue; }
           const text = String(msg.text?.body || "").trim();
+          console.log("wa: text from", from, "len", text.length);
           if (!text) continue;
 
-          // resolve the user by phone
-          const { data: links } = await admin.from("whatsapp_link").select("user_id,phone");
+          const { data: links, error: linkErr } = await admin.from("whatsapp_link").select("user_id,phone");
+          if (linkErr) console.error("wa: whatsapp_link query error", linkErr.message);
           const link = (links || []).find((l: any) => digits(l.phone) === from);
-          if (!link) { await sendWhatsApp(from, ONBOARD); continue; }
+          console.log("wa: link match", !!link, "known phones", (links || []).map((l: any) => digits(l.phone)));
+          if (!link) { const r = await sendWhatsApp(from, ONBOARD); console.log("wa: onboarding sent", r.status, r.body.slice(0, 200)); continue; }
 
           const reply = apiKey ? await assistantReply(admin, link.user_id, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
-          await sendWhatsApp(from, reply);
+          console.log("wa: reply ready, len", reply.length);
+          const sent = await sendWhatsApp(from, reply);
+          console.log("wa: sendWhatsApp", sent.status, sent.ok, sent.body.slice(0, 300));
+          if (!sent.ok) { console.error("wa: SEND FAILED — likely WA_ACCESS_TOKEN expired or recipient not allow-listed"); }
+        } catch (e) {
+          console.error("wa: handler error", String((e as any)?.message || e));
+          try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more to do */ }
         }
       }
     }
-  } catch (_e) { /* never fail the webhook — Meta would retry and duplicate */ }
+  }
 
   return new Response("ok", { status: 200 });
 });
