@@ -21,3 +21,8 @@ verify_jwt = false
 # on-demand sweep for the signed-in user (B4) — JWT-gated, rate-limited in code.
 [functions.sweep-now]
 verify_jwt = true
+
+# WhatsApp inbound webhook (Meta can't send a Supabase JWT) — authenticity via
+# X-Hub-Signature-256 HMAC over the raw body (WA_APP_SECRET).
+[functions.wa-webhook]
+verify_jwt = false
