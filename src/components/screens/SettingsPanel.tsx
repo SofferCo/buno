@@ -59,7 +59,7 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
         </div>
 
         <div className="adk-pcard-foot">
-          <p className="adk-block-title"><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="spark" size={15} /> העוזר הדיגיטלי · הרשאות</span></p>
+          <p className="adk-block-title"><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="sun" size={15} /> העוזר הדיגיטלי · הרשאות</span></p>
           <div className="adk-asst-set">
             {[["cards", "משימות", "יצירה ועריכה של כרטיסים"], ["calendar", "יומן", "אירועים וטיוטות תזמון"], ["outbound", "שליחה החוצה", "מיילים/הודעות בשמך"]].map(([k, label, desc]) => {
               const val = (profile.assistant && profile.assistant[k]) || "suggest";

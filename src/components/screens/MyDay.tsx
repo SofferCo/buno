@@ -97,7 +97,7 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
         <div className="adk-day2">
           <aside className="adk-day2-brief">
             <div className="adk-brief2-scroll">
-              <div className="adk-brief2-tag"><span className="adk-brief2-av"><Icon name="spark" size={13} /></span> buno</div>
+              <div className="adk-brief2-tag"><span className="adk-brief2-av"><Icon name="sun" size={13} /></span> buno</div>
               <div className="adk-brief2-hl">{headline}</div>
               {briefLines.map((l, i) => <div key={i} className="adk-brief2-line">{l}</div>)}
               {runningCard && <div className="adk-brief2-now"><span className="rec-dot" /> טיימר פעיל · {runningCard.title || "משימה"} · {fmtClock(cardSeconds(runningCard, now))}</div>}

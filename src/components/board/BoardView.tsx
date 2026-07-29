@@ -51,7 +51,7 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
                         {st.length > 0 && <span className="adk-checkmini">☑ {done}/{st.length}</span>}
                         {(card.comments || []).length > 0 && <span className="adk-checkmini"><Icon name="comment" size={13} /> {card.comments.length}</span>}
                         {card.proposed && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="בקשת לקוח ממתינה לאישור">⏳ בקשה</span>}
-                        {card.draft && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="טיוטת העוזר"><Icon name="spark" size={12} /> טיוטה</span>}
+                        {card.draft && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="טיוטת העוזר"><Icon name="sun" size={12} /> טיוטה</span>}
                       </div>
                       <div className="adk-card-foot">
                         {peopleOf(card).length > 0 && (

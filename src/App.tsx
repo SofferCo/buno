@@ -685,7 +685,7 @@ export default function App() {
           onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}
 
-      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><Icon name="spark" size={24} /></button>}
+      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><Icon name="sun" size={24} /></button>}
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}

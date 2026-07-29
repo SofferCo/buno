@@ -75,7 +75,7 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
       <div className="adk-panel-body">
         {card.draft && !viewer && (
           <div className="adk-draft-banner">
-            <div className="adk-draft-txt"><Icon name="spark" size={15} /> {card.draft.level === "suggest" ? "buno מציע את הכרטיס הזה" : "טיוטת buno — ממתינה לאישורך"}</div>
+            <div className="adk-draft-txt"><Icon name="sun" size={15} /> {card.draft.level === "suggest" ? "buno מציע את הכרטיס הזה" : "טיוטת buno — ממתינה לאישורך"}</div>
             <div className="adk-req-act">
               <button className="ok" onClick={() => onChange({ draft: undefined, cc: Array.from(new Set([...cc, profileName].map((s) => (s || "").trim()).filter(Boolean).filter((n) => n !== creator))) })}>אשר</button>
               <button className="no" onClick={onDelete}>דחה</button>

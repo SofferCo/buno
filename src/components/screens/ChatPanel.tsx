@@ -132,7 +132,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       <div className="adk-chat">
         <div className="adk-chat-head">
           <div className="adk-chat-id">
-            <div className="adk-chat-av"><Icon name="spark" size={18} /></div>
+            <div className="adk-chat-av"><Icon name="sun" size={18} /></div>
             <div>
               <b>buno</b>
               <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
@@ -144,7 +144,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         <div className="adk-chat-body" ref={boxRef}>
           {msgs.map((m: any, i) => (
             <div key={i} className={"adk-msg " + m.by}>
-              {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="spark" size={13} /></div>}
+              {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="sun" size={13} /></div>}
               <div className="adk-bubble">
                 {m.text.split("\n").map((l: string, k: number) => renderLine(l, k))}
                 {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}</div>}
@@ -172,7 +172,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                       return (
                         <div key={c.id} className="adk-chat-cardwrap">
                           <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
-                            <span className="ic" style={col ? { background: col } : undefined}><Icon name="spark" size={12} /></span>
+                            <span className="ic" style={col ? { background: col } : undefined}><Icon name="sun" size={12} /></span>
                             <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
                             <span className="go">›</span>
                           </button>
@@ -190,7 +190,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               </div>
             </div>
           ))}
-          {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="spark" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}
+          {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="sun" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}
         </div>
         {pendingFile && (
           <div className={"adk-chat-pending" + (pendingUrl ? " img" : "")}>
@@ -206,7 +206,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             {plusOpen && (<>
               <button className="adk-plus-scrim" onClick={() => setPlusOpen(false)} aria-label="סגור" />
               <div className="adk-plus-menu">
-                {live && onSweepNow && <button onClick={sweepNowLocal}><Icon name="spark" size={14} /> סרוק עכשיו</button>}
+                {live && onSweepNow && <button onClick={sweepNowLocal}><Icon name="sun" size={14} /> סרוק עכשיו</button>}
                 <button onClick={() => plusFileRef.current?.click()}><Icon name="plus" size={14} /> העלה קובץ</button>
               </div>
             </>)}
