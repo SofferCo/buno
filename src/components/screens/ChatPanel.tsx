@@ -36,7 +36,9 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const [cardActs, setCardActs] = useState<Record<string, string>>({}); // inline draft approve/reject state
   const [plusOpen, setPlusOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<any>(null); // file staged on the compose bar, waiting for the user's intent
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null); // object URL for an image preview
   const plusFileRef = useRef<any>();
+  function clearPending() { setPendingFile(null); if (pendingUrl) { URL.revokeObjectURL(pendingUrl); setPendingUrl(null); } }
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
@@ -61,7 +63,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     if (pendingFile) {
       const file = pendingFile;
       if (!text) { setMsgs((m) => [...m, { by: "twin", text: `קיבלתי את "${file.name}". מה לעשות איתו — לפתוח ממנו משימה, לצרף ללקוח, או לנתח?`, at: Date.now() }]); return; }
-      setPendingFile(null); setInput("");
+      clearPending(); setInput("");
       setMsgs((m) => [...m, { by: "me", text: `📎 ${file.name} — ${text}`, at: Date.now() }]);
       onUploadFile?.(file, text);
       setMsgs((m) => [...m, { by: "twin", text: `פתחתי טיוטה מהקובץ: "${text}". הקובץ מצורף — אפשר לפתוח ולסדר.`, at: Date.now() }]);
@@ -118,7 +120,9 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     setPlusOpen(false);
+    if (pendingUrl) URL.revokeObjectURL(pendingUrl);
     setPendingFile(file);
+    setPendingUrl(file.type?.startsWith("image/") ? URL.createObjectURL(file) : null);
   }
   useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, typing]);
   useEffect(() => { if (seed && !seededRef.current) { seededRef.current = true; send(seed); onSeedUsed && onSeedUsed(); } }, [seed]); // eslint-disable-line
@@ -189,9 +193,10 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
           {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="spark" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}
         </div>
         {pendingFile && (
-          <div className="adk-chat-pending">
-            <span className="pf">📎 <span className="fn">{pendingFile.name}</span></span>
-            <button className="x" onClick={() => setPendingFile(null)} title="הסר">×</button>
+          <div className={"adk-chat-pending" + (pendingUrl ? " img" : "")}>
+            {pendingUrl
+              ? <span className="thumb"><img src={pendingUrl} alt={pendingFile.name} /><button className="x" onClick={clearPending} title="הסר">×</button></span>
+              : <><span className="pf">📎 <span className="fn">{pendingFile.name}</span></span><button className="x" onClick={clearPending} title="הסר">×</button></>}
           </div>
         )}
         {!pendingFile && <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>}

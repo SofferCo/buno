@@ -591,6 +591,7 @@ export default function App() {
         </>)}
         <div className="adk-rail bare">
           <button className="adk-rail-btn" data-label="היום שלי" onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
+          <button className="adk-rail-btn" data-label="פרויקטים" onClick={() => { if (clients[0]) setCurrentId(clients[0].id); openPage(null); }}><Icon name="grid" /></button>
           <button className="adk-rail-btn" data-label="יומן" onClick={() => openPage("cal")}><Icon name="calendar" /></button>
           <button className="adk-rail-btn" data-label="דשבורד" onClick={() => openPage("dash")}><Icon name="chart" /></button>
         </div>

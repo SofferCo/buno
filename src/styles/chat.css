@@ -31,6 +31,12 @@
 .adk-chat-pending .pf .fn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .adk-chat-pending .x{flex:none;border:none;background:transparent;color:var(--faint);font-size:19px;line-height:1;cursor:pointer;padding:0 4px;}
 .adk-chat-pending .x:hover{color:var(--rec);}
+/* image staged: show the picture itself (thumbnail), not a filename */
+.adk-chat-pending.img{padding:10px 14px 2px;}
+.adk-chat-pending .thumb{position:relative;width:48px;height:48px;border-radius:10px;overflow:hidden;border:1px solid var(--border);flex:none;}
+.adk-chat-pending .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.adk-chat-pending .thumb .x{position:absolute;top:2px;inset-inline-start:2px;width:18px;height:18px;padding:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:12px;display:grid;place-items:center;}
+.adk-chat-pending .thumb .x:hover{background:var(--rec);color:#fff;}
 .adk-chat-sugg{display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--border);}
 .adk-chat-sugg button{border:1px solid var(--border);background:var(--surface-2);border-radius:16px;padding:5px 11px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;}
 .adk-chat-sugg button:hover{border-color:var(--accent);color:var(--accent-d);}

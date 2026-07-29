@@ -62,10 +62,11 @@ Deno.serve(async (req) => {
     : "סרקתי שוב — לא נראים דברים חדשים באופק.";
   const snapshot = [base, ...(r.nudges || [])].join("\n");
   if (threadId) {
-    await admin.from("assistant_message").insert({
-      thread_id: threadId, role: "assistant", door: "sweep",
-      content: snapshot, meta: r.created.length ? { created: r.created } : null,
-    });
+    // persist the trigger too, so the "סרוק עכשיו" turn survives a reload
+    await admin.from("assistant_message").insert([
+      { thread_id: threadId, role: "user", door: "web", content: "סרוק עכשיו" },
+      { thread_id: threadId, role: "assistant", door: "sweep", content: snapshot, meta: r.created.length ? { created: r.created } : null },
+    ]);
   }
   return json({ ok: true, snapshot, created: r.created, considered: r.considered, nudges: r.nudges });
 });
