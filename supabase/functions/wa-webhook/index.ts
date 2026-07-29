@@ -42,46 +42,49 @@ Deno.serve(async (req) => {
   const raw = await req.text();
   const appSecret = Deno.env.get("WA_APP_SECRET") || "";
   const sigHeader = req.headers.get("x-hub-signature-256");
-  console.log("wa: POST received, bytes=", raw.length, "hasSecret=", !!appSecret, "hasSig=", !!sigHeader);
-  // Step-A debug stamp (before signature) so ANY delivery from Meta is recorded
-  try { await admin.from("integration").upsert({ user_id: DEBUG_UID, kind: "whatsapp", status: "connected", external_id: `in ${new Date().toISOString()} sig=${!!sigHeader} len=${raw.length}`, connected_at: new Date().toISOString() }, { onConflict: "user_id,kind" }); } catch (_e) { /* best-effort */ }
+  // Step-A trace: written to the integration row so ?peek shows the full outcome
+  let trace = `arrived sig=${!!sigHeader} len=${raw.length}`;
+  const stamp = async () => { try { await admin.from("integration").upsert({ user_id: DEBUG_UID, kind: "whatsapp", status: "connected", external_id: `${new Date().toISOString()} ${trace}`.slice(0, 250), connected_at: new Date().toISOString() }, { onConflict: "user_id,kind" }); } catch (_e) { /* best-effort */ } };
+  await stamp();
   if (appSecret) {
     const ok = await verifyWaSignature(raw, sigHeader, appSecret);
-    if (!ok) { console.warn("wa: SIGNATURE MISMATCH — check WA_APP_SECRET matches Meta App Secret"); return new Response("bad signature", { status: 401 }); }
-  } else {
-    console.warn("wa: WA_APP_SECRET not set — skipping signature check (Step A only; set it!)");
-  }
+    if (!ok) { trace += " SIGFAIL"; await stamp(); return new Response("bad signature", { status: 401 }); }
+    trace += " sigOK";
+  } else { trace += " NOSECRET"; }
 
   let payload: any;
-  try { payload = JSON.parse(raw); } catch { return new Response("bad json", { status: 400 }); }
+  try { payload = JSON.parse(raw); } catch { trace += " BADJSON"; await stamp(); return new Response("bad json", { status: 400 }); }
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
   for (const entry of payload?.entry || []) {
     for (const change of entry?.changes || []) {
       const value = change?.value || {};
-      if (value.statuses) continue; // delivery/read acks
+      if (value.statuses) { trace += " status"; continue; }
       for (const msg of value.messages || []) {
         const from = digits(msg.from);
         try {
           if (msg.type !== "text") { await sendWhatsApp(from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂"); continue; }
           const text = String(msg.text?.body || "").trim();
-          if (!text) continue;
+          if (!text) { trace += " emptytext"; continue; }
 
           const { data: links } = await admin.from("whatsapp_link").select("user_id,phone");
           const link = (links || []).find((l: any) => digits(l.phone) === from);
-          if (!link) { await sendWhatsApp(from, ONBOARD); continue; }
+          trace += ` from=${from} link=${!!link}`;
+          if (!link) { const r = await sendWhatsApp(from, ONBOARD); trace += ` onboard=${r.status}`; continue; }
 
           const reply = apiKey ? await assistantReply(admin, link.user_id, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
           const sent = await sendWhatsApp(from, reply);
+          trace += ` reply=${reply.length} send=${sent.status}/${sent.ok} ${sent.body.slice(0, 120)}`;
           if (!sent.ok) console.error("wa: send failed", sent.status, sent.body.slice(0, 300));
         } catch (e) {
-          console.error("wa: handler error", String((e as any)?.message || e));
+          trace += ` ERR:${String((e as any)?.message || e).slice(0, 100)}`;
           try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more */ }
         }
       }
     }
   }
 
+  await stamp(); // final outcome for ?peek
   return new Response("ok", { status: 200 });
 });
