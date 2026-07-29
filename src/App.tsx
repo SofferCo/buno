@@ -693,7 +693,7 @@ export default function App() {
         onApproveCard={(id) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
         onRejectCard={(id) => deleteCard(id, "owner")}
         onSweepNow={async () => { const r = await sweepNow(); if (r?.ok && r?.created?.length) await refreshBoardFromCloud(currentId); return r; }}
-        onUploadFile={(file: any) => { const id = assistantAction("create_card", { title: file.name, description: "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
+        onUploadFile={(file: any, intent?: string) => { const id = assistantAction("create_card", { title: (intent || file.name || "").slice(0, 80), description: intent ? `מהקובץ ${file.name}` : "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}

@@ -5,7 +5,7 @@
 // 10 minutes so it can't be hammered. Uses the service role only to run the
 // shared sweepUser under the authenticated user's id.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sweepUser, daySnapshot } from "../_shared/sweep.ts";
+import { sweepUser } from "../_shared/sweep.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -56,7 +56,11 @@ Deno.serve(async (req) => {
     const { data: t } = await admin.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
     threadId = t?.id;
   }
-  const snapshot = daySnapshot(r);
+  // scan-framed message (not the morning "בוקר טוב" brief) — this is an on-demand scan
+  const base = r.created.length
+    ? `סרקתי שוב — ${r.created.length === 1 ? "יש טיוטה אחת חדשה" : `יש ${r.created.length} טיוטות חדשות`} על הלוח.`
+    : "סרקתי שוב — לא נראים דברים חדשים באופק.";
+  const snapshot = [base, ...(r.nudges || [])].join("\n");
   if (threadId) {
     await admin.from("assistant_message").insert({
       thread_id: threadId, role: "assistant", door: "sweep",

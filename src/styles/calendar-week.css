@@ -39,6 +39,9 @@
 .adk-cal-row .tx{overflow:hidden;text-overflow:ellipsis;}
 .adk-cal-row.demo{color:#8a5a12;}
 .adk-cal-cell.g.today{background:rgba(20,160,150,.05);}
+.adk-cal-cell.g{cursor:pointer;}
+.adk-cal-cell.g:hover{background:var(--surface-2);}
+.adk-cal-cell.g.sel{background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent) inset;}
 .adk-cal-wd div{text-align:center;font-size:12px;font-weight:800;color:var(--muted);}
 .adk-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;}
 .adk-cal-cell{aspect-ratio:1/1;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:6px 7px;display:flex;flex-direction:column;gap:4px;overflow:hidden;}

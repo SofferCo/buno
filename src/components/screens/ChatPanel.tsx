@@ -35,6 +35,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const [typing, setTyping] = useState(false);
   const [cardActs, setCardActs] = useState<Record<string, string>>({}); // inline draft approve/reject state
   const [plusOpen, setPlusOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<any>(null); // file staged on the compose bar, waiting for the user's intent
   const plusFileRef = useRef<any>();
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
@@ -54,7 +55,19 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const connectors = [{ n: "לוח", real: true }, { n: "יומן", real: !!calConnected }, { n: "מייל", real: !!mailConnected }, { n: "וואטסאפ", real: false }, { n: "דרייב", real: false }];
   const connectedNames = connectors.filter((c) => c.real).map((c) => c.n).join(" · ") || "לוח";
   async function send(q?: string) {
-    const text = (q ?? input).trim(); if (!text || typing) return;
+    const text = (q ?? input).trim();
+    if (typing) return;
+    // a staged file waits for the user's intent (B3): act only once they say what to do
+    if (pendingFile) {
+      const file = pendingFile;
+      if (!text) { setMsgs((m) => [...m, { by: "twin", text: `קיבלתי את "${file.name}". מה לעשות איתו — לפתוח ממנו משימה, לצרף ללקוח, או לנתח?`, at: Date.now() }]); return; }
+      setPendingFile(null); setInput("");
+      setMsgs((m) => [...m, { by: "me", text: `📎 ${file.name} — ${text}`, at: Date.now() }]);
+      onUploadFile?.(file, text);
+      setMsgs((m) => [...m, { by: "twin", text: `פתחתי טיוטה מהקובץ: "${text}". הקובץ מצורף — אפשר לפתוח ולסדר.`, at: Date.now() }]);
+      return;
+    }
+    if (!text) return;
     // LIVE assistant (Stage 3a: conversation over the real board via Claude)
     if (live && ask) {
       const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
@@ -99,14 +112,13 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי לסרוק כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }
-  // B3 — real file upload: buno opens a draft task from the file
+  // B3 — a picked file is STAGED on the compose bar; buno waits for the user to
+  // say what to do with it (never auto-acts on pick).
   function onPickFile(e: any) {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     setPlusOpen(false);
-    setMsgs((m) => [...m, { by: "me", text: `📎 ${file.name}`, at: Date.now() }]);
-    onUploadFile?.(file);
-    setMsgs((m) => [...m, { by: "twin", text: `העליתי את "${file.name}" ופתחתי ממנו טיוטת משימה על הלוח — אפשר לפתוח ולסדר.`, at: Date.now() }]);
+    setPendingFile(file);
   }
   useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, typing]);
   useEffect(() => { if (seed && !seededRef.current) { seededRef.current = true; send(seed); onSeedUsed && onSeedUsed(); } }, [seed]); // eslint-disable-line
@@ -176,7 +188,14 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
           ))}
           {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="spark" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}
         </div>
-        <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
+        {pendingFile && (
+          <div className="adk-chat-pending">
+            <span className="pf">📎 {pendingFile.name}</span>
+            <span className="hint">כתוב מה לעשות עם הקובץ ושלח</span>
+            <button className="x" onClick={() => setPendingFile(null)} title="הסר">×</button>
+          </div>
+        )}
+        {!pendingFile && <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>}
         <div className="adk-chat-input">
           <div className="adk-plus">
             <button className="adk-attach" onClick={() => setPlusOpen((o) => !o)} title="עוד"><Icon name="plus" size={18} /></button>

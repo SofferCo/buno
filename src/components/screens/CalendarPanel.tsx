@@ -40,8 +40,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   function goThisMonth() { setVy(base.getFullYear()); setVm(base.getMonth()); }
   function shiftWeek(n) { setWeekAnchor((d) => { const x = new Date(d); x.setDate(x.getDate() + n * 7); return x; }); }
   function goThisWeek() { const d = new Date(); d.setHours(0, 0, 0, 0); setWeekAnchor(d); }
-  function shiftDay(n) { setDayAnchor((d) => { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(0, 0, 0, 0); return x; }); }
-  function goToday() { const d = new Date(); d.setHours(0, 0, 0, 0); setDayAnchor(d); }
+  const selectDay = (y, m, d) => setDayAnchor(new Date(y, m, d)); // click a calendar tile → show that day in the side card (B5)
 
   // week days (Sunday-based)
   const ws = new Date(weekAnchor); ws.setDate(ws.getDate() - ws.getDay());
@@ -94,12 +93,12 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
                   const tasks = tasksByDay[ds] || []; const evs = demoEvents[ds] || [];
                   const items: any[] = [...tasks.map((c) => ({ kind: "task", c })), ...evs.map((e) => ({ kind: "demo", e }))];
                   return (
-                    <div className={"adk-cal-cell g" + (ds === today ? " today" : "")} key={d}>
+                    <div className={"adk-cal-cell g" + (ds === today ? " today" : "") + (ds === selDay ? " sel" : "")} key={d} onClick={() => selectDay(vy, vm, d)} title="הצג את היום הזה">
                       <div className={"adk-cal-num g" + (ds === today ? " today" : "")}>{d}</div>
                       <div className="adk-cal-items g">
                         {items.slice(0, 4).map((it, k) => it.kind === "task"
-                          ? <div className="adk-cal-row" key={k} onClick={() => onOpen(it.c.id)} title={`${it.c.title || "משימה"} · ${nameOf(it.c.clientId)}`}><span className="dot" style={{ background: colorOf(it.c.clientId) }} />{it.c.time && <b>{it.c.time} </b>}<span className="tx">{it.c.title || "משימה"}</span></div>
-                          : <div className={"adk-cal-row demo" + (eventsAreDemo ? "" : " ev")} key={k} onClick={(e) => { if (!eventsAreDemo) { e.stopPropagation(); onOpenEvent?.(it.e); } }} title={(eventsAreDemo ? "אירוע (הדגמה)" : "אירוע מהיומן") + (it.e.location ? " · " + it.e.location : "")}><span className="dot" style={{ background: (it.e.projectId && colorOf(it.e.projectId)) || "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
+                          ? <div className="adk-cal-row" key={k} onClick={(e) => { e.stopPropagation(); onOpen(it.c.id); }} title={`${it.c.title || "משימה"} · ${nameOf(it.c.clientId)}`}><span className="dot" style={{ background: colorOf(it.c.clientId) }} />{it.c.time && <b>{it.c.time} </b>}<span className="tx">{it.c.title || "משימה"}</span></div>
+                          : <div className={"adk-cal-row demo" + (eventsAreDemo ? "" : " ev")} key={k} onClick={(e) => { e.stopPropagation(); if (!eventsAreDemo) onOpenEvent?.(it.e); }} title={(eventsAreDemo ? "אירוע (הדגמה)" : "אירוע מהיומן") + (it.e.location ? " · " + it.e.location : "")}><span className="dot" style={{ background: (it.e.projectId && colorOf(it.e.projectId)) || "#C9821A" }} />{it.e.time && <b>{it.e.time} </b>}<span className="tx">{it.e.t}</span></div>
                         )}
                         {items.length > 4 && <div className="adk-cal-more">{items.length - 4}+ נוספים</div>}
                       </div>
@@ -178,11 +177,8 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
           {view === "month" && (
             <div className="adk-cal-today">
               <div className="adk-cal-today-head">
-                <button className="dnav" title="יום קודם" onClick={() => shiftDay(-1)}>›</button>
                 <div className="dnum">{dayAnchor.getDate()}</div>
-                <div className="dwrap"><div className="dl">{["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"][dayAnchor.getDay()]}</div><div className="ds">{HE_MONTHS[dayAnchor.getMonth()]}</div></div>
-                <button className="dnav" title="יום הבא" onClick={() => shiftDay(1)}>‹</button>
-                {!selIsToday && <button className="dtoday" onClick={goToday}>היום</button>}
+                <div><div className="dl">{["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"][dayAnchor.getDay()]}{!selIsToday && " · נבחר"}</div><div className="ds">{HE_MONTHS[dayAnchor.getMonth()]}</div></div>
               </div>
               <div className="adk-cal-agenda">
                 {todayItems.length === 0 && <div className="adk-cal-empty">{selIsToday ? "אין משימות להיום ✦" : "אין משימות ביום זה ✦"}</div>}
