@@ -5,7 +5,7 @@ import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
 import { fmtClock, fmtModeHours } from "../../lib/format";
 import { cardSeconds, sumHours } from "../../lib/time";
 
-export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onAsk, onClose, onOpenCard, onToggleTimer, onDone }: any) {
+export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onAsk, onClose, onOpenCard, onToggleTimer, onDone, onDefer }: any) {
   const clientOf = (id) => clients.find((c) => c.id === id);
   const [q, setQ] = useState("");
   function ask() { const t = q.trim(); if (!t) return; onAsk(t); setQ(""); }
@@ -15,8 +15,12 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
   const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   // today's real Google Calendar events → timeline items
   const eventItems = ((events && events[todayKey]) || []).map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
+  // overdue tasks are pulled out to their own top section ("חצו את הזמן"), not
+  // scattered through the chronological order.
+  const overdueTasks = planTasks.filter((t: any) => deadlineInfo(t.card.deadline)?.tone === "over");
+  const planRest = planTasks.filter((t: any) => deadlineInfo(t.card.deadline)?.tone !== "over");
   // chronological: timed items by time, then untimed. Tasks + calendar events merged.
-  const taskItems = planTasks.map((t: any) => ({ kind: "task", id: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
+  const taskItems = planRest.map((t: any) => ({ kind: "task", id: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
   const chrono = [...taskItems, ...eventItems].sort((a, b) => {
     const ta = a.time || "", tb = b.time || "";
     if (ta && tb) return ta.localeCompare(tb);
@@ -73,7 +77,11 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
             {dl && dl.tone === "over" && <span className="adk-dl over">{dl.text}</span>}
           </div>
         </div>
-        <button className={"adk-mini-timer" + (isRun ? " on" : "")} onClick={(e) => { e.stopPropagation(); onToggleTimer(c.id); }}>{isRun ? "■" : "▶"}</button>
+        <div className="adk-tl-actions">
+          {onDone && <button className="qa done" title="בוצע" onClick={(e) => { e.stopPropagation(); onDone(c.id); }}>✓</button>}
+          {onDefer && <button className="qa" title="דחה למחר" onClick={(e) => { e.stopPropagation(); onDefer(c.id); }}>→מחר</button>}
+          <button className={"adk-mini-timer" + (isRun ? " on" : "")} onClick={(e) => { e.stopPropagation(); onToggleTimer(c.id); }}>{isRun ? "■" : "▶"}</button>
+        </div>
       </div>
     );
   };
@@ -102,7 +110,11 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
           </aside>
 
           <div className="adk-day2-tasks">
-            {chrono.length === 0 && <div className="adk-day-empty">אין משימות או אירועים בתוכנית של היום.</div>}
+            {overdueTasks.length === 0 && chrono.length === 0 && <div className="adk-day-empty">אין משימות או אירועים בתוכנית של היום.</div>}
+            {overdueTasks.length > 0 && (<>
+              <div className="adk-tl-head over">חצו את הזמן</div>
+              {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
+            </>)}
             {chrono.length > 0 && <div className="adk-tl-head">סדר היום</div>}
             {chrono.map((x) => x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />)}
             {upcoming.length > 0 && (<>

@@ -15,7 +15,7 @@ import { uid } from "../../lib/id";
 import { ccOf, creatorOf } from "../../lib/people";
 import { cardSeconds, subHours } from "../../lib/time";
 
-export function CardPanel({ card, now, assets, client, projects, onMoveProject, onCreateProject, giverSuggestions, profileName, viewer, onClose, onChange, onDelete, onToggleTimer, onAddFiles, onAddLink, onUpdateAtt, onRemoveAtt }) {
+export function CardPanel({ card, now, assets, client, projects, onMoveProject, onCreateProject, onComplete, giverSuggestions, profileName, viewer, onClose, onChange, onDelete, onToggleTimer, onAddFiles, onAddLink, onUpdateAtt, onRemoveAtt }) {
   const isRun = !!card.timerStart, secs = cardSeconds(card, now);
   const directHours = Math.round((card.timeSpent || 0) / 3600);
   const subTotal = subHours(card);
@@ -263,7 +263,10 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
             </div>
           </>)}
         </div>
-        <button className="adk-btn primary" style={{ marginInlineStart: "auto" }} onClick={onClose}>שמור וסגור</button>
+        <div style={{ marginInlineStart: "auto", display: "flex", gap: 8 }}>
+          {!viewer && onComplete && card.activeColumn !== "col-done" && !card.draft && <button className="adk-btn done" onClick={onComplete}>✓ סיימתי</button>}
+          <button className="adk-btn primary" onClick={onClose}>שמור וסגור</button>
+        </div>
       </div>
     </div>
   );

@@ -94,3 +94,15 @@
 
 /* event chips in chat use a calendar-teal icon */
 .adk-chat-card.ev .ic.cal{background:linear-gradient(135deg,#0E8F8C,#0A6F6D);}
+
+/* a chat card that carries inline draft actions (B2) */
+.adk-chat-cardwrap{display:flex;flex-direction:column;gap:6px;}
+.adk-chat-card-acts{display:flex;gap:6px;padding-inline-start:2px;}
+.adk-chat-card-acts button{border-radius:8px;padding:5px 14px;font-size:12px;font-weight:800;font-family:inherit;cursor:pointer;border:1px solid var(--border);}
+.adk-chat-card-acts .ok{background:var(--accent);color:#fff;border-color:transparent;}
+.adk-chat-card-acts .ok:hover{background:var(--accent-d);}
+.adk-chat-card-acts .no{background:var(--surface);color:var(--muted);}
+.adk-chat-card-acts .no:hover{border-color:var(--rec);color:var(--rec);}
+.adk-chat-card-status{font-size:11.5px;font-weight:800;padding-inline-start:4px;}
+.adk-chat-card-status.approved{color:var(--accent-d);}
+.adk-chat-card-status.rejected{color:var(--muted);}

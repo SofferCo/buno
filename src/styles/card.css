@@ -16,6 +16,8 @@
 .adk-btn{border:none;border-radius:9px;padding:9px 16px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;}
 .adk-btn.primary{background:var(--accent);color:#fff;}
 .adk-btn.primary:hover{background:var(--accent-d);}
+.adk-btn.done{background:var(--accent-soft);color:var(--accent-d);}
+.adk-btn.done:hover{background:var(--accent);color:#fff;}
 .adk-btn.danger{background:transparent;color:var(--rec);margin-inline-end:auto;}
 .adk-btn.danger:hover{background:var(--rec-soft);}
 /* stepper */

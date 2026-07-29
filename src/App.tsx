@@ -621,6 +621,7 @@ export default function App() {
           profileName={viewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || identity?.name || "אני")}
           viewer={viewer || roleViewer}
           onClose={() => setEditing(null)} onChange={(viewer || roleViewer) ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, (viewer || roleViewer) ? "client" : "owner")}
+          onComplete={() => { moveCard(editing, "col-done"); setEditing(null); }}
           onToggleTimer={() => toggleTimer(editing)} onAddFiles={(fl) => addFiles(editing, fl)} onAddLink={() => addLink(editing)}
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
       </>)}
@@ -659,7 +660,8 @@ export default function App() {
           onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}
           onClose={() => setDayOpen(false)}
           onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); openPage(null); setEditing(id); } }}
-          onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")} />
+          onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")}
+          onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 
       {archiveOpen && (<>
@@ -688,6 +690,8 @@ export default function App() {
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
         onOpenSettings={() => { setChatOpen(false); openPage("settings"); }}
+        onApproveCard={(id) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
+        onRejectCard={(id) => deleteCard(id, "owner")}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}

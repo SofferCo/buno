@@ -28,11 +28,12 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, eventColor, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [cardActs, setCardActs] = useState<Record<string, string>>({}); // inline draft approve/reject state
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
@@ -129,12 +130,22 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                   <div className="adk-chat-cards">
                     {m.cards.map((c: any) => {
                       const col = cardColor?.(c);
+                      const isDraft = c.level && c.level !== "act"; // buno-created drafts get inline approve/reject
+                      const act = cardActs[c.id];
                       return (
-                        <button key={c.id} className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
-                          <span className="ic" style={col ? { background: col } : undefined}><Icon name="spark" size={12} /></span>
-                          <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
-                          <span className="go">›</span>
-                        </button>
+                        <div key={c.id} className="adk-chat-cardwrap">
+                          <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
+                            <span className="ic" style={col ? { background: col } : undefined}><Icon name="spark" size={12} /></span>
+                            <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
+                            <span className="go">›</span>
+                          </button>
+                          {isDraft && (act
+                            ? <span className={"adk-chat-card-status " + act}>{act === "approved" ? "אושר ✓" : "נדחה"}</span>
+                            : <span className="adk-chat-card-acts">
+                                <button className="ok" onClick={() => { onApproveCard?.(c.id); setCardActs((s: any) => ({ ...s, [c.id]: "approved" })); }}>אשר</button>
+                                <button className="no" onClick={() => { onRejectCard?.(c.id); setCardActs((s: any) => ({ ...s, [c.id]: "rejected" })); }}>דחה</button>
+                              </span>)}
+                        </div>
                       );
                     })}
                   </div>
