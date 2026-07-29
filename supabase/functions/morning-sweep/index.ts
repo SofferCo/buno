@@ -7,6 +7,7 @@
 // snapshot is a private chat message, gathered content is DATA.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sweepUser, daySnapshot } from "../_shared/sweep.ts";
+import { sendWhatsApp } from "../_shared/whatsapp.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -46,13 +47,20 @@ Deno.serve(async (req) => {
         const { data: t } = await admin.from("assistant_thread").insert({ user_id: userId }).select("id").single();
         threadId = t?.id;
       }
+      const snapshot = daySnapshot(r);
       if (threadId) {
         await admin.from("assistant_message").insert({
           thread_id: threadId, role: "assistant", door: "sweep",
-          content: daySnapshot(r), meta: r.created.length ? { created: r.created } : null,
+          content: snapshot, meta: r.created.length ? { created: r.created } : null,
         });
       }
-      results.push({ userId, created: r.created.length, considered: r.considered });
+      // also push the morning brief over WhatsApp, if the user linked & verified a number
+      let waSent = false;
+      try {
+        const { data: link } = await admin.from("whatsapp_link").select("phone,verified").eq("user_id", userId).maybeSingle();
+        if (link?.verified && link.phone) { const s = await sendWhatsApp(link.phone, snapshot); waSent = s.ok; }
+      } catch { /* whatsapp push best-effort */ }
+      results.push({ userId, created: r.created.length, considered: r.considered, waSent });
     } catch (e) {
       results.push({ userId, error: String(e) });
     }
