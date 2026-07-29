@@ -6,10 +6,10 @@ export function daysUntil(ds) { if (!ds) return null; const d = new Date(ds + "T
 
 export function deadlineInfo(ds) {
   const d = daysUntil(ds); if (d === null) return null;
-  if (d < 0) return { text: `באיחור ${-d}ד`, tone: "over" };
+  if (d < 0) return { text: `באיחור ${-d} ${-d === 1 ? "יום" : "ימים"}`, tone: "over" };
   if (d === 0) return { text: "היום", tone: "today" };
   if (d === 1) return { text: "מחר", tone: "soon" };
-  if (d <= 7) return { text: `בעוד ${d}ד`, tone: "soon" };
+  if (d <= 7) return { text: `בעוד ${d} ${d === 1 ? "יום" : "ימים"}`, tone: "soon" };
   const [, m, day] = ds.split("-"); return { text: `${+day}.${+m}`, tone: "far" };
 }
 

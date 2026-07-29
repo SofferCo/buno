@@ -281,9 +281,10 @@ export function daySnapshot(r: SweepResult): string {
   const lines: string[] = [];
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
   const shape = r.events.length >= 4 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";
-  lines.push(`${greetingFor(Date.now())}${r.profileName ? ` ${r.profileName}` : ""}. ${shape}.`);
+  const firstName = String(r.profileName || "").trim().split(/\s+/)[0]; // first name only, not "Tal Soffer"
+  lines.push(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}. ${shape}.`);
   if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
-  if (r.created.length) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת" : `${r.created.length} טיוטות`} לאישורך על הלוח.`);
+  if (r.created.length) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
   else lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
   // proactive nudges (P1.5–P1.7) get their own lines under the opening brief.
   return [lines.join(" "), ...(r.nudges || [])].filter(Boolean).join("\n");

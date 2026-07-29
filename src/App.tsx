@@ -48,7 +48,7 @@ export default function App() {
   const [dropCol, setDropCol] = useState<any>(null);
   const [clientMenu, setClientMenu] = useState(false);
   const [clientEdit, setClientEdit] = useState<any>(null);
-  const [dayOpen, setDayOpen] = useState(false);
+  const [dayOpen, setDayOpen] = useState(true); // default landing = "היום שלי" (board is one click away)
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [dashOpen, setDashOpen] = useState(false);
@@ -66,6 +66,8 @@ export default function App() {
       if (c.archived) return;
       const cn = clients.find((x) => x.id === c.clientId)?.name || "";
       const col = clients.find((x) => x.id === c.clientId)?.color || null;
+      // a card with no title can't be shown in lists — surface it in the bell instead, with a link to complete it
+      if (!String(c.title || "").trim()) { out.push({ id: "u" + c.id, type: "untitled", at: c.createdAt, cardId: c.id, title: "כרטיס בלי כותרת", client: cn, color: col, text: "כרטיס בלי כותרת ממתין להשלמה" }); return; }
       if (c.draft) out.push({ id: "d" + c.id, type: "draft", at: c.draft.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: "טיוטת buno ממתינה לאישור" });
       if (c.proposed) out.push({ id: "p" + c.id, type: "request", at: c.proposed.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: `בקשת תזמון מ${c.proposed.by || "לקוח"}` });
       (c.comments || []).forEach((cm) => {
@@ -468,7 +470,7 @@ export default function App() {
     .map((c) => ({ ...c, reason: c.archived ? (c.removedBy === "client" ? "client" : "deleted") : "done", when: c.archivedAt || c.createdAt }))
     .sort((a, b) => b.when - a.when);
 
-  const dayTasks = Object.values(cards).filter((c) => !c.archived && cardColumn[c.id] !== "col-done").map((c) => ({ card: c, d: daysUntil(c.deadline) }));
+  const dayTasks = Object.values(cards).filter((c) => !c.archived && cardColumn[c.id] !== "col-done" && String(c.title || "").trim()).map((c) => ({ card: c, d: daysUntil(c.deadline) }));
   const planWindow = (c) => c.routine === "monthly" ? 31 : 7;
   const inPlan = (t) => { if (t.d === null) return false; if (flexDay(t.card)) return t.d <= planWindow(t.card); return t.d <= 0; };
   const byTime = (a, b) => { const ta = a.card.time || "99:99", tb = b.card.time || "99:99"; return ta < tb ? -1 : ta > tb ? 1 : 0; };
@@ -578,7 +580,7 @@ export default function App() {
                 <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); openPage(null); setEditing(n.cardId); }}>
                   <span className={"adk-notif-dot " + n.type} style={n.color ? { background: n.color } : undefined} />
                   <span className="adk-notif-body">
-                    <span className="t">{n.type === "draft" ? "טיוטת buno" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
+                    <span className="t">{n.type === "draft" ? "טיוטת buno" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : n.type === "untitled" ? "להשלמה" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
                     <span className="s">{n.text}</span>
                     <span className="tm">{relTime(n.at)}</span>
                   </span>
@@ -685,6 +687,7 @@ export default function App() {
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
+        onOpenSettings={() => { setChatOpen(false); openPage("settings"); }}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}

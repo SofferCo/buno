@@ -94,13 +94,13 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             </div>
             {gcal?.status === "connected" && !gmailReady && (
               <div className="adk-asst-row" style={{ borderBottom: "none" }}>
-                <div className="adk-asst-info"><b>הוסף גישת מייל</b><span>כדי שהכפיל יזהה משימות מהמייל — התחבר מחדש ואשר גם את המייל</span></div>
+                <div className="adk-asst-info"><b>הוסף גישת מייל</b><span>כדי שבונו יזהה משימות מהמייל — התחבר מחדש ואשר גם את המייל</span></div>
                 <button className="adk-btn primary" disabled={busy} onClick={connect}>{busy ? "מפנה…" : "הוסף מייל"}</button>
               </div>
             )}
             {gcal?.status === "connected" && gmailReady && (
               <div className="adk-asst-row" style={{ borderBottom: "none" }}>
-                <div className="adk-asst-info"><b>סריקת מייל — חודש אחרון</b><span>הכפיל יעבור על המייל של 30 הימים האחרונים ויציע טיוטות משימות לאישורך</span></div>
+                <div className="adk-asst-info"><b>סריקת מייל — חודש אחרון</b><span>בונו יעבור על המייל של 30 הימים האחרונים ויציע טיוטות משימות לאישורך</span></div>
                 <button className="adk-btn primary" disabled={scanning} onClick={scan}>{scanning ? "סורק…" : "סרוק"}</button>
               </div>
             )}

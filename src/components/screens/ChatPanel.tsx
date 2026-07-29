@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { DemoTag } from "../ui/DemoTag";
 import { Icon } from "../ui/Icon";
 import { loadAssistantThread } from "../../data/assistant";
 
@@ -29,9 +28,9 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, eventColor, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
-  const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno, הכפיל הדיגיטלי שלך. כרגע אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
+  const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const boxRef = useRef<any>();
@@ -50,6 +49,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
   const connectors = [{ n: "לוח", real: true }, { n: "יומן", real: !!calConnected }, { n: "מייל", real: !!mailConnected }, { n: "וואטסאפ", real: false }, { n: "דרייב", real: false }];
+  const connectedNames = connectors.filter((c) => c.real).map((c) => c.n).join(" · ") || "לוח";
   async function send(q?: string) {
     const text = (q ?? input).trim(); if (!text || typing) return;
     // LIVE assistant (Stage 3a: conversation over the real board via Claude)
@@ -93,16 +93,15 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       <div className="adk-scrim" onClick={onClose} />
       <div className="adk-chat">
         <div className="adk-chat-head">
-          <div className="adk-chat-id"><div className="adk-chat-av"><Icon name="spark" size={18} /></div><div><b>buno</b><span>כפיל דיגיטלי · אחד בכל הדלתות</span></div></div>
+          <div className="adk-chat-id">
+            <div className="adk-chat-av"><Icon name="spark" size={18} /></div>
+            <div>
+              <b>buno</b>
+              <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
+            </div>
+          </div>
           <div className="sp" style={{ flex: 1 }} />
           <button className="adk-x" onClick={onClose}>×</button>
-        </div>
-        <div className="adk-conn">
-          <span className="adk-conn-lbl">מחובר ל־</span>
-          {connectors.map((c) => (
-            <span key={c.n} className={"adk-conn-chip" + (c.real ? " real" : "")} title={c.real ? "מחובר (אמיתי)" : "יחובר בגרסת השרת"}><span className="d" />{c.n}</span>
-          ))}
-          <DemoTag />
         </div>
         <div className="adk-chat-body" ref={boxRef}>
           {msgs.map((m: any, i) => (
@@ -148,7 +147,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
         <div className="adk-chat-input">
           <button className="adk-attach" onClick={attachDemo} title="העלה קובץ (הדגמה)"><Icon name="plus" size={18} /></button>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="שאל את הכפיל…" />
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="שאל את בונו…" />
           <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={17} /></button>
         </div>
       </div>

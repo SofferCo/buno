@@ -96,7 +96,7 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
             </div>
             <div className="adk-day-ask">
               <button className="adk-attach" title="העלה קובץ (הדגמה)" onClick={() => onAsk("📎 קובץ")}><Icon name="plus" size={18} /></button>
-              <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ask(); }} placeholder="שאל את הכפיל על היום שלך…" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ask(); }} placeholder="שאל את בונו על היום שלך…" />
               <button className="adk-cmt-send" onClick={ask} title="שלח"><Icon name="arrowUp" size={17} /></button>
             </div>
           </aside>
