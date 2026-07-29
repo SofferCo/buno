@@ -41,6 +41,6 @@ export async function loadAssistantThread(): Promise<{ threadId?: string; messag
   const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at");
   return {
     threadId: t.id,
-    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined })),
+    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined, waFailed: x.meta?.waSendFailed || undefined })),
   };
 }

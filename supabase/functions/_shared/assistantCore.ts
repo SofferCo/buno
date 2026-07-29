@@ -51,7 +51,16 @@ function summarize(projects: any[], cards: any[], cols: any[]): string {
   return lines.join("\n");
 }
 
-export async function assistantReply(admin: SupabaseClient, userId: string, userMessage: string, apiKey: string, door = "whatsapp"): Promise<string> {
+// Get (or create) the user's shared thread — exported so callers can persist the
+// assistant message themselves (with the real send outcome).
+export async function getThread(admin: SupabaseClient, userId: string): Promise<string | undefined> {
+  const { data: t } = await admin.from("assistant_thread").select("id").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (t?.id) return t.id;
+  const { data: nt } = await admin.from("assistant_thread").insert({ user_id: userId }).select("id").single();
+  return nt?.id;
+}
+
+export async function assistantReply(admin: SupabaseClient, userId: string, userMessage: string, apiKey: string, door = "whatsapp"): Promise<{ reply: string; created: any[]; threadId?: string }> {
   // board context + settings, admin-scoped to the user's own projects (no RLS)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
@@ -190,11 +199,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   } catch { reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך?` : reply); }
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים — נסה שוב.";
 
-  if (threadId) {
-    await admin.from("assistant_message").insert([
-      { thread_id: threadId, role: "user", door, content: userMessage },
-      { thread_id: threadId, role: "assistant", door, content: reply, meta: created.length ? { created } : null },
-    ]);
-  }
-  return reply;
+  // persist the USER message now; the caller persists the assistant message AFTER
+  // the send, so it can record whether the WhatsApp delivery actually succeeded.
+  if (threadId) await admin.from("assistant_message").insert({ thread_id: threadId, role: "user", door, content: userMessage });
+  return { reply, created, threadId };
 }

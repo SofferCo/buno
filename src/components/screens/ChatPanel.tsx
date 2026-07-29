@@ -167,7 +167,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                     ))}
                   </div>
                 )}
-                {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}</div>}
+                {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}{m.waFailed ? " · לא נשלח לוואטסאפ" : ""}</div>}
                 {m.events && m.events.length > 0 && (
                   <div className="adk-chat-cards">
                     {m.events.map((e: any, ei: number) => {

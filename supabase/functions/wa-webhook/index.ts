@@ -9,11 +9,26 @@
 // Unknown number → one short onboarding line.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature } from "../_shared/whatsapp.ts";
-import { assistantReply } from "../_shared/assistantCore.ts";
+import { assistantReply, getThread } from "../_shared/assistantCore.ts";
 import { getSession, currentRender, handleAction } from "../_shared/review.ts";
 
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
 const ONBOARD = "היי, אני בונו. כדי שנתחבר — היכנס ל־buno.io וחבר את המספר שלך.";
+
+// Persist an assistant outbound to the shared thread, recording whether the
+// WhatsApp send actually succeeded — so a failed delivery is never swallowed and
+// still surfaces in the web chat (with its buttons).
+async function recordOutbound(admin: any, userId: string, text: string, extraMeta: any, sent: any) {
+  try {
+    const threadId = await getThread(admin, userId);
+    if (!threadId) return;
+    const meta: any = { ...(extraMeta || {}) };
+    if (meta.actions && !meta.actions.length) delete meta.actions;
+    if (sent && !sent.ok) { meta.waSendFailed = true; meta.waStatus = sent.status; }
+    await admin.from("assistant_message").insert({ thread_id: threadId, role: "assistant", door: "whatsapp", content: text, meta: Object.keys(meta).length ? meta : null });
+    if (sent && !sent.ok) console.error("wa: review SEND FAILED", sent.status, String(sent.body || "").slice(0, 200));
+  } catch { /* recording best-effort */ }
+}
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -63,7 +78,7 @@ Deno.serve(async (req) => {
           if (msg.type === "interactive") {
             const id = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || "";
             if (id === "rv:more") { const s = await getSession(admin, userId); if (s) { const r = currentRender(s); await sendWhatsAppList(from, r.text, "בחר פעולה", r.actions.filter((a) => !a.url).map((a) => ({ id: a.id, title: a.label }))); } continue; }
-            if (id.startsWith("rv:")) { await sendRender(from, await handleAction(admin, userId, id)); continue; }
+            if (id.startsWith("rv:")) { const r = await handleAction(admin, userId, id); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
             continue;
           }
           if (msg.type !== "text") { await sendWhatsApp(from, "כרגע אני קורא טקסט וכפתורים. כתוב לי מה תרצה 🙂"); continue; }
@@ -72,11 +87,19 @@ Deno.serve(async (req) => {
 
           // resume a paused guided review with a natural phrase
           const s = await getSession(admin, userId);
-          if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { await sendRender(from, currentRender(s)); continue; }
+          if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { const r = currentRender(s); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
 
-          const reply = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
-          const sent = await sendWhatsApp(from, reply);
-          if (!sent.ok) console.error("wa: send failed", sent.status, sent.body.slice(0, 300));
+          const out = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : { reply: "מצטער, אני לא זמין כרגע.", created: [], threadId: await getThread(admin, userId) };
+          const sent = await sendWhatsApp(from, out.reply);
+          // persist the assistant reply WITH the send outcome — so a failed WhatsApp
+          // delivery is never swallowed: it's logged, recorded, and still shows in web.
+          if (out.threadId) {
+            const meta: any = {};
+            if (out.created?.length) meta.created = out.created;
+            if (!sent.ok) { meta.waSendFailed = true; meta.waStatus = sent.status; }
+            await admin.from("assistant_message").insert({ thread_id: out.threadId, role: "assistant", door: "whatsapp", content: out.reply, meta: Object.keys(meta).length ? meta : null });
+          }
+          if (!sent.ok) console.error("wa: SEND FAILED", sent.status, sent.body.slice(0, 300));
         } catch (e) {
           console.error("wa: handler error", String((e as any)?.message || e));
           try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more */ }
