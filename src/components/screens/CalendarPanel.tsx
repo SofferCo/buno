@@ -72,10 +72,10 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
               <button className={view === "week" ? "on" : ""} onClick={() => setView("week")}>שבוע</button>
             </div>
             <div className="adk-cal-nav">
-              {/* RTL: previous is on the right (›), next on the left (‹) */}
-              <button onClick={() => (view === "month" ? prevM() : shiftWeek(-1))} title="הקודם">›</button>
+              {/* RTL: previous on the right (‹), next on the left (›) */}
+              <button onClick={() => (view === "month" ? prevM() : shiftWeek(-1))} title="הקודם">‹</button>
               <button className="mid" onClick={() => (view === "month" ? goThisMonth() : goThisWeek())}>{view === "month" ? HE_MONTHS[vm] : "השבוע"}</button>
-              <button onClick={() => (view === "month" ? nextM() : shiftWeek(1))} title="הבא">‹</button>
+              <button onClick={() => (view === "month" ? nextM() : shiftWeek(1))} title="הבא">›</button>
             </div>
           </div>
 
