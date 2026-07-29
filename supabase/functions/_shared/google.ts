@@ -114,6 +114,27 @@ export async function fetchEmailRefs(accessToken: string, messageId: string): Pr
   }
 }
 
+// Full plain-text body of a message (top reply + quoted history). Used to decide
+// whether a reply in an existing thread is a substantive update or a mere ack —
+// the model needs the quoted content, not just the snippet. DATA, not instructions.
+export async function fetchEmailBody(accessToken: string, messageId: string): Promise<string> {
+  try {
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!r.ok) return "";
+    const m = await r.json();
+    let plain = "", html = "";
+    const walk = (p: any) => {
+      if (!p) return;
+      if (p.mimeType === "text/plain" && p.body?.data) plain += b64urlDecode(p.body.data) + "\n";
+      else if (p.mimeType === "text/html" && p.body?.data) html += b64urlDecode(p.body.data) + "\n";
+      (p.parts || []).forEach(walk);
+    };
+    walk(m.payload);
+    const text = plain || html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+    return text.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 4000);
+  } catch { return ""; }
+}
+
 // Read calendar events in a time window. Returns a compact, escaped shape —
 // remember: gathered content is DATA, never instructions.
 export async function listCalendarEvents(accessToken: string, timeMinISO: string, timeMaxISO: string) {

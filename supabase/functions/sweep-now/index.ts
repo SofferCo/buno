@@ -57,10 +57,11 @@ Deno.serve(async (req) => {
     threadId = t?.id;
   }
   // scan-framed message (not the morning "בוקר טוב" brief) — this is an on-demand scan
+  const upd = (r.threadUpdates || []).map((u) => `תשובות חדשות על "${u.cardTitle}" — ${u.from}: ${u.summary} לעדכן או לסגור?`);
   const base = r.created.length
     ? `סרקתי שוב — ${r.created.length === 1 ? "יש טיוטה אחת חדשה" : `יש ${r.created.length} טיוטות חדשות`} על הלוח.`
-    : "סרקתי שוב — לא נראים דברים חדשים באופק.";
-  const snapshot = [base, ...(r.nudges || [])].join("\n");
+    : (upd.length ? "סרקתי שוב — יש עדכונים בשרשורים קיימים:" : "סרקתי שוב — לא נראים דברים חדשים באופק.");
+  const snapshot = [base, ...upd, ...(r.nudges || [])].join("\n");
   if (threadId) {
     // persist the trigger too, so the "סרוק עכשיו" turn survives a reload
     await admin.from("assistant_message").insert([
