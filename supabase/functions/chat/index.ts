@@ -16,6 +16,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
+import { ensureOrgBoard } from "../_shared/orgboard.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -118,6 +119,42 @@ const ARCHIVE_CARD_TOOL = {
   },
 };
 
+const CREATE_PROJECT_TOOL = {
+  name: "create_project",
+  description: "Open a NEW project/board on the user's request (e.g. 'תפתח בורד לקודאטה'). Use ONLY on an explicit request for a new project/board. If a board with that name already exists it is reused.",
+  input_schema: {
+    type: "object",
+    properties: { name: { type: "string", description: "The board/project name, in the user's words." } },
+    required: ["name"],
+  },
+};
+
+const CREATE_CARDS_TOOL = {
+  name: "create_cards",
+  description: "Create MULTIPLE task cards at once. ALWAYS use this (not many create_card calls) when the user asks to add more than one task. Cards are drafts unless the permission level is 'act'.",
+  input_schema: {
+    type: "object",
+    properties: {
+      project: { type: "string", description: "Optional project name for all cards (match one of the user's projects, or a board you just created)." },
+      cards: {
+        type: "array",
+        description: "The tasks to create.",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Short Hebrew title, verb-first." },
+            description: { type: "string" },
+            deadline: { type: "string", description: "YYYY-MM-DD, only if the user stated one." },
+            priority: { type: "string", enum: ["regular", "important", "critical"] },
+          },
+          required: ["title"],
+        },
+      },
+    },
+    required: ["cards"],
+  },
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -206,6 +243,7 @@ Deno.serve(async (req) => {
 
   // ---- server-side card creation (the enforcement point) --------------------
   const created: { id: string; title: string; project: string; level: string }[] = [];
+  let boardChanged = false; // a new project/board was opened → the client should refresh
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim();
     if (!title) return "לא נוצר: חסרה כותרת.";
@@ -233,6 +271,33 @@ Deno.serve(async (req) => {
     return cardLevel === "act"
       ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}.`
       : `נוצרה טיוטה "${title}" בפרויקט ${project.name}, ממתינה לאישור המשתמש.`;
+  }
+  // bulk create — one tool call for many cards (avoids blowing max_tokens on many
+  // separate create_card calls). Reuses the single-create insert + enforcement.
+  async function doCreateCards(input: any): Promise<string> {
+    const list = Array.isArray(input?.cards) ? input.cards.slice(0, 40) : [];
+    if (!list.length) return "לא צוינו משימות ליצירה.";
+    const before = created.length; let failed = 0;
+    for (const item of list) { const out = await doCreateCard({ ...item, project: item?.project || input?.project }); if (out.startsWith("לא נוצר")) failed++; }
+    const n = created.length - before;
+    const projName = created[created.length - 1]?.project || "";
+    return `${cardLevel === "act" ? `נוצרו ${n} כרטיסים` : `נוצרו ${n} טיוטות`}${projName ? ` ב${projName}` : ""}${failed ? ` (${failed} נכשלו)` : ""}.`;
+  }
+  // open a new board on explicit request (reuses ensureOrgBoard; idempotent by name)
+  async function doCreateProject(input: any): Promise<string> {
+    const name = String(input?.name || "").trim();
+    if (!name) return "לא נוצר: חסר שם לבורד.";
+    try {
+      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const usedColors = new Set<string>((projects as any[]).map((p: any) => p.color).filter(Boolean));
+      const proj = await ensureOrgBoard(admin, user.id, name, "", projects as any[], usedColors);
+      if (!proj) return "לא הצלחתי לפתוח בורד.";
+      // pull the new board's columns into scope so create_card(s) can target it now
+      const { data: newCols } = await admin.from("board_column").select("id,project_id,key,title,position").eq("project_id", proj.id);
+      for (const c of newCols || []) (cols.data as any[]).push(c);
+      boardChanged = true;
+      return `פתחתי בורד "${proj.name}".`;
+    } catch (e) { return "לא הצלחתי לפתוח בורד: " + String((e as any)?.message || e); }
   }
 
   // ---- board organization (agency): reversible ops on explicit request -------
@@ -307,8 +372,10 @@ Deno.serve(async (req) => {
 Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 
 === TOOLS ===
-create_card — the card-permission level is "${cardLevel}" ("act" = card goes live immediately; "draft"/"suggest" = pending draft the user approves — enforced in code). Call it when the user clearly asks to add/open/create a task. Never invent tasks the user didn't ask for.
-move_card / complete_card / archive_card — organize the board on the user's EXPLICIT request only (e.g. "העבר ל'בעבודה'", "סמן שסיימתי", "תארכב"). These act directly (reversible). Identify the card by its title. Never move/complete/archive a card the user didn't clearly name.
+create_card — one task. The card-permission level is "${cardLevel}" ("act" = live immediately; "draft"/"suggest" = pending draft the user approves — enforced in code). Never invent tasks the user didn't ask for.
+create_cards — MANY tasks at once. ALWAYS use this (a single call with the array) when the user asks to add more than one task — do NOT call create_card many times.
+create_project — open a NEW board, ONLY on an explicit request ("תפתח בורד ל…"). After opening, you can add its cards with create_cards (project = the new board's name).
+move_card / complete_card / archive_card — organize the board on the user's EXPLICIT request only (e.g. "העבר ל'בעבודה'", "סמן שסיימתי", "תארכב"). Act directly (reversible), identify by title.
 After any tool call, tell the user plainly in one line what actually happened. If a tool reported it couldn't find the card/column, say so honestly — don't pretend it worked.`;
 
   const anthropic = new Anthropic({ apiKey });
@@ -322,13 +389,13 @@ After any tool call, tell the user plainly in one line what actually happened. I
 
   let reply = "";
   try {
-    for (let hop = 0; hop < 4; hop++) {
+    for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
         model: "claude-opus-5",
-        max_tokens: 1024,
+        max_tokens: 2048,
         output_config: { effort: "low" },
         system: sys,
-        tools: [CREATE_CARD_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
+        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
         messages,
       });
       if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
@@ -341,6 +408,8 @@ After any tool call, tell the user plainly in one line what actually happened. I
       for (const tu of toolUses) {
         let out = "כלי לא מוכר.";
         if (tu.name === "create_card") out = await doCreateCard(tu.input);
+        else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
+        else if (tu.name === "create_project") out = await doCreateProject(tu.input);
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
@@ -349,8 +418,12 @@ After any tool call, tell the user plainly in one line what actually happened. I
       messages.push({ role: "user", content: results });
     }
   } catch (e) {
-    return json({ error: "assistant failed", detail: String(e) }, 502);
+    // NEVER an empty bubble: report honestly what got done before the failure.
+    console.error("chat: loop error", String((e as any)?.message || e));
+    reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך מהמקום שעצרתי?` : "נתקלתי בתקלה זמנית — נסה שוב בעוד רגע.");
   }
+  // guard: if the loop ended with tools but no closing text, still say something real
+  if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים את הבקשה — נסה שוב.";
 
   const lint = voiceLint(reply);
   try {
@@ -372,8 +445,8 @@ After any tool call, tell the user plainly in one line what actually happened. I
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created, changed: changed.length, events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created, changed: changed.length + (boardChanged ? 1 : 0), events: responseEvents, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
-    return json({ reply, created, changed: changed.length, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, created, changed: changed.length + (boardChanged ? 1 : 0), voiceOk: lint.ok, voiceHits: lint.hits });
   }
 });

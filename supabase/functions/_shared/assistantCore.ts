@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
+import { ensureOrgBoard } from "./orgboard.ts";
 
 const CREATE_CARD_TOOL = {
   name: "create_card",
@@ -25,6 +26,8 @@ const CREATE_CARD_TOOL = {
 const MOVE_CARD_TOOL = { name: "move_card", description: "Move an existing card to another column on its board. Only on explicit request. Reversible.", input_schema: { type: "object", properties: { card: { type: "string" }, column: { type: "string" } }, required: ["card", "column"] } };
 const COMPLETE_CARD_TOOL = { name: "complete_card", description: "Mark a card done (move to the Done column). Only when the user says a task is finished.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 const ARCHIVE_CARD_TOOL = { name: "archive_card", description: "Archive a card (remove from the active board, reversible). Only on explicit request.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
+const CREATE_PROJECT_TOOL = { name: "create_project", description: "Open a NEW board on explicit request. Reused by name if it exists.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } };
+const CREATE_CARDS_TOOL = { name: "create_cards", description: "Create MANY task cards at once. ALWAYS use this (one call, array) when the user asks for more than one task — never call create_card repeatedly.", input_schema: { type: "object", properties: { project: { type: "string" }, cards: { type: "array", items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] } }, required: ["title"] } } }, required: ["cards"] } };
 
 function summarize(projects: any[], cards: any[], cols: any[]): string {
   const colTitle = new Map<string, string>(cols.map((c: any) => [c.id, c.title]));
@@ -94,6 +97,25 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     cards.push(data); created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
     return cardLevel === "act" ? `נוצר כרטיס "${title}" ב${project.name}.` : `נוצרה טיוטה "${title}" ב${project.name}, ממתינה לאישורך.`;
   }
+  async function doCreateCards(input: any): Promise<string> {
+    const list = Array.isArray(input?.cards) ? input.cards.slice(0, 40) : [];
+    if (!list.length) return "לא צוינו משימות.";
+    const before = created.length; let failed = 0;
+    for (const item of list) { const out = await doCreateCard({ ...item, project: item?.project || input?.project }); if (out.startsWith("לא נוצר")) failed++; }
+    const n = created.length - before; const projName = created[created.length - 1]?.project || "";
+    return `${cardLevel === "act" ? `נוצרו ${n} כרטיסים` : `נוצרו ${n} טיוטות`}${projName ? ` ב${projName}` : ""}${failed ? ` (${failed} נכשלו)` : ""}.`;
+  }
+  async function doCreateProject(input: any): Promise<string> {
+    const name = String(input?.name || "").trim(); if (!name) return "לא נוצר: חסר שם.";
+    try {
+      const usedColors = new Set<string>((projects as any[]).map((p: any) => p.color).filter(Boolean));
+      const proj = await ensureOrgBoard(admin, userId, name, "", projects as any[], usedColors);
+      if (!proj) return "לא הצלחתי לפתוח בורד.";
+      const { data: newCols } = await admin.from("board_column").select("id,project_id,key,title,position,is_done").eq("project_id", proj.id);
+      for (const c of newCols || []) (cols as any[]).push(c);
+      return `פתחתי בורד "${proj.name}".`;
+    } catch (e) { return "לא הצלחתי לפתוח בורד: " + String((e as any)?.message || e); }
+  }
   async function moveTo(card: any, col: any): Promise<boolean> {
     const { error } = await admin.from("card").update({ column_id: col.id, active_column_key: col.key }).eq("id", card.id);
     if (error) return false; card.column_id = col.id; changed.push(card.id); return true;
@@ -135,16 +157,16 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     boardSummary: summarize(projects, cards, cols),
     capabilities: { createCard: true, organizeCards: true, calendar: false, email: false },
   }) + `\n\nToday is ${today}. הודעת וואטסאפ — קצר במיוחד: משפט־שניים, בלי Markdown.
-כלים: create_card ברמת "${cardLevel}" ("act"=כרטיס חי מיד; אחרת טיוטה לאישור — נאכף בקוד). move_card/complete_card/archive_card רק על בקשה מפורשת, זיהוי לפי כותרת. אחרי כלי — שורה אחת מה קרה, בכנות.`;
+כלים: create_card (משימה אחת, רמה "${cardLevel}"); create_cards (כמה משימות — תמיד קריאה אחת עם מערך, לא הרבה create_card); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card רק על בקשה מפורשת, זיהוי לפי כותרת. אחרי כלי — שורה אחת מה קרה, בכנות.`;
 
   const messages: any[] = [...history, { role: "user", content: userMessage }];
   let reply = "מצטער, לא הצלחתי להשיב כרגע.";
   try {
     const anthropic = new Anthropic({ apiKey });
-    for (let hop = 0; hop < 4; hop++) {
+    for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
-        model: "claude-opus-5", max_tokens: 700, output_config: { effort: "low" },
-        system: sys, tools: [CREATE_CARD_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
+        model: "claude-opus-5", max_tokens: 1500, output_config: { effort: "low" },
+        system: sys, tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
       });
       if (res.stop_reason === "refusal") { reply = "מצטער, לא אוכל לעזור בזה."; break; }
       const textNow = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
@@ -156,6 +178,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       for (const tu of toolUses) {
         let out = "כלי לא מוכר.";
         if (tu.name === "create_card") out = await doCreateCard(tu.input);
+        else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
+        else if (tu.name === "create_project") out = await doCreateProject(tu.input);
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
@@ -163,7 +187,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       }
       messages.push({ role: "user", content: results });
     }
-  } catch { /* keep the default reply */ }
+  } catch { reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך?` : reply); }
+  if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים — נסה שוב.";
 
   if (threadId) {
     await admin.from("assistant_message").insert([
