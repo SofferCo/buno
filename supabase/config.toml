@@ -17,3 +17,7 @@ verify_jwt = true
 # invoked by pg_cron, not the browser — gated by the CRON_SECRET header.
 [functions.morning-sweep]
 verify_jwt = false
+
+# on-demand sweep for the signed-in user (B4) — JWT-gated, rate-limited in code.
+[functions.sweep-now]
+verify_jwt = true

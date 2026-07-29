@@ -10,6 +10,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   const [vy, setVy] = useState(base.getFullYear());
   const [vm, setVm] = useState(base.getMonth());
   const [weekAnchor, setWeekAnchor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  const [dayAnchor, setDayAnchor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }); // the day shown in the side agenda card (B5)
   const [hidden, setHidden] = useState(() => new Set());
   const [showDemo, setShowDemo] = useState(true);
   const pad = (n) => String(n).padStart(2, "0");
@@ -39,6 +40,8 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   function goThisMonth() { setVy(base.getFullYear()); setVm(base.getMonth()); }
   function shiftWeek(n) { setWeekAnchor((d) => { const x = new Date(d); x.setDate(x.getDate() + n * 7); return x; }); }
   function goThisWeek() { const d = new Date(); d.setHours(0, 0, 0, 0); setWeekAnchor(d); }
+  function shiftDay(n) { setDayAnchor((d) => { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(0, 0, 0, 0); return x; }); }
+  function goToday() { const d = new Date(); d.setHours(0, 0, 0, 0); setDayAnchor(d); }
 
   // week days (Sunday-based)
   const ws = new Date(weekAnchor); ws.setDate(ws.getDate() - ws.getDay());
@@ -49,10 +52,11 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
   const parseHM = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; };
 
-  const td = new Date();
+  const selDay = dstr(dayAnchor);
+  const selIsToday = selDay === today;
   const todayItems: any[] = [
-    ...(tasksByDay[today] || []).map((c) => ({ kind: "task", time: c.time || "", title: c.title || "משימה", card: c })),
-    ...(demoEvents[today] || []).map((e) => ({ kind: "demo", time: e.time || "", title: e.t, e })),
+    ...(tasksByDay[selDay] || []).map((c) => ({ kind: "task", time: c.time || "", title: c.title || "משימה", card: c })),
+    ...(demoEvents[selDay] || []).map((e) => ({ kind: "demo", time: e.time || "", title: e.t, e })),
   ].sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
 
   const weekTitle = (() => { const a = weekDays[0], b = weekDays[6]; return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} ${HE_MONTHS[a.getMonth()]}` : `${a.getDate()} ${HE_MONTHS[a.getMonth()]} – ${b.getDate()} ${HE_MONTHS[b.getMonth()]}`; })();
@@ -174,11 +178,14 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
           {view === "month" && (
             <div className="adk-cal-today">
               <div className="adk-cal-today-head">
-                <div className="dnum">{td.getDate()}</div>
-                <div><div className="dl">{["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"][td.getDay()]}</div><div className="ds">{HE_MONTHS[td.getMonth()]}</div></div>
+                <button className="dnav" title="יום קודם" onClick={() => shiftDay(-1)}>›</button>
+                <div className="dnum">{dayAnchor.getDate()}</div>
+                <div className="dwrap"><div className="dl">{["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"][dayAnchor.getDay()]}</div><div className="ds">{HE_MONTHS[dayAnchor.getMonth()]}</div></div>
+                <button className="dnav" title="יום הבא" onClick={() => shiftDay(1)}>‹</button>
+                {!selIsToday && <button className="dtoday" onClick={goToday}>היום</button>}
               </div>
               <div className="adk-cal-agenda">
-                {todayItems.length === 0 && <div className="adk-cal-empty">אין משימות להיום ✦</div>}
+                {todayItems.length === 0 && <div className="adk-cal-empty">{selIsToday ? "אין משימות להיום ✦" : "אין משימות ביום זה ✦"}</div>}
                 {todayItems.map((it, k) => (
                   <div className={"adk-agenda-row" + (it.kind === "demo" ? " demo" : "")} key={k} onClick={it.card ? () => onOpen(it.card.id) : (!eventsAreDemo && it.e ? () => onOpenEvent?.(it.e) : undefined)}>
                     <div className="tm">{it.time || "—"}</div>

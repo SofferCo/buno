@@ -28,12 +28,14 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, eventColor, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onUploadFile, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [cardActs, setCardActs] = useState<Record<string, string>>({}); // inline draft approve/reject state
+  const [plusOpen, setPlusOpen] = useState(false);
+  const plusFileRef = useRef<any>();
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
@@ -82,10 +84,29 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     const reply = answer(text);
     setTimeout(() => { setMsgs((m) => [...m, { by: "twin", text: reply }]); setTyping(false); }, 480);
   }
-  function attachDemo() {
+  // B4 — run the sweep pipeline on demand and show the result in the chat
+  async function sweepNowLocal() {
     if (typing) return;
-    setMsgs((m) => [...m, { by: "me", text: "📎 בריף_לקוח.pdf" }]); setTyping(true);
-    setTimeout(() => { setMsgs((m) => [...m, { by: "twin", text: "קיבלתי את הקובץ. בגרסה המחוברת אנתח את הבריף ואפתח ממנו משימה תחת הלקוח המתאים — עם כותרת, דגשים וקבצים מצורפים. (הדגמה)" }]); setTyping(false); }, 650);
+    setPlusOpen(false);
+    if (!onSweepNow) return;
+    setMsgs((m) => [...m, { by: "me", text: "סרוק עכשיו", at: Date.now() }]); setTyping(true);
+    try {
+      const r = await onSweepNow();
+      const txt = r?.rateLimited || r?.connected === false ? (r?.message || "לא הצלחתי לסרוק כרגע.")
+        : r?.ok ? (r.snapshot || "סרקתי — אין פריט חדש.") : (r?.message || "לא הצלחתי לסרוק כרגע.");
+      const cards = r?.ok && r?.created?.length ? r.created.map((c: any) => ({ ...c, level: "draft" })) : undefined;
+      setMsgs((m) => [...m, { by: "twin", text: txt, at: Date.now(), cards }]);
+    } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי לסרוק כרגע.", at: Date.now() }]); }
+    finally { setTyping(false); }
+  }
+  // B3 — real file upload: buno opens a draft task from the file
+  function onPickFile(e: any) {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    setPlusOpen(false);
+    setMsgs((m) => [...m, { by: "me", text: `📎 ${file.name}`, at: Date.now() }]);
+    onUploadFile?.(file);
+    setMsgs((m) => [...m, { by: "twin", text: `העליתי את "${file.name}" ופתחתי ממנו טיוטת משימה על הלוח — אפשר לפתוח ולסדר.`, at: Date.now() }]);
   }
   useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, typing]);
   useEffect(() => { if (seed && !seededRef.current) { seededRef.current = true; send(seed); onSeedUsed && onSeedUsed(); } }, [seed]); // eslint-disable-line
@@ -157,7 +178,17 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         </div>
         <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>
         <div className="adk-chat-input">
-          <button className="adk-attach" onClick={attachDemo} title="העלה קובץ (הדגמה)"><Icon name="plus" size={18} /></button>
+          <div className="adk-plus">
+            <button className="adk-attach" onClick={() => setPlusOpen((o) => !o)} title="עוד"><Icon name="plus" size={18} /></button>
+            {plusOpen && (<>
+              <button className="adk-plus-scrim" onClick={() => setPlusOpen(false)} aria-label="סגור" />
+              <div className="adk-plus-menu">
+                {live && onSweepNow && <button onClick={sweepNowLocal}><Icon name="spark" size={14} /> סרוק עכשיו</button>}
+                <button onClick={() => plusFileRef.current?.click()}><Icon name="plus" size={14} /> העלה קובץ</button>
+              </div>
+            </>)}
+            <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
+          </div>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="שאל את בונו…" />
           <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={17} /></button>
         </div>

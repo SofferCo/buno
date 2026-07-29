@@ -24,7 +24,7 @@ import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant } from "./data/assistant";
-import { fetchCalendar, listIntegrations, hasGmailScope } from "./data/integrations";
+import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow } from "./data/integrations";
 import { inferEventProjectId } from "./lib/inferProject";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
@@ -692,6 +692,8 @@ export default function App() {
         onOpenSettings={() => { setChatOpen(false); openPage("settings"); }}
         onApproveCard={(id) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
         onRejectCard={(id) => deleteCard(id, "owner")}
+        onSweepNow={async () => { const r = await sweepNow(); if (r?.ok && r?.created?.length) await refreshBoardFromCloud(currentId); return r; }}
+        onUploadFile={(file: any) => { const id = assistantAction("create_card", { title: file.name, description: "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}

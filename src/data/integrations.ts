@@ -52,3 +52,13 @@ export async function scanGmail(): Promise<ScanResult> {
 }
 
 export const hasGmailScope = (i?: Integration) => !!i?.scopes?.some((s) => s.includes("gmail"));
+
+export type SweepNowResult = { ok: boolean; rateLimited?: boolean; connected?: boolean; waitMin?: number; message?: string; snapshot?: string; created?: { id: string; title: string; project: string }[]; nudges?: string[] };
+
+// "Scan now" — run the full sweep pipeline for the current user on demand (B4).
+export async function sweepNow(): Promise<SweepNowResult> {
+  if (!supabase) return { ok: false, message: "לא במצב מחובר" };
+  const { data, error } = await supabase.functions.invoke("sweep-now", { body: {} });
+  if (error) return { ok: false, message: error.message };
+  return data as SweepNowResult;
+}
