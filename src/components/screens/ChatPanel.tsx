@@ -190,8 +190,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         </div>
         {pendingFile && (
           <div className="adk-chat-pending">
-            <span className="pf">📎 {pendingFile.name}</span>
-            <span className="hint">כתוב מה לעשות עם הקובץ ושלח</span>
+            <span className="pf">📎 <span className="fn">{pendingFile.name}</span></span>
             <button className="x" onClick={() => setPendingFile(null)} title="הסר">×</button>
           </div>
         )}
@@ -208,7 +207,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             </>)}
             <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
           </div>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="שאל את בונו…" />
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? "כתוב מה לעשות עם הקובץ…" : "שאל את בונו…"} />
           <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={17} /></button>
         </div>
       </div>
