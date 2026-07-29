@@ -8,8 +8,9 @@
 // buno conversation (shared thread, door='whatsapp') → reply via sendWhatsApp.
 // Unknown number → one short onboarding line.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sendWhatsApp, verifyWaSignature } from "../_shared/whatsapp.ts";
+import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature } from "../_shared/whatsapp.ts";
 import { assistantReply } from "../_shared/assistantCore.ts";
+import { getSession, currentRender, handleAction } from "../_shared/review.ts";
 
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
 const ONBOARD = "היי, אני בונו. כדי שנתחבר — היכנס ל־buno.io וחבר את המספר שלך.";
@@ -53,15 +54,27 @@ Deno.serve(async (req) => {
       for (const msg of value.messages || []) {
         const from = digits(msg.from);
         try {
-          if (msg.type !== "text") { await sendWhatsApp(from, "כרגע אני קורא רק הודעות טקסט. כתוב לי מה תרצה 🙂"); continue; }
-          const text = String(msg.text?.body || "").trim();
-          if (!text) continue;
-
           const { data: links } = await admin.from("whatsapp_link").select("user_id,phone");
           const link = (links || []).find((l: any) => digits(l.phone) === from);
           if (!link) { await sendWhatsApp(from, ONBOARD); continue; }
+          const userId = link.user_id;
 
-          const reply = apiKey ? await assistantReply(admin, link.user_id, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
+          // real buttons: interactive button_reply / list_reply → review actions
+          if (msg.type === "interactive") {
+            const id = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || "";
+            if (id === "rv:more") { const s = await getSession(admin, userId); if (s) { const r = currentRender(s); await sendWhatsAppList(from, r.text, "בחר פעולה", r.actions.filter((a) => !a.url).map((a) => ({ id: a.id, title: a.label }))); } continue; }
+            if (id.startsWith("rv:")) { await sendRender(from, await handleAction(admin, userId, id)); continue; }
+            continue;
+          }
+          if (msg.type !== "text") { await sendWhatsApp(from, "כרגע אני קורא טקסט וכפתורים. כתוב לי מה תרצה 🙂"); continue; }
+          const text = String(msg.text?.body || "").trim();
+          if (!text) continue;
+
+          // resume a paused guided review with a natural phrase
+          const s = await getSession(admin, userId);
+          if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { await sendRender(from, currentRender(s)); continue; }
+
+          const reply = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : "מצטער, אני לא זמין כרגע.";
           const sent = await sendWhatsApp(from, reply);
           if (!sent.ok) console.error("wa: send failed", sent.status, sent.body.slice(0, 300));
         } catch (e) {

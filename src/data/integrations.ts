@@ -53,7 +53,7 @@ export async function scanGmail(): Promise<ScanResult> {
 
 export const hasGmailScope = (i?: Integration) => !!i?.scopes?.some((s) => s.includes("gmail"));
 
-export type SweepNowResult = { ok: boolean; rateLimited?: boolean; connected?: boolean; waitMin?: number; message?: string; snapshot?: string; created?: { id: string; title: string; project: string }[]; nudges?: string[] };
+export type SweepNowResult = { ok: boolean; rateLimited?: boolean; connected?: boolean; message?: string; snapshot?: string; created?: { id: string; title: string; project: string }[]; nudges?: string[]; review?: { text: string; actions: { id: string; label: string; url?: string }[] } | null };
 
 // "Scan now" — run the full sweep pipeline for the current user on demand (B4).
 export async function sweepNow(): Promise<SweepNowResult> {

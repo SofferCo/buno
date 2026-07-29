@@ -17,6 +17,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
+import { handleAction } from "../_shared/review.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -178,6 +179,16 @@ Deno.serve(async (req) => {
   const userMessage = String(payload?.message || "").trim();
   const history = Array.isArray(payload?.history) ? payload.history : [];
   const currentProjectId = payload?.currentProjectId || null;
+
+  // guided-review button (web): map the action id to the shared engine — same
+  // logic path as WhatsApp interactive replies. No LLM needed.
+  const reviewAction = String(payload?.reviewAction || "");
+  if (reviewAction.startsWith("rv:")) {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const r = await handleAction(admin, user.id, reviewAction);
+    return json({ reply: r.text, actions: r.actions, reviewDone: !!r.done });
+  }
+
   if (!userMessage) return json({ error: "empty message" }, 400);
 
   const [proj, cards, cols, prof, asst, comm, att] = await Promise.all([

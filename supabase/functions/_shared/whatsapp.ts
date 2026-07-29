@@ -21,6 +21,49 @@ export async function sendWhatsApp(to: string, text: string): Promise<{ ok: bool
   return { ok: res.ok, status: res.status, body };
 }
 
+async function post(payload: any): Promise<{ ok: boolean; status: number; body: string }> {
+  const token = Deno.env.get("WA_ACCESS_TOKEN");
+  if (!token) return { ok: false, status: 500, body: "WA_ACCESS_TOKEN missing" };
+  const res = await fetch(`${GRAPH}/${WA_PHONE_NUMBER_ID}/messages`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  return { ok: res.ok, status: res.status, body: await res.text() };
+}
+
+// interactive reply buttons (up to 3, title ≤20 chars)
+export async function sendWhatsAppButtons(to: string, body: string, buttons: { id: string; title: string }[]) {
+  return post({
+    messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "interactive",
+    interactive: { type: "button", body: { text: String(body).slice(0, 1024) }, action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })) } },
+  });
+}
+
+// interactive list (for 4+ options)
+export async function sendWhatsAppList(to: string, body: string, buttonLabel: string, rows: { id: string; title: string; description?: string }[]) {
+  return post({
+    messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "interactive",
+    interactive: { type: "list", body: { text: String(body).slice(0, 1024) }, action: { button: buttonLabel.slice(0, 20), sections: [{ title: "פעולות", rows: rows.slice(0, 10).map((r) => ({ id: r.id.slice(0, 200), title: r.title.slice(0, 24), description: (r.description || "").slice(0, 72) })) }] } },
+  });
+}
+
+// Send a channel-agnostic Render over WhatsApp: url actions become text links;
+// reply actions become buttons (≤3), or 2 buttons + "עוד…" that opens a list.
+export async function sendRender(to: string, render: { text: string; actions: { id: string; label: string; url?: string }[] }, expandList = false) {
+  const urls = render.actions.filter((a) => a.url);
+  const btns = render.actions.filter((a) => !a.url);
+  let body = render.text;
+  for (const u of urls) body += `\n${u.label}: ${u.url}`;
+  if (!btns.length) return sendWhatsApp(to, body);
+  if (expandList || btns.length > 3) {
+    if (!expandList && btns.length > 3) {
+      // 2 primary + "עוד…" (opens the full list on tap)
+      return sendWhatsAppButtons(to, body, [...btns.slice(0, 2).map((b) => ({ id: b.id, title: b.label })), { id: "rv:more", title: "עוד…" }]);
+    }
+    return sendWhatsAppList(to, body, "בחר פעולה", btns.map((b) => ({ id: b.id, title: b.label })));
+  }
+  return sendWhatsAppButtons(to, body, btns.map((b) => ({ id: b.id, title: b.label })));
+}
+
 // Verify the X-Hub-Signature-256 header = "sha256=" + HMAC_SHA256(appSecret, rawBody).
 export async function verifyWaSignature(rawBody: string, header: string | null, appSecret: string): Promise<boolean> {
   if (!header || !header.startsWith("sha256=") || !appSecret) return false;

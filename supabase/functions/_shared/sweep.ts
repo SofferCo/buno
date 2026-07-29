@@ -10,6 +10,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { freshAccessToken, listGmailCandidates, listCalendarEvents, fetchEmailRefs, fetchEmailBody } from "./google.ts";
 import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "./orgboard.ts";
+import { setSession, clearSession, openingRender, type ReviewItem, type Render } from "./review.ts";
 
 const SUBMIT_TOOL = {
   name: "submit_candidates",
@@ -167,7 +168,7 @@ const SUBMIT_UPDATES_TOOL = {
 };
 
 export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
-export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[] };
+export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null };
 
 export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: string): Promise<SweepResult | null> {
   const access = await freshAccessToken(admin, userId, "gcal");
@@ -176,7 +177,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   // the user's projects (owner/member only — where a card may be created)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
-  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [] };
+  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null };
   const [{ data: projects }, { data: prof }, { data: asst }] = await Promise.all([
     admin.from("project").select("id,name,is_personal").in("id", writeIds),
     admin.from("profile").select("name,settings").eq("id", userId).maybeSingle(),
@@ -196,6 +197,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   const candidates = await listGmailCandidates(access, 40);
   const created: { id: string; title: string; project: string }[] = [];
   const threadUpdates: ThreadUpdate[] = [];
+  const reviewQueue: ReviewItem[] = []; // guided review items (updates + invites)
   const cardByThread = new Map<string, { id: string; title: string }>();
   try {
     const { data: existing } = await admin.from("card").select("id,title,origin").in("project_id", writeIds);
@@ -294,7 +296,10 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
         const { data: ins } = await admin.from("card_thread_update")
           .upsert({ card_id: card.id, message_ref: it.id, from_name: from, summary }, { onConflict: "card_id,message_ref", ignoreDuplicates: true })
           .select("id");
-        if (ins && ins.length) threadUpdates.push({ cardTitle: card.title, from, summary });
+        if (ins && ins.length) {
+          threadUpdates.push({ cardTitle: card.title, from, summary });
+          reviewQueue.push({ kind: "update", updateId: ins[0].id, cardId: card.id, cardTitle: card.title, from, summary });
+        }
       }
     } catch { /* thread-update pass best-effort (also degrades before 0014 is applied) */ }
   }
@@ -334,7 +339,20 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     }
   } catch { /* nudges are best-effort — never block the snapshot */ }
 
-  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates };
+  // calendar invites (pending RSVP) get their own review items — not filtered
+  for (const e of events) {
+    if (e.myStatus === "needsAction" && e.title) {
+      reviewQueue.push({ kind: "invite", title: e.title, from: e.organizerName || e.organizer || "מארגן", when: String(e.start || "").replace("T", " ").slice(0, 16), url: e.htmlLink || "" });
+    }
+  }
+  // store the guided-review session (or clear a stale one) and prep the opening
+  let reviewOpening: Render | null = null;
+  try {
+    if (reviewQueue.length) { await setSession(admin, userId, reviewQueue, 0); reviewOpening = openingRender(reviewQueue); }
+    else await clearSession(admin, userId);
+  } catch { /* review_session may not exist before 0015 — degrade */ }
+
+  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening };
 }
 
 // Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say
@@ -356,9 +374,10 @@ export function daySnapshot(r: SweepResult): string {
   lines.push(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}. ${shape}.`);
   if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
   if (r.created.length) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
-  else if (!(r.threadUpdates || []).length) lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
-  // thread updates: new replies on existing cards (P — dedup fix)
-  const upd = (r.threadUpdates || []).map((u) => `התקבלו תשובות חדשות על "${u.cardTitle}" — ${u.from}: ${u.summary} לעדכן או לסגור?`);
+  else if (!r.reviewCount) lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
+  // the opening stays ONE paragraph; thread updates/invites become a single
+  // offer line — the guided walk starts only when the user engages.
+  const offer = r.reviewCount ? `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?` : "";
   // proactive nudges (P1.5–P1.7) get their own lines under the opening brief.
-  return [lines.join(" "), ...upd, ...(r.nudges || [])].filter(Boolean).join("\n");
+  return [lines.join(" "), offer, ...(r.nudges || [])].filter(Boolean).join("\n");
 }

@@ -4,7 +4,16 @@
 import { supabase } from "../lib/supabase";
 
 export type CreatedCard = { id: string; title: string; project: string; level: string };
+export type ReviewAction = { id: string; label: string; url?: string };
 export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[] };
+
+// guided-review button click (web) → the shared engine returns the next step.
+export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean }> {
+  if (!supabase) throw new Error("assistant requires cloud mode");
+  const { data, error } = await supabase.functions.invoke("chat", { body: { reviewAction: action } });
+  if (error) throw new Error(error.message || "assistant unavailable");
+  return data as any;
+}
 
 export async function askAssistant(
   message: string,
@@ -32,6 +41,6 @@ export async function loadAssistantThread(): Promise<{ threadId?: string; messag
   const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at");
   return {
     threadId: t.id,
-    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined })),
+    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined })),
   };
 }

@@ -28,7 +28,7 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onUploadFile, eventColor, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -111,7 +111,20 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         : r?.ok ? (r.snapshot || "סרקתי — אין פריט חדש.") : (r?.message || "לא הצלחתי לסרוק כרגע.");
       const cards = r?.ok && r?.created?.length ? r.created.map((c: any) => ({ ...c, level: "draft" })) : undefined;
       setMsgs((m) => [...m, { by: "twin", text: txt, at: Date.now(), cards }]);
+      // guided review offer (thread updates / invites) → a message with buttons
+      if (r?.ok && r?.review) setMsgs((m) => [...m, { by: "twin", text: r.review.text, at: Date.now(), actions: r.review.actions }]);
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי לסרוק כרגע.", at: Date.now() }]); }
+    finally { setTyping(false); }
+  }
+  // a guided-review button: url actions open the link; the rest advance the walk
+  async function reviewClick(action: any) {
+    if (action?.url) { window.open(action.url, "_blank"); return; }
+    if (typing || !onReviewAction) return;
+    setTyping(true);
+    try {
+      const r = await onReviewAction(action.id);
+      setMsgs((m) => [...m, { by: "twin", text: r?.reply || "", at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions }]);
+    } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }
   // B3 — a picked file is STAGED on the compose bar; buno waits for the user to
@@ -147,6 +160,13 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="sun" size={13} /></div>}
               <div className="adk-bubble">
                 {m.text.split("\n").map((l: string, k: number) => renderLine(l, k))}
+                {m.actions && m.actions.length > 0 && (
+                  <div className="adk-rv-acts">
+                    {m.actions.map((a: any) => (
+                      <button key={a.id} className={"adk-rv-btn" + (a.url ? " link" : "")} onClick={() => reviewClick(a)}>{a.label}</button>
+                    ))}
+                  </div>
+                )}
                 {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}</div>}
                 {m.events && m.events.length > 0 && (
                   <div className="adk-chat-cards">

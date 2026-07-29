@@ -44,8 +44,7 @@ Deno.serve(async (req) => {
       .select("created_at").eq("thread_id", threadId).eq("door", "sweep")
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (recent?.created_at && (Date.now() - new Date(recent.created_at).getTime()) < RATE_MS) {
-      const waitMin = Math.max(1, Math.ceil((RATE_MS - (Date.now() - new Date(recent.created_at).getTime())) / 60000));
-      return json({ ok: false, rateLimited: true, waitMin, message: `כבר סרקתי לא מזמן — אפשר שוב בעוד ${waitMin} דק'.` });
+      return json({ ok: false, rateLimited: true, message: "סרקתי ממש עכשיו, הכול מעודכן." });
     }
   }
 
@@ -56,18 +55,16 @@ Deno.serve(async (req) => {
     const { data: t } = await admin.from("assistant_thread").insert({ user_id: user.id }).select("id").single();
     threadId = t?.id;
   }
-  // scan-framed message (not the morning "בוקר טוב" brief) — this is an on-demand scan
-  const upd = (r.threadUpdates || []).map((u) => `תשובות חדשות על "${u.cardTitle}" — ${u.from}: ${u.summary} לעדכן או לסגור?`);
+  // scan-framed message; thread updates/invites are offered as a guided walk (buttons)
   const base = r.created.length
     ? `סרקתי שוב — ${r.created.length === 1 ? "יש טיוטה אחת חדשה" : `יש ${r.created.length} טיוטות חדשות`} על הלוח.`
-    : (upd.length ? "סרקתי שוב — יש עדכונים בשרשורים קיימים:" : "סרקתי שוב — לא נראים דברים חדשים באופק.");
-  const snapshot = [base, ...upd, ...(r.nudges || [])].join("\n");
+    : (r.reviewCount ? "סרקתי שוב." : "סרקתי שוב — לא נראים דברים חדשים באופק.");
+  const snapshot = [base, ...(r.nudges || [])].join("\n");
   if (threadId) {
-    // persist the trigger too, so the "סרוק עכשיו" turn survives a reload
     await admin.from("assistant_message").insert([
       { thread_id: threadId, role: "user", door: "web", content: "סרוק עכשיו" },
       { thread_id: threadId, role: "assistant", door: "sweep", content: snapshot, meta: r.created.length ? { created: r.created } : null },
     ]);
   }
-  return json({ ok: true, snapshot, created: r.created, considered: r.considered, nudges: r.nudges });
+  return json({ ok: true, snapshot, created: r.created, considered: r.considered, nudges: r.nudges, review: r.reviewOpening });
 });
