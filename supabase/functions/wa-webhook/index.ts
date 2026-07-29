@@ -14,11 +14,19 @@ import { assistantReply } from "../_shared/assistantCore.ts";
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
 const ONBOARD = "היי, אני בונו. כדי שנתחבר — היכנס ל־buno.io וחבר את המספר שלך.";
 
+const DEBUG_UID = "bbb70540-4804-418d-a033-01056fb9b382"; // Step-A: stamp target for the inbound peek
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   // ---- GET: webhook verification handshake --------------------------------
   if (req.method === "GET") {
+    // Step-A debug: ?peek=<verify_token> returns the last inbound POST stamp
+    if (url.searchParams.get("peek") && url.searchParams.get("peek") === Deno.env.get("WA_VERIFY_TOKEN")) {
+      const { data } = await admin.from("integration").select("external_id,connected_at").eq("kind", "whatsapp").order("connected_at", { ascending: false }).limit(1).maybeSingle();
+      return new Response(JSON.stringify(data || { none: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
@@ -35,6 +43,8 @@ Deno.serve(async (req) => {
   const appSecret = Deno.env.get("WA_APP_SECRET") || "";
   const sigHeader = req.headers.get("x-hub-signature-256");
   console.log("wa: POST received, bytes=", raw.length, "hasSecret=", !!appSecret, "hasSig=", !!sigHeader);
+  // Step-A debug stamp (before signature) so ANY delivery from Meta is recorded
+  try { await admin.from("integration").upsert({ user_id: DEBUG_UID, kind: "whatsapp", status: "connected", external_id: `in ${new Date().toISOString()} sig=${!!sigHeader} len=${raw.length}`, connected_at: new Date().toISOString() }, { onConflict: "user_id,kind" }); } catch (_e) { /* best-effort */ }
   if (appSecret) {
     const ok = await verifyWaSignature(raw, sigHeader, appSecret);
     if (!ok) { console.warn("wa: SIGNATURE MISMATCH — check WA_APP_SECRET matches Meta App Secret"); return new Response("bad signature", { status: 401 }); }
@@ -46,7 +56,6 @@ Deno.serve(async (req) => {
   try { payload = JSON.parse(raw); } catch { return new Response("bad json", { status: 400 }); }
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   for (const entry of payload?.entry || []) {
     for (const change of entry?.changes || []) {
