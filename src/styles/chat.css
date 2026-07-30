@@ -8,8 +8,12 @@
   --chat-gap-item:8px;--chat-gap-topic:24px;--radius-bubble:16px;--radius-card:12px;--radius-btn:10px;}
 .adk{transition:padding .24s ease;}
 .adk.chat-open{padding-left:440px;}
+/* full-screen pages (My Day, calendar, …) are fixed overlays — push them too so
+   they sit BESIDE the chat instead of covering it */
+.adk-page{transition:left .24s ease;}
+.adk.chat-open .adk-page{left:440px;}
 /* narrow screens: don't push (would crush the board) — chat overlays full-width */
-@media (max-width:820px){ .adk.chat-open{padding-left:0;} .adk-chat{width:100%;max-width:100%;} }
+@media (max-width:820px){ .adk.chat-open{padding-left:0;} .adk.chat-open .adk-page{left:0;} .adk-chat{width:100%;max-width:100%;} }
 @keyframes adk-slideL{from{transform:translateX(-100%);}to{transform:translateX(0);}}
 .adk-chat-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
 .adk-chat-id{display:flex;align-items:center;gap:10px;}
@@ -57,9 +61,10 @@
 .adk-chat-streamchips button:hover{border-color:var(--ink);background:var(--surface-2);}
 /* buno FAB (chat launcher) shows the logo mark */
 .adk-fab img{width:26px;height:26px;display:block;}
-/* oversized buno brand watermark — top-right, bleeding off the frame, faint bg */
-.adk-brand-wm{position:fixed;top:-90px;right:-90px;width:380px;height:auto;opacity:.05;filter:invert(1);pointer-events:none;z-index:2;}
-.adk-shell{position:relative;z-index:1;}
+/* oversized buno brand watermark — top-right, bleeding off the frame. Painted
+   above content (so it shows on the opaque shell + full-screen pages) but faint
+   and click-through, so it reads as background without trapping any layer. */
+.adk-brand-wm{position:fixed;top:-90px;right:-90px;width:380px;height:auto;opacity:.05;filter:invert(1);pointer-events:none;z-index:57;}
 /* one integrated pill: + (right) · field · ↑ send · mic (left). Ghost icons, no
    inner borders or separate circles — the whole bar is a single rounded container. */
 .adk-chat-input{display:flex;align-items:center;gap:2px;margin:12px 14px;padding:5px 6px;border:1px solid var(--border);border-radius:26px;background:var(--surface);}
