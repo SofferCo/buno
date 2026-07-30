@@ -479,7 +479,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, changed: changed.length + (boardChanged ? 1 : 0), events: eventsOut, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, pending: reviewActions ? created.length : undefined, started: reviewActions ? true : undefined, changed: changed.length + (boardChanged ? 1 : 0), events: eventsOut, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
     return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), voiceOk: lint.ok, voiceHits: lint.hits });
   }

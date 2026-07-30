@@ -87,6 +87,8 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
         setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined, actions: res?.actions?.length ? res.actions : undefined, review: res?.review || undefined }]);
+        if (res?.pending && res.pending > 0) setSessionState({ pending: res.pending, started: !!res.started }); // a walk just opened → contextual chips reflect it
+
       } catch (e: any) {
         setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע.", at: Date.now() }]);
       } finally { setTyping(false); }
@@ -229,7 +231,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                         <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}
                           style={col ? ({ ["--pc"]: col } as any) : undefined}>
                           <span className="ic cal" style={col ? { background: col } : undefined}><Icon name="calendar" size={12} /></span>
-                          <span className="tx"><b>{e.title}</b><em>{t}{isMeeting ? " · פגישה" : ""}{p?.name ? ` · ${p.name}` : ""}</em></span>
+                          <span className="tx"><b>{e.title}</b><em>{t}{isMeeting ? " · פגישה" : ""}{p?.name && <>{" · "}<span className="bdot" style={col ? { background: col } : undefined} />{p.name}</>}</em></span>
                           <span className="go">›</span>
                         </button>
                       );
@@ -246,7 +248,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                         <div key={c.id} className="adk-chat-cardwrap">
                           <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)} style={col ? ({ ["--pc"]: col } as any) : undefined}>
                             <span className="ic" style={col ? { background: col } : undefined}><Icon name="sun" size={12} /></span>
-                            <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
+                            <span className="tx"><b>{c.title}</b>{c.project && <em><span className="bdot" style={col ? { background: col } : undefined} />{c.project}</em>}</span>
                             <span className="go">›</span>
                           </button>
                           {isDraft && (act
@@ -268,7 +270,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               last message — they vanish while typing and return after buno replies */}
           {!pendingFile && !input.trim() && !typing && msgs.length > 0 && msgs[msgs.length - 1].by === "twin" && (
             <div className="adk-chat-streamchips">
-              {chipSet().map((c, ci) => <button key={ci} onClick={c.act}>{c.label}</button>)}
+              {chipSet().slice(0, 4).map((c, ci) => <button key={ci} onClick={c.act}>{c.label}</button>)}
             </div>
           )}
         </div>

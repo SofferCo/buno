@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 export type CreatedCard = { id: string; title: string; project: string; level: string };
 export type ReviewAction = { id: string; label: string; url?: string };
 export type ReviewMeta = { project?: string };
-export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[]; actions?: ReviewAction[]; review?: ReviewMeta };
+export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[]; actions?: ReviewAction[]; review?: ReviewMeta; pending?: number; started?: boolean };
 
 // guided-review button click (web) → the shared engine returns the next step.
 export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean; review?: ReviewMeta; pending?: number; started?: boolean }> {
