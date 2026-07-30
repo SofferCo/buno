@@ -140,31 +140,30 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     setStep("my_day");
   }
 
-  const stepIndex = ["welcome", "otp"].includes(step) ? 0
-    : step === "verticals" ? 1 : step === "sharing" ? 2
-    : ["boards", "first_task", "calendar_offer", "calendar"].includes(step) ? 3 : 4;
+  // three macro-phases for the header label
+  const phase = ["welcome", "otp"].includes(step) ? 1 : ["verticals", "sharing"].includes(step) ? 2 : 3;
 
   return (
     <div className="adk ob-root">
+      <video className="ob-bg" src="/onboarding-bg.mp4" autoPlay muted loop playsInline />
+      <div className="ob-bg-tint" />
       <div className="ob-card">
         <div className="ob-head">
-          <div className="ob-av"><Icon name="sun" size={20} /></div>
+          <div className="ob-av"><img src="/bunologo.svg" alt="buno" /></div>
           <div className="ob-head-tx"><b>בונו</b><span>הקמה ראשונית</span></div>
           <div style={{ flex: 1 }} />
-          <div className="ob-steps">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={"ob-dot" + (stepIndex >= i ? " on" : "")} />)}</div>
+          <div className="ob-steplabel">שלב {phase} מתוך 3</div>
         </div>
 
         <div className="ob-body" ref={boxRef}>
           {msgs.map((m, i) => {
             if (m.kind === "typing") return (
-              <div key={i} className="ob-msg twin"><div className="ob-msg-av"><Icon name="sun" size={13} /></div>
-                <div className="ob-bubble ob-typing"><span /><span /><span /></div></div>
+              <div key={i} className="ob-msg twin"><div className="ob-bubble ob-typing"><span /><span /><span /></div></div>
             );
             if (m.kind === "boards") return <BoardsWidget key={i} boards={boards} cards={cards} extra={extraCards} />;
             if (m.kind === "calendar") return <CalendarBlock key={i} onDone={goWhatsapp} />;
             return (
               <div key={i} className={"ob-msg " + m.by}>
-                {m.by === "twin" && <div className="ob-msg-av"><Icon name="sun" size={13} /></div>}
                 <div className="ob-bubble">{m.text}</div>
               </div>
             );
