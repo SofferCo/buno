@@ -28,7 +28,7 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -77,7 +77,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       try {
         const res = await ask(text, history, threadRef.current);
         if (res?.threadId) threadRef.current = res.threadId;
-        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined, actions: res?.actions?.length ? res.actions : undefined }]);
+        setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי להשיב כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, events: res?.events?.length ? res.events : undefined, actions: res?.actions?.length ? res.actions : undefined, review: res?.review || undefined }]);
       } catch (e: any) {
         setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע.", at: Date.now() }]);
       } finally { setTyping(false); }
@@ -116,14 +116,17 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי לסרוק כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }
-  // a guided-review button: url actions open the link; the rest advance the walk
-  async function reviewClick(action: any) {
+  // a guided-review button: url actions open the link; the rest advance the walk.
+  // `mi` is the message the button lives on — we stamp the chosen action onto it
+  // so the button reads as pressed (not untouched) once the walk moves on.
+  async function reviewClick(action: any, mi: number) {
     if (action?.url) { window.open(action.url, "_blank"); return; }
     if (typing || !onReviewAction) return;
+    setMsgs((m) => m.map((x: any, k) => (k === mi ? { ...x, resolved: action.id } : x)));
     setTyping(true);
     try {
       const r = await onReviewAction(action.id);
-      setMsgs((m) => [...m, { by: "twin", text: r?.reply || "", at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions }]);
+      setMsgs((m) => [...m, { by: "twin", text: r?.reply || "", at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }
@@ -159,12 +162,29 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             <div key={i} className={"adk-msg " + m.by}>
               {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="sun" size={13} /></div>}
               <div className="adk-bubble">
-                {m.text.split("\n").map((l: string, k: number) => renderLine(l, k))}
+                {(() => {
+                  const proj = m.review?.project;
+                  const projCol = proj ? cardColor?.({ project: proj }) : null;
+                  return m.text.split("\n").map((l: string, k: number) =>
+                    // the project line is upgraded to a colored chip (with an avatar dot)
+                    proj && l.trim() === String(proj).trim()
+                      ? <span key={k} className="adk-rv-proj" style={projCol ? { color: projCol, borderColor: projCol } : undefined}>
+                          <span className="dot" style={projCol ? { background: projCol } : undefined} />{proj}
+                        </span>
+                      : renderLine(l, k));
+                })()}
                 {m.actions && m.actions.length > 0 && (
                   <div className="adk-rv-acts">
-                    {m.actions.map((a: any) => (
-                      <button key={a.id} className={"adk-rv-btn" + (a.url ? " link" : "")} onClick={() => reviewClick(a)}>{a.label}</button>
-                    ))}
+                    {m.actions.map((a: any) => {
+                      const spent = !!m.resolved;            // an action was already chosen on this message
+                      const chosen = m.resolved === a.id;
+                      return (
+                        <button key={a.id}
+                          className={"adk-rv-btn" + (a.url ? " link" : "") + (spent ? (chosen ? " chosen" : " dimmed") : "")}
+                          disabled={spent && !a.url}
+                          onClick={() => reviewClick(a, i)}>{a.label}{chosen ? " ✓" : ""}</button>
+                      );
+                    })}
                   </div>
                 )}
                 {m.at && <div className="adk-msg-time">{fmtMsgTime(m.at)}{m.waFailed ? " · לא נשלח לוואטסאפ" : ""}</div>}
@@ -172,11 +192,14 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                   <div className="adk-chat-cards">
                     {m.events.map((e: any, ei: number) => {
                       const t = e.allDay ? "כל היום" : (e.start || "").slice(11, 16);
-                      const col = eventColor?.(e);
+                      const p = eventProject?.(e);
+                      const col = p?.color || eventColor?.(e) || null;
+                      const isMeeting = (e.attendees || []).some((a: any) => !a.self);
                       return (
-                        <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}>
+                        <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}
+                          style={col ? { background: col + "12", borderColor: col + "40" } : undefined}>
                           <span className="ic cal" style={col ? { background: col } : undefined}><Icon name="calendar" size={12} /></span>
-                          <span className="tx"><b>{e.title}</b><em>{t}{(e.attendees || []).some((a: any) => !a.self) ? " · פגישה" : ""}</em></span>
+                          <span className="tx"><b>{e.title}</b><em>{t}{isMeeting ? " · פגישה" : ""}{p?.name ? ` · ${p.name}` : ""}</em></span>
                           <span className="go">›</span>
                         </button>
                       );

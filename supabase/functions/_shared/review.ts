@@ -11,7 +11,9 @@ export type ReviewItem =
   | { kind: "draft"; cardId: string; title: string; project: string };
 
 export type Action = { id: string; label: string; url?: string };
-export type Render = { text: string; actions: Action[]; done?: boolean };
+// `project` is the current item's board name — carried structured so the web door
+// can paint it as a colored chip (WhatsApp just reads it off the text line).
+export type Render = { text: string; actions: Action[]; done?: boolean; project?: string };
 
 // ---- session store ---------------------------------------------------------
 export async function setSession(admin: SupabaseClient, userId: string, queue: ReviewItem[], cursor: number) {
@@ -27,20 +29,26 @@ export async function getSession(admin: SupabaseClient, userId: string): Promise
 export async function clearSession(admin: SupabaseClient, userId: string) { try { await admin.from("review_session").delete().eq("user_id", userId); } catch { /* ok */ } }
 
 // ---- rendering -------------------------------------------------------------
-function renderItem(item: ReviewItem, idx: number, total: number): Render {
-  const n = total > 1 ? `(${idx + 1}/${total}) ` : "";
+// the "2 מתוך 4" progress line (only when there's more than one item to walk).
+function progressLine(idx: number, total: number): string {
+  return total > 1 ? `ממשיכים הלאה ${idx + 1} מתוך ${total}` : "";
+}
+// bare per-item render — no preamble/progress/ack prefix; the callers assemble
+// those. The project goes on its own text line (WhatsApp) AND as a structured
+// `project` field (web chip).
+function renderItem(item: ReviewItem, _idx: number, _total: number): Render {
   if (item.kind === "invite") {
-    return { text: `${n}התקבלה הזמנה מ־${item.from} ל"${item.title}"${item.when ? ` · ${item.when}` : ""}.`, actions: [{ id: "rv:open_cal", label: "פתח ביומן", url: item.url }, { id: "rv:skip", label: "הבא ›" }] };
+    return { text: `התקבלה הזמנה מ־${item.from} ל"${item.title}"${item.when ? ` · ${item.when}` : ""}.`, actions: [{ id: "rv:open_cal", label: "פתח ביומן", url: item.url }, { id: "rv:skip", label: "הבא ›" }] };
   }
   if (item.kind === "draft") {
-    return { text: `${n}טיוטה: "${item.title}"${item.project ? ` · ${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }] };
+    return { text: `הצעה: ${item.title}${item.project ? `\n${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }], project: item.project || undefined };
   }
-  return { text: `${n}עדכון על "${item.cardTitle}" — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }] };
+  return { text: `עדכון על "${item.cardTitle}" — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }] };
 }
 // immediate opening for a multi-draft walk (3+): preamble + the first item.
 export function draftsOpening(queue: ReviewItem[]): Render {
-  const first = currentRender({ queue, cursor: 0 });
-  return { text: `קלטתי ${queue.length} דברים — נעבור אחד־אחד:\n${first.text}`, actions: first.actions };
+  const first = renderItem(queue[0], 0, queue.length);
+  return { ...first, text: `קלטתי ${queue.length} דברים — נעבור אחד־אחד:\n${first.text}` };
 }
 export function offerRender(count: number): Render {
   return { text: `סרקתי — יש ${count} עדכונים בשרשורים קיימים. בוא נעבור עליהם.`, actions: [{ id: "rv:start", label: "בוא נעבור" }] };
@@ -73,7 +81,12 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   const item = s.queue[s.cursor];
   if (!item) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true }; }
 
-  if (actionId === "rv:start" || actionId === "rv:open_cal") return currentRender(s);
+  // present the current item (no state change) — with its progress line.
+  if (actionId === "rv:start" || actionId === "rv:open_cal") {
+    const r = currentRender(s);
+    const p = progressLine(s.cursor, s.queue.length);
+    return { ...r, text: [p, r.text].filter(Boolean).join("\n") };
+  }
 
   let ack = "";
   try {
@@ -95,8 +108,14 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   const next = { queue: s.queue, cursor: s.cursor + 1 };
   await setSession(admin, userId, next.queue, next.cursor);
   const r = currentRender(next);
-  if (r.done) await clearSession(admin, userId);
-  return { ...r, text: [ack, r.text].filter(Boolean).join("\n") };
+  if (r.done) { await clearSession(admin, userId); return { ...r, text: [ack, r.text].filter(Boolean).join("\n") }; }
+  // ack on its own line, a blank line, then "ממשיכים הלאה X מתוך Y", then the item.
+  const p = progressLine(next.cursor, next.queue.length);
+  const parts: string[] = [];
+  if (ack) parts.push(ack, "");
+  if (p) parts.push(p);
+  parts.push(r.text);
+  return { ...r, text: parts.join("\n") };
 }
 
 async function cardProject(admin: SupabaseClient, cardId: string): Promise<string> {

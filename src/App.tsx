@@ -699,6 +699,9 @@ export default function App() {
         onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}
+        // an event's board: the inferred client, else the personal board — so every
+        // event tile carries a clear board name + color (never an anonymous tile).
+        eventProject={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); const p = clients.find((c) => c.id === id) || clients.find((c) => c.home) || null; return p ? { name: p.name, color: p.color } : null; }}
         cardColor={(c: any) => clients.find((x) => x.name === c.project)?.color || null}
         answer={(q) => {
         const s = q.toLowerCase();

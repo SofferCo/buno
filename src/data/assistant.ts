@@ -5,10 +5,11 @@ import { supabase } from "../lib/supabase";
 
 export type CreatedCard = { id: string; title: string; project: string; level: string };
 export type ReviewAction = { id: string; label: string; url?: string };
-export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[]; actions?: ReviewAction[] };
+export type ReviewMeta = { project?: string };
+export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[]; actions?: ReviewAction[]; review?: ReviewMeta };
 
 // guided-review button click (web) → the shared engine returns the next step.
-export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean }> {
+export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean; review?: ReviewMeta }> {
   if (!supabase) throw new Error("assistant requires cloud mode");
   const { data, error } = await supabase.functions.invoke("chat", { body: { reviewAction: action } });
   if (error) throw new Error(error.message || "assistant unavailable");
@@ -34,13 +35,13 @@ export const assistantLive = !!supabase;
 // Load the user's ongoing twin conversation (one entity, continuous across
 // open/close and — later — across doors). Returns the latest thread + its
 // messages, mapped to the ChatPanel's shape.
-export async function loadAssistantThread(): Promise<{ threadId?: string; messages: { by: "me" | "twin"; text: string; at?: number; cards?: CreatedCard[]; events?: any[] }[] }> {
+export async function loadAssistantThread(): Promise<{ threadId?: string; messages: { by: "me" | "twin"; text: string; at?: number; cards?: CreatedCard[]; events?: any[]; actions?: ReviewAction[]; review?: ReviewMeta }[] }> {
   if (!supabase) return { messages: [] };
   const { data: t } = await supabase.from("assistant_thread").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!t) return { messages: [] };
   const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at");
   return {
     threadId: t.id,
-    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined, waFailed: x.meta?.waSendFailed || undefined })),
+    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined, review: x.meta?.review || undefined, waFailed: x.meta?.waSendFailed || undefined })),
   };
 }

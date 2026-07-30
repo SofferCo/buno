@@ -127,3 +127,12 @@
 .adk-rv-btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:800;font-family:inherit;cursor:pointer;transition:border-color .12s,background .12s,color .12s;}
 .adk-rv-btn:hover{border-color:var(--accent);color:var(--accent-d);background:var(--accent-soft);}
 .adk-rv-btn.link{border-color:var(--accent);color:var(--accent-d);}
+/* once an action was chosen, the button reads as pressed (not untouched) */
+.adk-rv-btn.chosen{background:var(--accent);color:#fff;border-color:transparent;cursor:default;}
+.adk-rv-btn.chosen:hover{background:var(--accent);color:#fff;}
+.adk-rv-btn.dimmed{opacity:.4;cursor:default;}
+.adk-rv-btn.dimmed:hover{border-color:var(--border);color:var(--ink);background:var(--surface);}
+.adk-rv-btn:disabled{pointer-events:none;}
+/* the guided-walk project chip: a colored dot + the board name */
+.adk-rv-proj{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:3px 10px 3px 8px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:800;width:fit-content;}
+.adk-rv-proj .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;}

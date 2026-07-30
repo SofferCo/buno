@@ -10,7 +10,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
 import { assistantReply, getThread } from "../_shared/assistantCore.ts";
-import { getSession, currentRender, handleAction } from "../_shared/review.ts";
+import { getSession, currentRender, handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
 const ONBOARD = "היי, אני בונו. כדי שנתחבר — היכנס ל־buno.io וחבר את המספר שלך.";
@@ -91,6 +91,18 @@ Deno.serve(async (req) => {
           if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { const r = currentRender(s); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
 
           const out = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : { reply: "מצטער, אני לא זמין כרגע.", created: [], threadId: await getThread(admin, userId) };
+
+          // threshold (same as web): 3+ new drafts → a guided one-by-one walk with
+          // real buttons; 1–2 stay a plain reply. Keeps both doors identical.
+          if ((out.created?.length || 0) >= 3) {
+            const queue = out.created.map((c: any) => ({ kind: "draft", cardId: c.id, title: c.title, project: c.project }));
+            await setSession(admin, userId, queue as any, 0);
+            const opening = draftsOpening(queue as any);
+            const sent = await sendRender(from, opening);
+            await recordOutbound(admin, userId, opening.text, { actions: opening.actions }, sent);
+            continue;
+          }
+
           const sent = await sendWhatsApp(from, out.reply);
           // persist the assistant reply WITH the send outcome — so a failed WhatsApp
           // delivery is never swallowed: it's logged, recorded, and still shows in web.
