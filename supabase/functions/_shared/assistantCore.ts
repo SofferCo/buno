@@ -158,7 +158,21 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const { data: recent } = threadId
     ? await admin.from("assistant_message").select("role,content").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(12)
     : { data: [] as any[] };
-  const history = (recent || []).reverse().map((m: any) => ({ role: m.role === "user" ? "user" : "assistant", content: String(m.content || "") }));
+  // Build a CLEAN history for the API: this is a shared thread (web + sweep +
+  // whatsapp), so the raw rows can start with an assistant message or have two
+  // assistant rows in a row (a sweep snapshot + a walk opening). Anthropic requires
+  // the first message to be "user" and roles to alternate — otherwise a 400 that
+  // repeats on every turn. Drop empties, drop leading assistants, merge consecutive.
+  const history: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of (recent || []).reverse()) {
+    const content = String(m.content || "").trim();
+    if (!content) continue;
+    const role = m.role === "user" ? "user" : "assistant";
+    if (!history.length && role !== "user") continue;
+    const last = history[history.length - 1];
+    if (last && last.role === role) last.content += "\n" + content;
+    else history.push({ role, content });
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const sys = systemPrompt({
@@ -168,7 +182,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   }) + `\n\nToday is ${today}. הודעת וואטסאפ — קצר במיוחד: משפט־שניים, בלי Markdown.
 כלים: create_card (משימה אחת, רמה "${cardLevel}"); create_cards (כמה משימות — תמיד קריאה אחת עם מערך, לא הרבה create_card); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card רק על בקשה מפורשת, זיהוי לפי כותרת. אחרי כלי — שורה אחת מה קרה, בכנות.`;
 
-  const messages: any[] = [...history, { role: "user", content: userMessage }];
+  // append the new user turn — merging if history already ends with a user row
+  // (would otherwise be two consecutive "user" messages → 400).
+  const messages: any[] = [...history];
+  if (messages.length && messages[messages.length - 1].role === "user") messages[messages.length - 1].content += "\n" + userMessage;
+  else messages.push({ role: "user", content: userMessage });
   let reply = "מצטער, לא הצלחתי להשיב כרגע.";
   try {
     const anthropic = new Anthropic({ apiKey });
@@ -196,7 +214,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       }
       messages.push({ role: "user", content: results });
     }
-  } catch { reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך?` : reply); }
+  } catch (e) { console.error("wa: model call failed", String((e as any)?.message || e)); reply = created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך?` : reply; }
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים — נסה שוב.";
 
   // persist the USER message now; the caller persists the assistant message AFTER
