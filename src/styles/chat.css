@@ -68,10 +68,9 @@
 .adk-chat-streamchips button:hover{border-color:var(--ink);background:var(--surface-2);}
 /* buno FAB (chat launcher) shows the logo mark */
 .adk-fab img{width:26px;height:26px;display:block;}
-/* oversized buno brand watermark — top-right, bleeding off the frame. Painted
-   above content (so it shows on the opaque shell + full-screen pages) but faint
-   and click-through, so it reads as background without trapping any layer. */
-.adk-brand-wm{position:fixed;top:-90px;right:-90px;width:380px;height:auto;opacity:.05;filter:invert(1);pointer-events:none;z-index:57;}
+/* buno brand mark — white logo tucked in the top-right, bleeding 21px off the top
+   and 18.8px off the right (per design). Click-through, above content. */
+.adk-brand-wm{position:fixed;top:-21px;right:-18.8px;width:152px;height:156px;pointer-events:none;z-index:57;}
 /* one integrated pill: + (right) · field · ↑ send · mic (left). Ghost icons, no
    inner borders or separate circles — the whole bar is a single rounded container. */
 .adk-chat-input{display:flex;align-items:center;gap:2px;min-height:64px;margin:12px 14px;padding:0 12px;border:1px solid var(--border);border-radius:32px;background:var(--surface);}
