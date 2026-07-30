@@ -1,9 +1,14 @@
 /* buno onboarding — first-run chat flow (design prototype).
    Ink shell, marker-green CTA, sun avatar; boards tinted by --bc per vertical. */
-.ob-root{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;
+.ob-root{position:fixed;inset:0;z-index:80;
   background:radial-gradient(120% 120% at 50% 0%, #23241f 0%, #1A1A1A 60%);}
-.ob-card{width:100%;max-width:460px;height:min(88vh,780px);background:var(--surface);border-radius:22px;
-  box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden;}
+/* docked to the bottom-left, flush on those edges; only the top-right corner is
+   swept (46px), the rest square. Reads as a panel that lives in the corner. */
+.ob-card{position:absolute;left:0;bottom:0;width:460px;max-width:96vw;height:min(92vh,860px);
+  background:var(--surface);border-radius:0 46px 0 0;overflow:hidden;
+  box-shadow:0 -8px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;
+  animation:ob-dock .32s ease both;}
+@keyframes ob-dock{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
 .ob-head{display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border);}
 .ob-av{width:38px;height:38px;border-radius:11px;background:#1A1A1A;color:#D9F252;display:grid;place-items:center;flex:none;}
 .ob-head-tx b{display:block;font-size:15px;font-weight:800;line-height:1.1;}
