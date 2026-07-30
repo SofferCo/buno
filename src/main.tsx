@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { LoginScreen } from "./auth/LoginScreen";
+import { Onboarding } from "./components/screens/Onboarding";
 import "./styles/index.css";
 
 // Gate: local mode (no env) → straight to the app, Stage-A behavior.
@@ -10,6 +11,8 @@ import "./styles/index.css";
 function Root() {
   const { loading, session, localMode } = useAuth();
   if (new URLSearchParams(location.search).has("login-preview")) return <LoginScreen />;
+  // DESIGN PREVIEW: first-run onboarding prototype, no auth needed (?onboarding=1)
+  if (new URLSearchParams(location.search).get("onboarding") === "1") return <Onboarding onDone={() => { location.search = ""; }} />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
   if (!session) return <LoginScreen />;
