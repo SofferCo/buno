@@ -2,13 +2,13 @@
    Ink shell, marker-green CTA, sun avatar; boards tinted by --bc per vertical. */
 .ob-root{position:fixed;inset:0;z-index:80;
   background:radial-gradient(120% 120% at 50% 0%, #23241f 0%, #1A1A1A 60%);}
-/* docked to the bottom-left, flush on those edges; only the top-right corner is
-   swept (46px), the rest square. Reads as a panel that lives in the corner. */
-.ob-card{position:absolute;left:0;bottom:0;width:460px;max-width:96vw;height:min(92vh,860px);
+/* a full-height left drawer (like the product's chat panel: top:0 bottom:0 left:0),
+   flush on left/top/bottom; only the top-right corner is swept (46px). */
+.ob-card{position:absolute;left:0;top:0;bottom:0;width:460px;max-width:96vw;
   background:var(--surface);border-radius:0 46px 0 0;overflow:hidden;
-  box-shadow:0 -8px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;
-  animation:ob-dock .32s ease both;}
-@keyframes ob-dock{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+  box-shadow:20px 0 60px rgba(0,0,0,.4);display:flex;flex-direction:column;
+  animation:ob-dock .3s ease both;}
+@keyframes ob-dock{from{opacity:0;transform:translateX(-18px);}to{opacity:1;transform:translateX(0);}}
 .ob-head{display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--border);}
 .ob-av{width:38px;height:38px;border-radius:11px;background:#1A1A1A;color:#D9F252;display:grid;place-items:center;flex:none;}
 .ob-head-tx b{display:block;font-size:15px;font-weight:800;line-height:1.1;}
