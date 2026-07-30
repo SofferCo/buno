@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "../ui/Icon";
-import { loadAssistantThread } from "../../data/assistant";
+import { loadAssistantThread, sendReviewAction } from "../../data/assistant";
 
 // buno writes plain Hebrew, but the model still occasionally emits Markdown
 // (**bold**, #, *). Render **bold** as bold and strip the rest so the bubble
@@ -34,6 +34,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [cardActs, setCardActs] = useState<Record<string, string>>({}); // inline draft approve/reject state
+  const [sessionState, setSessionState] = useState<{ pending: number; started: boolean } | null>(null); // live guided-review session (drives the continuity chips)
   const [plusOpen, setPlusOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<any>(null); // file staged on the compose bar, waiting for the user's intent
   const [pendingUrl, setPendingUrl] = useState<string | null>(null); // object URL for an image preview
@@ -46,9 +47,17 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   // chat isn't empty each time. Falls back to the greeting for a first-timer.
   useEffect(() => {
     if (!live) return;
-    loadAssistantThread().then((r) => {
+    loadAssistantThread().then(async (r) => {
       threadRef.current = r.threadId;
       if (r.messages.length) setMsgs(r.messages as any);
+      // continuity: if a guided-review session is open, greet with a resume prompt
+      try {
+        const p = await sendReviewAction("rv:peek");
+        if (p?.pending && p.pending > 0) {
+          setSessionState({ pending: p.pending, started: !!p.started });
+          setMsgs((m) => [...m, { by: "twin", text: `נמשיך מאיפה שהפסקנו? יש ${p.pending} הצעות ממתינות`, at: Date.now(), actions: [{ id: "rv:start", label: "בוא נמשיך" }] }]);
+        }
+      } catch { /* peek is best-effort */ }
     }).catch(() => {});
   }, [live]);
   const suggestions = live
@@ -112,8 +121,24 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       const cards = r?.ok && r?.created?.length ? r.created.map((c: any) => ({ ...c, level: "draft" })) : undefined;
       setMsgs((m) => [...m, { by: "twin", text: txt, at: Date.now(), cards }]);
       // guided review offer (thread updates / invites) → a message with buttons
-      if (r?.ok && r?.review) setMsgs((m) => [...m, { by: "twin", text: r.review.text, at: Date.now(), actions: r.review.actions }]);
+      if (r?.ok && r?.review) {
+        setMsgs((m) => [...m, { by: "twin", text: r.review.text, at: Date.now(), actions: r.review.actions }]);
+        try { const p = await sendReviewAction("rv:peek"); setSessionState(p?.pending && p.pending > 0 ? { pending: p.pending, started: !!p.started } : null); } catch { /* best-effort */ }
+      }
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי לסרוק כרגע.", at: Date.now() }]); }
+    finally { setTyping(false); }
+  }
+  // run a guided-review action, append the next step, and refresh the session
+  // state (so the continuity chips update). Used by both the in-bubble buttons
+  // and the contextual chips.
+  async function pushReview(id: string) {
+    if (typing || !onReviewAction) return;
+    setTyping(true);
+    try {
+      const r = await onReviewAction(id);
+      setSessionState(r?.pending && r.pending > 0 ? { pending: r.pending, started: !!r.started } : null);
+      if (r?.reply) setMsgs((m) => [...m, { by: "twin", text: r.reply, at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
+    } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }
   // a guided-review button: url actions open the link; the rest advance the walk.
@@ -123,12 +148,18 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     if (action?.url) { window.open(action.url, "_blank"); return; }
     if (typing || !onReviewAction) return;
     setMsgs((m) => m.map((x: any, k) => (k === mi ? { ...x, resolved: action.id } : x)));
-    setTyping(true);
-    try {
-      const r = await onReviewAction(action.id);
-      setMsgs((m) => [...m, { by: "twin", text: r?.reply || "", at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
-    } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
-    finally { setTyping(false); }
+    await pushReview(action.id);
+  }
+  // the contextual-chip set, chosen by state: an in-progress walk offers resume/skip;
+  // a queued-but-unstarted session (e.g. after a morning snapshot) offers to begin;
+  // otherwise the plain suggestions.
+  function chipSet(): { label: string; act: () => void }[] {
+    if (sessionState && sessionState.pending > 0) {
+      return sessionState.started
+        ? [{ label: "נמשיך?", act: () => pushReview("rv:start") }, { label: "דלג על הכול", act: () => pushReview("rv:skipall") }]
+        : [{ label: "בוא נעבור על העדכונים", act: () => pushReview("rv:start") }];
+    }
+    return suggestions.map((s: string) => ({ label: s, act: () => send(s) }));
   }
   // B3 — a picked file is STAGED on the compose bar; buno waits for the user to
   // say what to do with it (never auto-acts on pick).
@@ -160,7 +191,6 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         <div className="adk-chat-body" ref={boxRef}>
           {msgs.map((m: any, i) => (
             <div key={i} className={"adk-msg " + m.by}>
-              {m.by === "twin" && <div className="adk-chat-av sm"><Icon name="sun" size={13} /></div>}
               <div className="adk-bubble">
                 {(() => {
                   const proj = m.review?.project;
@@ -197,7 +227,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                       const isMeeting = (e.attendees || []).some((a: any) => !a.self);
                       return (
                         <button key={e.id || ei} className="adk-chat-card ev" onClick={() => onOpenEvent?.(e)}
-                          style={col ? { background: col + "12", borderColor: col + "40" } : undefined}>
+                          style={col ? ({ ["--pc"]: col } as any) : undefined}>
                           <span className="ic cal" style={col ? { background: col } : undefined}><Icon name="calendar" size={12} /></span>
                           <span className="tx"><b>{e.title}</b><em>{t}{isMeeting ? " · פגישה" : ""}{p?.name ? ` · ${p.name}` : ""}</em></span>
                           <span className="go">›</span>
@@ -214,7 +244,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                       const act = cardActs[c.id];
                       return (
                         <div key={c.id} className="adk-chat-cardwrap">
-                          <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)}>
+                          <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)} style={col ? ({ ["--pc"]: col } as any) : undefined}>
                             <span className="ic" style={col ? { background: col } : undefined}><Icon name="sun" size={12} /></span>
                             <span className="tx"><b>{c.title}</b>{c.project && <em>{c.project}</em>}</span>
                             <span className="go">›</span>
@@ -233,7 +263,14 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               </div>
             </div>
           ))}
-          {typing && <div className="adk-msg twin"><div className="adk-chat-av sm"><Icon name="sun" size={13} /></div><div className="adk-bubble typing"><span /><span /><span /></div></div>}
+          {typing && <div className="adk-msg twin"><div className="adk-bubble typing"><span /><span /><span /></div></div>}
+          {/* contextual chips live INSIDE the stream, on the user's side, under buno's
+              last message — they vanish while typing and return after buno replies */}
+          {!pendingFile && !input.trim() && !typing && msgs.length > 0 && msgs[msgs.length - 1].by === "twin" && (
+            <div className="adk-chat-streamchips">
+              {chipSet().map((c, ci) => <button key={ci} onClick={c.act}>{c.label}</button>)}
+            </div>
+          )}
         </div>
         {pendingFile && (
           <div className={"adk-chat-pending" + (pendingUrl ? " img" : "")}>
@@ -242,7 +279,6 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
               : <><span className="pf">📎 <span className="fn">{pendingFile.name}</span></span><button className="x" onClick={clearPending} title="הסר">×</button></>}
           </div>
         )}
-        {!pendingFile && <div className="adk-chat-sugg">{suggestions.map((s) => <button key={s} onClick={() => send(s)}>{s}</button>)}</div>}
         <div className="adk-chat-input">
           <div className="adk-plus">
             <button className="adk-attach" onClick={() => setPlusOpen((o) => !o)} title="עוד"><Icon name="plus" size={18} /></button>

@@ -13,7 +13,9 @@ export type ReviewItem =
 export type Action = { id: string; label: string; url?: string };
 // `project` is the current item's board name — carried structured so the web door
 // can paint it as a colored chip (WhatsApp just reads it off the text line).
-export type Render = { text: string; actions: Action[]; done?: boolean; project?: string };
+// `pending`/`started` describe the live session so the chat can show the right
+// continuity chip on open (pending & !started = a snapshot queue not yet begun).
+export type Render = { text: string; actions: Action[]; done?: boolean; project?: string; pending?: number; started?: boolean };
 
 // ---- session store ---------------------------------------------------------
 export async function setSession(admin: SupabaseClient, userId: string, queue: ReviewItem[], cursor: number) {
@@ -77,15 +79,19 @@ async function briefColumn(admin: SupabaseClient, projectId: string): Promise<an
 // (no state change) so it re-shows the current item.
 export async function handleAction(admin: SupabaseClient, userId: string, actionId: string): Promise<Render> {
   const s = await getSession(admin, userId);
-  if (!s) return { text: "אין כרגע רצף פעיל. אפשר לבקש 'סרוק עכשיו'.", actions: [], done: true };
+  // peek: report the live session without touching it (chat-open continuity chip).
+  if (actionId === "rv:peek") return s ? { text: "", actions: [], pending: s.queue.length - s.cursor, started: s.cursor > 0 } : { text: "", actions: [], done: true, pending: 0 };
+  if (!s) return { text: "הכול מעודכן 👍 רוצה שאסרוק שוב?", actions: [], done: true, pending: 0 };
+  // skip the rest of the walk in one go.
+  if (actionId === "rv:skipall") { await clearSession(admin, userId); return { text: "בסדר, דילגתי על השאר. הכול מעודכן 👍", actions: [], done: true, pending: 0 }; }
   const item = s.queue[s.cursor];
-  if (!item) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true }; }
+  if (!item) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true, pending: 0 }; }
 
   // present the current item (no state change) — with its progress line.
   if (actionId === "rv:start" || actionId === "rv:open_cal") {
     const r = currentRender(s);
     const p = progressLine(s.cursor, s.queue.length);
-    return { ...r, text: [p, r.text].filter(Boolean).join("\n") };
+    return { ...r, text: [p, r.text].filter(Boolean).join("\n"), pending: s.queue.length - s.cursor, started: true };
   }
 
   let ack = "";
@@ -108,14 +114,14 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   const next = { queue: s.queue, cursor: s.cursor + 1 };
   await setSession(admin, userId, next.queue, next.cursor);
   const r = currentRender(next);
-  if (r.done) { await clearSession(admin, userId); return { ...r, text: [ack, r.text].filter(Boolean).join("\n") }; }
+  if (r.done) { await clearSession(admin, userId); return { ...r, text: [ack, r.text].filter(Boolean).join("\n"), pending: 0 }; }
   // ack on its own line, a blank line, then "ממשיכים הלאה X מתוך Y", then the item.
   const p = progressLine(next.cursor, next.queue.length);
   const parts: string[] = [];
   if (ack) parts.push(ack, "");
   if (p) parts.push(p);
   parts.push(r.text);
-  return { ...r, text: parts.join("\n") };
+  return { ...r, text: parts.join("\n"), pending: next.queue.length - next.cursor, started: true };
 }
 
 async function cardProject(admin: SupabaseClient, cardId: string): Promise<string> {

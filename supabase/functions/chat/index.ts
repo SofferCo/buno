@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
   if (reviewAction.startsWith("rv:")) {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const r = await handleAction(admin, user.id, reviewAction);
-    return json({ reply: r.text, actions: r.actions, reviewDone: !!r.done, review: r.project ? { project: r.project } : undefined });
+    return json({ reply: r.text, actions: r.actions, reviewDone: !!r.done, review: r.project ? { project: r.project } : undefined, pending: r.pending ?? 0, started: !!r.started });
   }
 
   if (!userMessage) return json({ error: "empty message" }, 400);
@@ -225,7 +225,11 @@ Deno.serve(async (req) => {
   const orderEvents = (list: any[]) => [...list].sort((a, b) =>
     a.allDay === b.allDay ? String(a.start || "").localeCompare(String(b.start || "")) : (a.allDay ? 1 : -1));
 
-  const scheduleIntent = /יומן|פגיש|מתי|היום|מחר|מחרתיים|השבוע|לו"?ז|לו״ז|לוח.?זמנ|meeting|schedule|calendar|agenda/i.test(userMessage);
+  // a create/organize COMMAND ("תוסיף משימה... לקבוע פגישה בבנק") is not a request
+  // to see the agenda — don't drag the day's calendar into it just because a task
+  // text happens to contain "פגישה"/"היום".
+  const createIntent = /תוסיף|תוסיפי|הוסף|הוסיפי|תפתח|פתח|תצור|צור|תרשום|רשום|תזכיר|תכתוב/.test(userMessage);
+  const scheduleIntent = !createIntent && /יומן|פגיש|מתי|היום|מחר|מחרתיים|השבוע|לו"?ז|לו״ז|לוח.?זמנ|meeting|schedule|calendar|agenda/i.test(userMessage);
   const asksTomorrow = /מחר/.test(userMessage) && !/מחרתיים/.test(userMessage);
   const asksWeek = /השבוע|שבוע|לו"?ז|לו״ז|week|agenda/i.test(userMessage);
   const scope: "today" | "tomorrow" | "week" = asksWeek ? "week" : asksTomorrow ? "tomorrow" : "today";

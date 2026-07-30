@@ -9,7 +9,7 @@ export type ReviewMeta = { project?: string };
 export type AssistantReply = { reply: string; threadId?: string; voiceOk?: boolean; refused?: boolean; created?: CreatedCard[]; changed?: number; events?: any[]; actions?: ReviewAction[]; review?: ReviewMeta };
 
 // guided-review button click (web) → the shared engine returns the next step.
-export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean; review?: ReviewMeta }> {
+export async function sendReviewAction(action: string): Promise<{ reply: string; actions?: ReviewAction[]; reviewDone?: boolean; review?: ReviewMeta; pending?: number; started?: boolean }> {
   if (!supabase) throw new Error("assistant requires cloud mode");
   const { data, error } = await supabase.functions.invoke("chat", { body: { reviewAction: action } });
   if (error) throw new Error(error.message || "assistant unavailable");
