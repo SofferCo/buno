@@ -181,13 +181,10 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
         <div className="adk-chat-head">
           <div className="adk-chat-id">
             <div className="adk-chat-av"><img src="/bunologo.svg" alt="buno" /></div>
-            <div>
-              <b>buno</b>
-              <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
-            </div>
+            <b>buno</b>
           </div>
           <div className="sp" style={{ flex: 1 }} />
-          <button className="adk-x" onClick={onClose}>×</button>
+          <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
         </div>
         <div className="adk-chat-body" ref={boxRef}>
           {msgs.map((m: any, i) => (
