@@ -4,7 +4,7 @@
   background:radial-gradient(120% 120% at 50% 0%, #23241f 0%, #1A1A1A 60%);}
 /* a full-height left drawer (like the product's chat panel: top:0 bottom:0 left:0),
    flush on left/top/bottom; only the top-right corner is swept (46px). */
-.ob-card{position:absolute;left:0;top:0;bottom:0;width:460px;max-width:96vw;
+.ob-card{position:absolute;left:0;top:66px;bottom:0;width:460px;max-width:96vw;
   background:var(--surface);border-radius:0 46px 0 0;overflow:hidden;
   box-shadow:20px 0 60px rgba(0,0,0,.4);display:flex;flex-direction:column;
   animation:ob-dock .3s ease both;}
