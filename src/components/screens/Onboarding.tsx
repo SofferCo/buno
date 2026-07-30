@@ -91,14 +91,18 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     me(answer);
     say("בכל מקרה, תמיד אפשר להוסיף אנשים אחר כך — בורד הוא דבר שחי ומשתנה.");
     setStep("boards");
-    setMsgs((m) => [...m, { kind: "typing" }]);
-    setTimeout(() => {
-      setMsgs((m) => m.filter((x) => x.kind !== "typing"));
-      say("הנה הבורדים שלך. שים לב — כבר שמתי לנו כמה משימות משותפות:");
-      setMsgs((m) => [...m, { kind: "boards" }]);
-      say("ועכשיו תורך — תגיד לי דבר אחד אמיתי שיושב לך על הראש, ואני אכניס אותו למקום הנכון.");
-      setStep("first_task");
-    }, 1300);
+    const list = picked.length ? picked : ["personal"];
+    const at = (ms: number, fn: () => void) => setTimeout(fn, ms);
+    // staged build — buno narrates the "why", then the boards fall in one by one,
+    // their cards cascade, and only then he hands the turn back to the user.
+    at(500, () => setMsgs((m) => [...m, { kind: "typing" }]));
+    at(1500, () => { setMsgs((m) => m.filter((x) => x.kind !== "typing"));
+      say(list.length > 1
+        ? `סימנת ${list.length} תחומים — פותח בורד לכל אחד, ככה כל דבר יושב במקום שלו ושום דבר לא מתערבב.`
+        : "פותח לך את הבורד — מקום אחד שכל מה שחשוב יֵשב בו."); });
+    at(2400, () => setMsgs((m) => [...m, { kind: "boards" }]));      // boards + cards cascade (CSS)
+    at(4000, () => say("שים לב — כבר שמתי לנו כמה משימות משותפות שנתחיל מהן. ככה תראה איך זה עובד תוך כדי תנועה."));
+    at(5000, () => { say("ועכשיו תורך — תגיד לי דבר אחד אמיתי שיושב לך על הראש, ואני אכניס אותו למקום הנכון."); setStep("first_task"); });
   }
   function submitTask(skip = false) {
     if (skip || !task.trim()) { me("אחר כך"); say("אפשר גם אחר כך — הכרטיס מחכה."); goCalendarOffer(); return; }
