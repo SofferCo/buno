@@ -20,6 +20,7 @@ export function Icon({ name, size = 18 }) {
     bell: <><path d="M18 8.4a6 6 0 1 0-12 0c0 6.6-2.6 8.4-2.6 8.4h17.2S18 15 18 8.4" /><path d="M13.7 20.5a2 2 0 0 1-3.4 0" /></>,
     chevD: <><path d="M6 9.5l6 6 6-6" /></>,
     grid: <><rect x="4" y="4" width="7" height="7" rx="1.6" /><rect x="13" y="4" width="7" height="7" rx="1.6" /><rect x="4" y="13" width="7" height="7" rx="1.6" /><rect x="13" y="13" width="7" height="7" rx="1.6" /></>,
+    mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" /></>,
   };
   return <svg {...p}>{shapes[name]}</svg>;
 }

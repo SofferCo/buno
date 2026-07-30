@@ -505,7 +505,8 @@ export default function App() {
   );
 
   return (
-    <div className="adk">
+    <div className={"adk" + (chatOpen && !viewer ? " chat-open" : "")}>
+      <img src="/bunologo.svg" className="adk-brand-wm" alt="" aria-hidden="true" />
       <div className="adk-shell">
       <div className="adk-top">
         {viewer ? (<>
@@ -685,7 +686,7 @@ export default function App() {
           onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}
 
-      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><Icon name="sun" size={24} /></button>}
+      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><img src="/bunologo.svg" alt="buno" /></button>}
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}

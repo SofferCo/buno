@@ -1,16 +1,14 @@
-import { useState } from "react";
 import { Icon } from "../ui/Icon";
 import { PRIORITY } from "../../lib/constants";
 import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
 import { fmtClock, fmtModeHours } from "../../lib/format";
 import { cardSeconds, sumHours } from "../../lib/time";
 
-export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onAsk, onClose, onOpenCard, onToggleTimer, onDone, onDefer }: any) {
+export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending, profileName, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer }: any) {
   const clientOf = (id) => clients.find((c) => c.id === id);
-  const [q, setQ] = useState("");
-  function ask() { const t = q.trim(); if (!t) return; onAsk(t); setQ(""); }
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
+  const timeLabel = new Date(now).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
   const pad = (n: number) => String(n).padStart(2, "0");
   const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   // today's real Google Calendar events → timeline items
@@ -91,7 +89,7 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
       <div className="adk-pcard day">
         <div className="adk-pcard-head">
           <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={22} /></button>
-          <div className="titleblk"><div className="adk-day-sun"><Icon name="sun" size={20} /></div><div><h2>היום שלי</h2><span>{dateLabel}</span></div></div>
+          <div className="titleblk"><div className="adk-day-sun"><Icon name="sun" size={20} /></div><div><h2>היום שלי</h2><span>{dateLabel} · {timeLabel}</span></div></div>
         </div>
 
         <div className="adk-day2">
@@ -102,11 +100,6 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
               {briefLines.map((l, i) => <div key={i} className="adk-brief2-line">{l}</div>)}
               {runningCard && <div className="adk-brief2-now"><span className="rec-dot" /> טיימר פעיל · {runningCard.title || "משימה"} · {fmtClock(cardSeconds(runningCard, now))}</div>}
             </div>
-            <div className="adk-day-ask">
-              <button className="adk-attach" title="העלה קובץ (הדגמה)" onClick={() => onAsk("📎 קובץ")}><Icon name="plus" size={18} /></button>
-              <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ask(); }} placeholder="שאל את בונו על היום שלך…" />
-              <button className="adk-cmt-send" onClick={ask} title="שלח"><Icon name="arrowUp" size={17} /></button>
-            </div>
           </aside>
 
           <div className="adk-day2-tasks">
@@ -116,7 +109,20 @@ export function MyDay({ planTasks, upcoming, clients, now, runningCard, pending,
               {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
             </>)}
             {chrono.length > 0 && <div className="adk-tl-head">סדר היום</div>}
-            {chrono.map((x) => x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />)}
+            {(() => {
+              // a "now" divider showing where we are in the day — placed just before
+              // the first item still ahead of the current time.
+              const nowMin = new Date(now).getHours() * 60 + new Date(now).getMinutes();
+              const parse = (t: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+              let placed = false;
+              const out: any[] = [];
+              for (const x of chrono) {
+                const tmin = parse(x.time);
+                if (!placed && tmin !== null && tmin > nowMin) { placed = true; out.push(<div key="nowline" className="adk-tl-now"><span className="lbl">עכשיו · {timeLabel}</span><span className="ln" /><span className="dot" /></div>); }
+                out.push(x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />);
+              }
+              return out;
+            })()}
             {upcoming.length > 0 && (<>
               <div className="adk-tl-head up">בקרוב · 7 ימים</div>
               {upcoming.map((t) => <TLRow key={t.card.id} t={t} />)}

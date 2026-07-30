@@ -177,11 +177,10 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   useEffect(() => { if (seed && !seededRef.current) { seededRef.current = true; send(seed); onSeedUsed && onSeedUsed(); } }, [seed]); // eslint-disable-line
   return (
     <>
-      <div className="adk-scrim" onClick={onClose} />
       <div className="adk-chat">
         <div className="adk-chat-head">
           <div className="adk-chat-id">
-            <div className="adk-chat-av"><Icon name="sun" size={18} /></div>
+            <div className="adk-chat-av"><img src="/bunologo.svg" alt="buno" /></div>
             <div>
               <b>buno</b>
               <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
@@ -294,7 +293,8 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
           </div>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? "כתוב מה לעשות עם הקובץ…" : "שאל את בונו…"} />
-          <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={17} /></button>
+          <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={18} /></button>
+          <button className="adk-mic" title="הקלטה קולית — בקרוב" onClick={() => {}}><Icon name="mic" size={18} /></button>
         </div>
       </div>
     </>
