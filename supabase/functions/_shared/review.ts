@@ -111,7 +111,17 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
       else ack = "דילגתי.";
       if (item.updateId) await admin.from("card_thread_update").delete().eq("id", item.updateId);
     } else if (item.kind === "draft") {
-      if (actionId === "rv:approve") { await admin.from("card").update({ draft: null }).eq("id", item.cardId); ack = "אושר ✓"; }
+      if (actionId === "rv:approve") {
+        // assign the APPROVING user (as web chip-approve does); buno is only the
+        // creator in metadata — never an assignee. Covers every walk approve path.
+        const { data: cardRow } = await admin.from("card").select("cc").eq("id", item.cardId).maybeSingle();
+        const { data: prof } = await admin.from("profile").select("name").eq("id", userId).maybeSingle();
+        const name = String(prof?.name || "").trim();
+        const cc = Array.isArray(cardRow?.cc) ? cardRow.cc : [];
+        const nextCc = Array.from(new Set([...cc, name].map((s: any) => String(s || "").trim()).filter(Boolean).filter((s: string) => s !== "buno")));
+        await admin.from("card").update({ draft: null, cc: nextCc }).eq("id", item.cardId);
+        ack = "אושר ✓";
+      }
       else if (actionId === "rv:reject") { await admin.from("card").update({ archived: true, archived_at: new Date().toISOString(), removed_by: "assistant" }).eq("id", item.cardId); ack = "נדחה ✓"; }
       else ack = "";
     } else {

@@ -7,6 +7,8 @@ export function creatorOf(c) { const v = c.creator ?? c.briefFrom ?? ""; return 
 
 export function ccOf(c) { return c.cc || []; }
 
-export function peopleOf(c) { const r = []; const cr = creatorOf(c); if (cr) r.push(cr); ccOf(c).forEach((n) => { if (n && !r.includes(n)) r.push(n); }); return r; }
+// buno is the CREATOR in metadata only — it must never show as an assignee/person.
+// Real human creators still appear; assignees come from cc.
+export function peopleOf(c) { const r = []; const cr = creatorOf(c); if (cr && cr !== "buno") r.push(cr); ccOf(c).forEach((n) => { const nm = n === "העוזר" ? "buno" : n; if (nm && nm !== "buno" && !r.includes(nm)) r.push(nm); }); return r; }
 
 export function nameColor(n) { n = (n || "?"); let h = 5381; for (let i = 0; i < n.length; i++) h = (((h << 5) + h) + n.charCodeAt(i)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
