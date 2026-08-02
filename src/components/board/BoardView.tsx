@@ -52,6 +52,7 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
                         {(card.comments || []).length > 0 && <span className="adk-checkmini"><Icon name="comment" size={13} /> {card.comments.length}</span>}
                         {card.proposed && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="בקשת לקוח ממתינה לאישור">⏳ בקשה</span>}
                         {card.draft && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="טיוטת העוזר"><Icon name="sun" size={12} /> טיוטה</span>}
+                        {card.cardType === "waiting" && <span className="adk-checkmini" style={{ background: "#EEF2F4", color: "#5B6B72" }} title={card.waitingOn ? `ממתין ל${card.waitingOn}` : "ממתין לתשובה"}>⏳ ממתין{card.waitingOn ? ` · ${card.waitingOn}` : ""}</span>}
                       </div>
                       <div className="adk-card-foot">
                         {peopleOf(card).length > 0 && (

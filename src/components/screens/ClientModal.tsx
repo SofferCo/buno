@@ -98,7 +98,7 @@ function SharingSection({ sharing }: { sharing: any }) {
 }
 
 export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any) {
-  const [f, setF] = useState(client || { id: uid("cl"), name: "", color: SWATCHES[0], contact: "", email: "", notes: "", rate: "", members: [], logo: null });
+  const [f, setF] = useState(client || { id: uid("cl"), name: "", color: SWATCHES[0], contact: "", email: "", notes: "", rate: "", members: [], logo: null, why: "" });
   const [memberInput, setMemberInput] = useState("");
   const members = f.members || [];
   function addMember() { const n = memberInput.trim(); if (!n || members.includes(n)) return; setF({ ...f, members: [...members, n] }); setMemberInput(""); }
@@ -122,6 +122,7 @@ export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any)
             <div className="adk-field"><label>אימייל / טלפון</label><input className="adk-input" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} dir="ltr" /></div>
           </div>
           <div className="adk-field"><label>תעריף שעתי (₪) — לחישוב רווחיות בדשבורד</label><input className="adk-input" type="number" min="0" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} placeholder="למשל 250" /></div>
+          <div className="adk-field"><label>למה הבורד הזה קיים? (המטרה — בונו מזכיר אותה כשמשימה נתקעת)</label><textarea className="adk-textarea" rows={2} value={f.why || ""} onChange={(e) => setF({ ...f, why: e.target.value })} placeholder="למשל: לבנות מותג שאנשים סומכים עליו" /></div>
           <div className="adk-field"><label>הערות</label><textarea className="adk-textarea" rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="פרטים, תעריף, דגשים…" /></div>
           {sharing && <SharingSection sharing={sharing} />}
           <div className="adk-field"><label>שמות למוזכרים (@) והצעות מכותבים</label>

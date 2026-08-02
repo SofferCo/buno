@@ -155,7 +155,7 @@ const CREATE_CARDS_TOOL = {
     required: ["cards"],
   },
 };
-const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, or move to another board. Supports BULK — filter_project edits every open card of a project ('all codata → Tuesday'). Only fields you pass change. Single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string" }, filter_project: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string" } } } };
+const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, move to another board, or set the two-time model (work vs waiting), a time estimate, or a follow-up window. Supports BULK — filter_project edits every open card of a project ('all codata → Tuesday'). Only fields you pass change. Single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string" }, filter_project: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string" }, card_type: { type: "string", enum: ["work", "waiting"], description: "WORK = something the user does; WAITING = delegated / awaiting a reply." }, waiting_on: { type: "string", description: "Who/what a waiting card waits on, e.g. 'העירייה'. Empty string clears." }, follow_up_days: { type: "number", description: "For a waiting card: silent days before a follow-up nudge (supplier 7, authority 30, other 14)." }, estimate_hours: { type: "number", description: "Time estimate in hours for a work card (drives daily capacity). 0 clears." } } } };
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Only for genuine progress, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string" }, note: { type: "string" } }, required: ["card", "note"] } };
 const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 
@@ -195,8 +195,8 @@ Deno.serve(async (req) => {
   if (!userMessage) return json({ error: "empty message" }, 400);
 
   const [proj, cards, cols, prof, asst, comm, att] = await Promise.all([
-    supabase.from("project").select("id,name"),
-    supabase.from("card").select("id,project_id,column_id,title,deadline,priority,time_spent,archived,created_at"),
+    supabase.from("project").select("*"),                    // '*' tolerates pre-migration schema (why)
+    supabase.from("card").select("*"),                       // '*' tolerates pre-migration schema (card_type, waiting_on)
     supabase.from("board_column").select("id,project_id,key,title,position"),
     supabase.from("profile").select("name").eq("id", user.id).maybeSingle(),
     supabase.from("assistant_settings").select("cards,gender").eq("user_id", user.id).maybeSingle(),
@@ -377,6 +377,11 @@ Deno.serve(async (req) => {
     if (["regular", "important", "critical"].includes(input?.priority)) patch.priority = input.priority;
     if (typeof input?.title === "string" && input.title.trim()) patch.title = input.title.trim();
     if (typeof input?.description === "string") patch.description = input.description;
+    // B1 — two-time model / estimate / follow-up window.
+    if (input?.card_type === "work" || input?.card_type === "waiting") patch.card_type = input.card_type;
+    if (typeof input?.waiting_on === "string") patch.waiting_on = input.waiting_on.trim() || null;
+    if (typeof input?.follow_up_days === "number" && input.follow_up_days > 0) patch.follow_up_days = Math.round(input.follow_up_days);
+    if (typeof input?.estimate_hours === "number") patch.estimate_hours = input.estimate_hours > 0 ? input.estimate_hours : null;
     let moveProj: any = null;
     if (input?.project) { moveProj = projects.find((p: any) => p.name && p.name.toLowerCase().includes(String(input.project).toLowerCase())); if (!moveProj) return `לא מצאתי בורד בשם "${input.project}".`; }
     let targets: any[] = [];
@@ -396,7 +401,7 @@ Deno.serve(async (req) => {
       Object.assign(c, upd); changed.push(c.id); ok++;
     }
     if (!ok) return "לא הצלחתי לעדכן.";
-    const what = [patch.deadline !== undefined ? "דדליין" : null, patch.priority ? "עדיפות" : null, patch.title ? "כותרת" : null, patch.description !== undefined ? "תיאור" : null, moveProj ? "בורד" : null].filter(Boolean).join(", ");
+    const what = [patch.deadline !== undefined ? "דדליין" : null, patch.priority ? "עדיפות" : null, patch.title ? "כותרת" : null, patch.description !== undefined ? "תיאור" : null, moveProj ? "בורד" : null, patch.card_type ? (patch.card_type === "waiting" ? "המתנה" : "עבודה") : null, patch.waiting_on !== undefined ? "ממתין על" : null, patch.estimate_hours !== undefined ? "הערכת שעות" : null, patch.follow_up_days ? "מעקב" : null].filter(Boolean).join(", ");
     return targets.length > 1 ? `עדכנתי ${ok} כרטיסים${what ? ` (${what})` : ""}${fail ? ` (${fail} נכשלו)` : ""}.` : `עדכנתי את "${targets[0].title}"${what ? ` (${what})` : ""}.`;
   }
   // item 10 — a progress update → an activity note (comment) on the card.
@@ -421,11 +426,14 @@ Deno.serve(async (req) => {
   try { const { data: cs } = await supabase.from("conversation_summary").select("summary").eq("user_id", user.id).maybeSingle(); convSummary = String(cs?.summary || "").trim(); } catch { /* pre-0017 */ }
   const today = todayStr2; // YYYY-MM-DD in IL, for relative dates
   const nowIL = new Intl.DateTimeFormat("he-IL", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(nowD);
+  // D1 — the board's "why" (project purpose) rides alongside the summary so buno
+  // can connect a task to what it serves.
+  const whyBlock = projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n");
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
     profileName: prof.data?.name || "",
-    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()),
+    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()) + (whyBlock ? `\n\n=== מטרות הבורדים (why) ===\n${whyBlock}` : ""),
     // capabilities reflect exactly what THIS request sends: the create + organize
     // tools are always attached; calendar is context-only when we have events;
     // email is never available in the chat. Keeps the prompt honest to itself.

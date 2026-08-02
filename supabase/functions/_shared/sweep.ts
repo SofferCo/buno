@@ -51,6 +51,8 @@ type NudgeCtx = {
   colById: Map<string, any>;
   lastCommentMs: Map<string, number>;
   subHoursByCard: Map<string, number>;
+  subDoneByCard: Map<string, { done: number; total: number }>;  // subtask progress (D2)
+  whyByProject: Map<string, string>;                             // project "why" (D1)
   alreadyNudged: Set<string>;      // `${ruleId}:${cardId}` from the last 14 days
 };
 type NudgeRule = { id: string; run: (ctx: NudgeCtx) => Nudge | null };
@@ -89,6 +91,12 @@ function inPlanToday(c: any, ctx: NudgeCtx): boolean {   // mirror of App inPlan
   if (flexDayOf(c)) return d <= (c.routine === "monthly" ? 31 : 7);
   return d <= 0;
 }
+// last meaningful touch: column move, latest comment, or creation.
+function lastActivityMs(c: any, ctx: NudgeCtx): number {
+  const moved = new Date(c.column_changed_at || c.created_at).getTime();
+  const commented = ctx.lastCommentMs.get(c.id) || 0;
+  return Math.max(moved, commented, new Date(c.created_at).getTime());
+}
 
 // P1.6 — kaizen: the single oldest ALIVE card with no column move and no comment
 // for ≥3 days. One line per snapshot (the most-stuck card). Observe + offer.
@@ -97,15 +105,17 @@ const kaizenRule: NudgeRule = {
   run: (ctx) => {
     let best: any = null; let bestActivity = Infinity;
     for (const c of ctx.cards) {
-      if (!isAliveCard(c, ctx) || !hasTitle(c)) continue;   // never surface a titleless card
-      const moved = new Date(c.column_changed_at || c.created_at).getTime();
-      const commented = ctx.lastCommentMs.get(c.id) || 0;
-      const lastActivity = Math.max(moved, commented, new Date(c.created_at).getTime());
+      if (!isAliveCard(c, ctx) || !hasTitle(c) || c.card_type === "waiting") continue;   // titleless & waiting cards never get kaizen
+      const lastActivity = lastActivityMs(c, ctx);
       if ((ctx.nowMs - lastActivity) / DAY_MS >= 3 && lastActivity < bestActivity) { best = c; bestActivity = lastActivity; }
     }
     if (!best) return null;
     const idle = Math.floor((ctx.nowMs - bestActivity) / DAY_MS);
-    return { ruleId: "kaizen", cardId: best.id, line: `"${best.title || "משימה"}" פתוח ${idle} ימים — צעד קטן אחד יזיז אותו. רוצה שאציע?` };
+    // D1 — a repeat kaizen on the same card reconnects it to the board's purpose.
+    const repeat = ctx.alreadyNudged.has(`kaizen:${best.id}`);
+    const why = repeat ? String(ctx.whyByProject.get(best.project_id) || "").trim() : "";
+    const tail = why ? ` (זה מקדם: ${why})` : "";
+    return { ruleId: "kaizen", cardId: best.id, line: `"${best.title || "משימה"}" פתוח ${idle} ימים — צעד קטן אחד יזיז אותו${tail}. רוצה שאציע?` };
   },
 };
 
@@ -129,18 +139,71 @@ const draftAgingRule: NudgeRule = {
 
 // P1.7 — hara hachi bu: if today's plan load exceeds 80% of daily capacity,
 // gently ask what can wait. Same rounded hours as the board (P0.3).
+// B1 — capacity counts WORK cards only, by their explicit estimate. Waiting cards
+// never consume capacity; un-estimated cards aren't counted (estimateGapRule notes them).
 const haraHachiBuRule: NudgeRule = {
   id: "hara-hachi-bu",
   run: (ctx) => {
-    const planCards = ctx.cards.filter((c) => isAliveCard(c, ctx) && inPlanToday(c, ctx));
-    if (!planCards.length) return null;
-    const planHours = planCards.reduce((a, c) => a + cardHoursOf(cardSecondsOf(c, ctx), ctx.roundMode), 0);
+    const estimated = ctx.cards.filter((c) => isAliveCard(c, ctx) && c.card_type !== "waiting" && inPlanToday(c, ctx) && Number(c.estimate_hours) > 0);
+    if (!estimated.length) return null;
+    const planHours = estimated.reduce((a, c) => a + Number(c.estimate_hours), 0);
     if (planHours <= 0.8 * ctx.capacityHours) return null;
     return { ruleId: "hara-hachi-bu", cardId: null, line: `היום מתוכנן ל־${fmtHoursNudge(planHours, ctx.roundMode)} שעות מתוך ${ctx.capacityHours} — צפוף. יש משהו שיכול לחכות למחר?` };
   },
 };
 
-const NUDGE_RULES: NudgeRule[] = [kaizenRule, draftAgingRule, haraHachiBuRule];
+// B1 — when today's work is mostly un-estimated, the capacity number is blind. Say so.
+const estimateGapRule: NudgeRule = {
+  id: "estimate-gap",
+  run: (ctx) => {
+    const plan = ctx.cards.filter((c) => isAliveCard(c, ctx) && c.card_type !== "waiting" && inPlanToday(c, ctx) && hasTitle(c));
+    if (plan.length < 2) return null;
+    const missing = plan.filter((c) => !(Number(c.estimate_hours) > 0));
+    if (missing.length <= plan.length / 2) return null;   // only when the majority lack one
+    return { ruleId: "estimate-gap", cardId: null, line: `${missing.length} מ־${plan.length} המשימות היום בלי הערכת זמן — נעריך אותן כדי לדעת אם היום ריאלי?` };
+  },
+};
+
+// B1 — follow-up: a WAITING card silent past its follow_up_days earns a nudge to
+// chase whoever it waits on. Deduped (follow-up:card) so it fires once per window.
+const followUpRule: NudgeRule = {
+  id: "follow-up",
+  run: (ctx) => {
+    let best: any = null; let bestOver = -1;
+    for (const c of ctx.cards) {
+      if (c.card_type !== "waiting" || !isAliveCard(c, ctx) || !hasTitle(c)) continue;
+      if (ctx.alreadyNudged.has(`follow-up:${c.id}`)) continue;
+      const days = Number(c.follow_up_days) > 0 ? Number(c.follow_up_days) : 14;
+      const over = (ctx.nowMs - lastActivityMs(c, ctx)) / DAY_MS - days;
+      if (over >= 0 && over > bestOver) { best = c; bestOver = over; }
+    }
+    if (!best) return null;
+    const idle = Math.floor((ctx.nowMs - lastActivityMs(best, ctx)) / DAY_MS);
+    const who = String(best.waiting_on || "").trim();
+    return { ruleId: "follow-up", cardId: best.id, line: `עברו ${idle} ימים בלי תשובה${who ? ` מ־${who}` : ""} על "${best.title}" — מזכירים להם?` };
+  },
+};
+
+// D2 — kintsugi: a WORK card whose subtasks are mostly done but that hasn't moved
+// for ≥5 days is "almost there" — offer to ship it as v1. One per snapshot, deduped.
+const kintsugiRule: NudgeRule = {
+  id: "kintsugi",
+  run: (ctx) => {
+    let best: any = null; let bestIdle = 0;
+    for (const c of ctx.cards) {
+      if (c.card_type === "waiting" || !isAliveCard(c, ctx) || !hasTitle(c)) continue;
+      if (ctx.alreadyNudged.has(`kintsugi:${c.id}`)) continue;
+      const s = ctx.subDoneByCard.get(c.id);
+      if (!s || s.total < 2 || s.done / s.total < 0.6) continue;   // most subtasks closed
+      const idle = (ctx.nowMs - lastActivityMs(c, ctx)) / DAY_MS;
+      if (idle >= 5 && idle > bestIdle) { best = c; bestIdle = idle; }
+    }
+    if (!best) return null;
+    return { ruleId: "kintsugi", cardId: best.id, line: `"${best.title}" כמעט סגור — רוב תת־המשימות בוצעו. סוגרים כגרסה 1?` };
+  },
+};
+
+const NUDGE_RULES: NudgeRule[] = [kaizenRule, draftAgingRule, haraHachiBuRule, estimateGapRule, followUpRule, kintsugiRule];
 
 // classify replies in ALREADY-mapped threads: substantive update, or just an ack?
 const SUBMIT_UPDATES_TOOL = {
@@ -156,6 +219,7 @@ const SUBMIT_UPDATES_TOOL = {
           properties: {
             threadId: { type: "string", description: "Copy the item's threadId verbatim." },
             substantive: { type: "boolean", description: "true if there is a real update; false ONLY when both the reply AND its quoted content have nothing new (pure thank-you/ack)." },
+            closes: { type: "boolean", description: "true if this update means the card's work is essentially DONE — e.g. the awaited approval arrived, the request was answered/fulfilled, the deliverable was accepted. Default false." },
             from: { type: "string", description: "Sender display name." },
             summary: { type: "string", description: "One short Hebrew sentence: what's new." },
           },
@@ -182,7 +246,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   let waChannelDown = false;
   try { const { data: waLink } = await admin.from("whatsapp_link").select("wa_fail_streak,verified").eq("user_id", userId).maybeSingle(); if (waLink?.verified && (Number(waLink.wa_fail_streak) || 0) >= 3) waChannelDown = true; } catch { /* pre-0016 */ }
   const [{ data: projects }, { data: prof }, { data: asst }] = await Promise.all([
-    admin.from("project").select("id,name,is_personal").in("id", writeIds),
+    admin.from("project").select("*").in("id", writeIds),   // '*' tolerates pre-migration schema (why may not exist yet)
     admin.from("profile").select("name,settings").eq("id", userId).maybeSingle(),
     admin.from("assistant_settings").select("cards").eq("user_id", userId).maybeSingle(),
   ]);
@@ -301,7 +365,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
           .select("id");
         if (ins && ins.length) {
           threadUpdates.push({ cardTitle: card.title, from, summary });
-          reviewQueue.push({ kind: "update", updateId: ins[0].id, cardId: card.id, cardTitle: card.title, from, summary });
+          reviewQueue.push({ kind: "update", updateId: ins[0].id, cardId: card.id, cardTitle: card.title, from, summary, closes: !!u?.closes });
         }
       }
     } catch { /* thread-update pass best-effort (also degrades before 0014 is applied) */ }
@@ -320,7 +384,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     const cardList = cardRows || [];
     const cardIds = cardList.map((c: any) => c.id);
     const [subRes, comRes] = await Promise.all([
-      cardIds.length ? admin.from("subtask").select("card_id,hours").in("card_id", cardIds) : Promise.resolve({ data: [] as any[] }),
+      cardIds.length ? admin.from("subtask").select("card_id,hours,done").in("card_id", cardIds) : Promise.resolve({ data: [] as any[] }),
       cardIds.length ? admin.from("comment").select("card_id,created_at").in("card_id", cardIds) : Promise.resolve({ data: [] as any[] }),
     ]);
     // nudge_log is isolated: before 0013 is applied it doesn't exist, and its
@@ -329,12 +393,17 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     try { const { data } = await admin.from("nudge_log").select("rule_id,card_id").eq("user_id", userId).gte("created_at", new Date(now.getTime() - 14 * DAY_MS).toISOString()); nudgeRows = data || []; } catch { /* table not created yet */ }
     const colById = new Map<string, any>((colRows || []).map((c: any) => [c.id, c]));
     const subHoursByCard = new Map<string, number>();
-    for (const s of subRes.data || []) subHoursByCard.set(s.card_id, (subHoursByCard.get(s.card_id) || 0) + (Number(s.hours) || 0));
+    const subDoneByCard = new Map<string, { done: number; total: number }>();
+    for (const s of subRes.data || []) {
+      subHoursByCard.set(s.card_id, (subHoursByCard.get(s.card_id) || 0) + (Number(s.hours) || 0));
+      const e = subDoneByCard.get(s.card_id) || { done: 0, total: 0 }; e.total++; if (s.done) e.done++; subDoneByCard.set(s.card_id, e);
+    }
+    const whyByProject = new Map<string, string>(projList.map((p: any) => [p.id, String(p.why || "")]));
     const lastCommentMs = new Map<string, number>();
     for (const cm of comRes.data || []) { const t = new Date(cm.created_at).getTime(); if (t > (lastCommentMs.get(cm.card_id) || 0)) lastCommentMs.set(cm.card_id, t); }
     const alreadyNudged = new Set<string>(nudgeRows.map((n: any) => `${n.rule_id}:${n.card_id}`));
 
-    const ctx: NudgeCtx = { nowMs: now.getTime(), todayStr, roundMode, capacityHours, cards: cardList, colById, lastCommentMs, subHoursByCard, alreadyNudged };
+    const ctx: NudgeCtx = { nowMs: now.getTime(), todayStr, roundMode, capacityHours, cards: cardList, colById, lastCommentMs, subHoursByCard, subDoneByCard, whyByProject, alreadyNudged };
     const produced = NUDGE_RULES.map((r) => { try { return r.run(ctx); } catch { return null; } }).filter(Boolean) as Nudge[];
     nudges = produced.map((n) => n.line);
     if (produced.length) {

@@ -78,6 +78,34 @@ async function transcribeVoice(mediaId: string): Promise<string | null> {
     return t || null;
   } catch (e) { console.error("transcribe error", String((e as any)?.message || e)); return null; }
 }
+// Part 1 — image/document understanding. Same shape as voice: download the media,
+// read it with Claude (native image/document base64 blocks via the EXISTING
+// ANTHROPIC_API_KEY — audio isn't accepted by the Messages API, images & PDFs are),
+// and hand the extracted text into the normal assistant turn (tools, drafts, gender).
+const IMG_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+function toBase64(bytes: Uint8Array): string {
+  let bin = ""; const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(bin);
+}
+async function describeMedia(kind: "image" | "document", media: { bytes: Uint8Array; mime: string }, caption: string, apiKey: string): Promise<string | null> {
+  try {
+    const b64 = toBase64(media.bytes);
+    const block = kind === "image"
+      ? { type: "image", source: { type: "base64", media_type: IMG_MIMES.has(media.mime) ? media.mime : "image/jpeg", data: b64 } }
+      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } };
+    const instruction = `אתה בונו, קורא מדיה ששלח משתמש בוואטסאפ${caption ? ` עם ההודעה: "${caption}"` : " בלי טקסט מצורף"}. תמצת בעברית בקצרה ועניינית מה יש כאן. אם יש פריטי פעולה, משימות, מועדים או פרטים שאפשר להפוך לכרטיסים — פרט אותם כרשימה קצרה. אל תמציא פרטים שאינם במדיה; אם משהו לא ברור, ציין זאת.`;
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-opus-5", max_tokens: 2048, output_config: { effort: "low" }, messages: [{ role: "user", content: [block, { type: "text", text: instruction }] }] }),
+    });
+    if (!res.ok) { console.error("describeMedia failed", res.status, (await res.text()).slice(0, 200)); return null; }
+    const j = await res.json();
+    const t = (j?.content || []).filter((b: any) => b?.type === "text").map((b: any) => String(b.text || "")).join("\n").trim();
+    return t || null;
+  } catch (e) { console.error("describeMedia error", String((e as any)?.message || e)); return null; }
+}
 async function ackedMediaBefore(admin: any, userId: string, type: string): Promise<boolean> {
   try {
     const threadId = await getThread(admin, userId); if (!threadId) return false;
@@ -144,8 +172,35 @@ Deno.serve(async (req) => {
             const type = String(msg.type || "");
             if ((type === "audio" || type === "voice") && msg.audio?.id) {
               const t = await transcribeVoice(msg.audio.id);
-              if (t) voiceText = `(הודעה קולית) ${t}`;
+              if (t) voiceText = `(הודעה קולית): ${t}`;
               else { const line = "קיבלתי הקלטה — לא הצלחתי להבין אותה, אפשר בטקסט? 🙂"; const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, {}, sent); continue; }
+            } else if ((type === "image" || type === "document") && apiKey) {
+              // Part 1 — read the media with Claude, then enter the SAME text pipeline
+              // (reactions, assistant tools, draft walk) as a voice note does.
+              const mid = type === "image" ? msg.image?.id : msg.document?.id;
+              const mime = String((type === "image" ? msg.image?.mime_type : msg.document?.mime_type) || "");
+              const caption = String((type === "image" ? msg.image?.caption : msg.document?.caption) || "").trim();
+              const kindWord = type === "image" ? "תמונה" : "מסמך";
+              // Claude's document block reads PDF (and text); other doc types → honest ack.
+              if (type === "document" && mime && mime !== "application/pdf") {
+                const line = "קיבלתי קובץ מסוג שאני עדיין לא קורא ישירות — תרצה לספר לי בקצרה מה יש בו, או לשלוח PDF/תמונה?";
+                const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { media: type }, sent); continue;
+              }
+              const media = mid ? await fetchWaMedia(mid) : null;
+              const tooBig = !!media && ((type === "image" && media.bytes.length > 5_000_000) || (type === "document" && media.bytes.length > 15_000_000));
+              if (!media || tooBig) {
+                const line = tooBig ? `ה${kindWord} גדול/ה מדי לניתוח כאן — תרצה לתמצת לי במילים מה חשוב בו?` : `קיבלתי ${kindWord} אבל לא הצלחתי להוריד אותו — תנסה לשלוח שוב, או לספר לי בקצרה?`;
+                const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { media: type }, sent); continue;
+              }
+              const extracted = await describeMedia(type, media, caption, apiKey);
+              if (!extracted) {
+                const line = `קראתי את ה${kindWord} אבל לא הצלחתי להוציא ממנו משהו ברור — תרצה לספר לי בקצרה מה חשוב בו?`;
+                const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { media: type }, sent); continue;
+              }
+              voiceText = caption
+                ? `(${kindWord}) ${caption}\n\n[תוכן ה${kindWord} שקראתי: ${extracted}]`
+                : `(${kindWord} ללא טקסט) [תוכן ה${kindWord} שקראתי: ${extracted}]\n\n[הנחיה פנימית: תאר בקצרה מה קיבלת ושאל אם לפתוח מזה משימות; אל תפתח טיוטות לפני אישור.]`;
+              // fall through to the shared text pipeline below.
             } else {
               const acked = await ackedMediaBefore(admin, userId, type);
               if (type === "sticker") { const line = acked ? "🙂" : "😄"; const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent); }
@@ -159,7 +214,7 @@ Deno.serve(async (req) => {
           // status reaction (Cloud API): 👀 on receipt for anything that needs work,
           // 👍 on success, removed on failure. Small-talk / lone emoji get no reaction,
           // and a reaction never replaces the verbal reply (guaranteed response holds).
-          const bare = text.replace(/^\(הודעה קולית\)\s*/, "");
+          const bare = text.replace(/^\(הודעה קולית\):?\s*/, "");
           const trivial = /^[\p{Extended_Pictographic}\s\p{P}]+$/u.test(bare) || /^(בוקר טוב|בוקר אור|תודה|תודה רבה|היי|הי|שלום|אחלה|סבבה|ok|okay|אוקיי)\W*$/i.test(bare);
           const msgId = msg.id;
           const react = !trivial && !!msgId;
@@ -184,8 +239,11 @@ Deno.serve(async (req) => {
           }
 
           // item 2 — loop breaker: never send a reply identical to the previous one.
+          // A broken loop is a degraded (fallback) turn, not a real answer → the 👍
+          // is withheld and the receipt reaction removed below.
           const prev = await lastAssistantText(admin, userId);
-          if (prev && prev === out.reply.trim()) out.reply = "לא עניתי טוב קודם — תנסח לי בדיוק מה חסר ואחזור עם תשובה מדויקת.";
+          const loopBroke = !!(prev && prev === out.reply.trim());
+          if (loopBroke) out.reply = "לא עניתי טוב קודם — תנסח לי בדיוק מה חסר ואחזור עם תשובה מדויקת.";
 
           // WhatsApp has no inline chips — so EVERY draft created here must be
           // approvable from the channel. Any 1+ drafts open a guided walk with real
@@ -214,7 +272,9 @@ Deno.serve(async (req) => {
           }
           const streak = await noteWaSend(admin, userId, sent);
           await noteProc(admin, userId, true); // a real reply went out → reset processing health
-          if (react) await sendReaction(from, msgId, sent.ok ? "👍" : "");
+          // 👍 only on genuine, successfully-sent processing; a fallback/loop-broken
+          // turn or a failed send removes the receipt reaction instead of confirming.
+          if (react) await sendReaction(from, msgId, (sent.ok && !loopBroke) ? "👍" : "");
           if (!sent.ok) console.error("wa: SEND FAILED", sent.status, waErrorReason(sent), "streak", streak);
         } catch (e) {
           console.error("wa: handler error", String((e as any)?.message || e));

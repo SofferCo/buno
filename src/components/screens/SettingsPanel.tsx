@@ -34,7 +34,7 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
       <div className="adk-pcard">
         <div className="adk-pcard-head">
           <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={22} /></button>
-          <div className="titleblk"><div><h2>הגדרות</h2><span>פרופיל · העוזר · העדפות</span></div></div>
+          <div className="titleblk"><div><h2>הגדרות</h2><span>פרופיל · העוזר · חיבורים · העדפות</span></div></div>
           <div className="sp" />
         </div>
 

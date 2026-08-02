@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type ReviewItem =
-  | { kind: "update"; updateId: string; cardId: string; cardTitle: string; from: string; summary: string }
+  | { kind: "update"; updateId: string; cardId: string; cardTitle: string; from: string; summary: string; closes?: boolean }
   | { kind: "invite"; title: string; from: string; when: string; url: string }
   | { kind: "draft"; cardId: string; title: string; project: string };
 
@@ -44,6 +44,11 @@ function renderItem(item: ReviewItem, _idx: number, _total: number): Render {
   }
   if (item.kind === "draft") {
     return { text: `הצעה: ${item.title}${item.project ? `\n${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }], project: item.project || undefined };
+  }
+  // B2 — a reply that reads as "done" (approval arrived / request answered) leads
+  // with a close suggestion instead of the neutral update actions.
+  if (item.closes) {
+    return { text: `נראה שנסגר: "${item.cardTitle}" — ${item.from}: ${item.summary}. לסגור את הכרטיס?`, actions: [{ id: "rv:close", label: "סגור כרטיס" }, { id: "rv:update", label: "רק עדכן" }, { id: "rv:skip", label: "השאר פתוח" }] };
   }
   return { text: `עדכון על "${item.cardTitle}" — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }] };
 }

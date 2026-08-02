@@ -165,6 +165,10 @@ export class SyncEngine {
       const was = prevCl.get(c.id);
       if (!was) { await this.run(sb.from("project").insert(clientToRow(c, this.userId))); this.colMap[c.id] = {}; }
       else if (!jeq(was, c)) { const { id, created_by, ...row } = clientToRow(c, this.userId) as any; await this.run(sb.from("project").update(row).eq("id", c.id)); }
+      // D1 — the board "why" is written out-of-band (NOT via clientToRow) and its
+      // error is swallowed, so a pre-0018 schema (no `why` column) can never block
+      // the whole board sync. Persists once the migration is applied.
+      if (!was || (was as any).why !== (c as any).why) { try { await sb.from("project").update({ why: (c as any).why || null }).eq("id", c.id); } catch { /* why column not present yet */ } }
     }
     for (const c of prev.clients) if (!curCl.has(c.id)) { await this.run(sb.from("project").delete().eq("id", c.id)); delete this.colMap[c.id]; }
 

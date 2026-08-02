@@ -27,6 +27,7 @@ export function rowToClient(r: any) {
     id: r.id, name: r.name, color: r.color, contact: r.contact || "",
     email: r.email || "", notes: r.notes || "", rate: r.rate == null ? "" : r.rate,
     logo: r.logo_url || null, home: !!r.is_personal,
+    why: r.why || "",   // D1 — board purpose (undefined pre-0018 → "")
   };
 }
 
@@ -63,6 +64,10 @@ export function rowToCard(r: any) {
     origin: r.origin || undefined, draft: r.draft || undefined, proposed: r.proposed || undefined,
     activeColumn: r.active_column_key || undefined,
     createdAt: toMs(r.created_at) || Date.now(),
+    // B1 — two-time model (undefined pre-0018 → safe defaults). Read-only in the
+    // client for now; buno sets these via the update_card tool, server-side.
+    cardType: r.card_type === "waiting" ? "waiting" : "work",
+    waitingOn: r.waiting_on || "",
     subtasks: [], comments: [], attachments: [], history: [],
   };
 }

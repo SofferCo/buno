@@ -29,7 +29,7 @@ const COMPLETE_CARD_TOOL = { name: "complete_card", description: "Mark a card do
 const ARCHIVE_CARD_TOOL = { name: "archive_card", description: "Archive a card (remove from the active board, reversible). Only on explicit request.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 const CREATE_PROJECT_TOOL = { name: "create_project", description: "Open a NEW board on explicit request. Reused by name if it exists.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } };
 const CREATE_CARDS_TOOL = { name: "create_cards", description: "Create MANY task cards at once. ALWAYS use this (one call, array) when the user asks for more than one task — never call create_card repeatedly.", input_schema: { type: "object", properties: { project: { type: "string" }, cards: { type: "array", items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] } }, required: ["title"] } } }, required: ["cards"] } };
-const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, or move to another board. Supports BULK — pass filter_project to edit every open card of a project (e.g. 'all codata cards → Tuesday'). Only the fields you pass change. Identify a single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title of a single card to edit (omit if using filter_project)." }, filter_project: { type: "string", description: "Bulk: edit every open card in this project." }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string", description: "Move the card(s) to this board." } } } };
+const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, move to another board, or set the two-time model (work vs waiting), a time estimate, or a follow-up window. Supports BULK — pass filter_project to edit every open card of a project (e.g. 'all codata cards → Tuesday'). Only the fields you pass change. Identify a single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title of a single card to edit (omit if using filter_project)." }, filter_project: { type: "string", description: "Bulk: edit every open card in this project." }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string", description: "Move the card(s) to this board." }, card_type: { type: "string", enum: ["work", "waiting"], description: "WORK = something the user does; WAITING = delegated / awaiting a reply." }, waiting_on: { type: "string", description: "Who/what a waiting card waits on, e.g. 'העירייה'. Empty string clears." }, follow_up_days: { type: "number", description: "For a waiting card: silent days before a follow-up nudge (supplier 7, authority 30, other 14)." }, estimate_hours: { type: "number", description: "Time estimate in hours for a work card (drives daily capacity). 0 clears." } } } };
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון של Air Doctor, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Use ONLY for genuine progress updates, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title (or part) of the card the update is about." }, note: { type: "string", description: "The progress note, first-person from the user, ≤15 words Hebrew." } }, required: ["card", "note"] } };
 const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 
@@ -70,8 +70,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
   const ids = (mem || []).map((m: any) => m.project_id);
   const [{ data: projRows }, { data: cardRows }, { data: colRows }, { data: prof }, { data: asst }] = await Promise.all([
-    ids.length ? admin.from("project").select("id,name").in("id", ids) : Promise.resolve({ data: [] as any[] }),
-    ids.length ? admin.from("card").select("id,project_id,column_id,title,deadline,priority,archived").in("project_id", ids) : Promise.resolve({ data: [] as any[] }),
+    ids.length ? admin.from("project").select("*").in("id", ids) : Promise.resolve({ data: [] as any[] }),   // '*' tolerates pre-migration schema
+    ids.length ? admin.from("card").select("*").in("project_id", ids) : Promise.resolve({ data: [] as any[] }),
     ids.length ? admin.from("board_column").select("id,project_id,key,title,position,is_done").in("project_id", ids) : Promise.resolve({ data: [] as any[] }),
     admin.from("profile").select("name").eq("id", userId).maybeSingle(),
     admin.from("assistant_settings").select("cards,gender").eq("user_id", userId).maybeSingle(),
@@ -170,6 +170,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     if (["regular", "important", "critical"].includes(input?.priority)) patch.priority = input.priority;
     if (typeof input?.title === "string" && input.title.trim()) patch.title = input.title.trim();
     if (typeof input?.description === "string") patch.description = input.description;
+    // B1 — two-time model / estimate / follow-up window.
+    if (input?.card_type === "work" || input?.card_type === "waiting") patch.card_type = input.card_type;
+    if (typeof input?.waiting_on === "string") patch.waiting_on = input.waiting_on.trim() || null;
+    if (typeof input?.follow_up_days === "number" && input.follow_up_days > 0) patch.follow_up_days = Math.round(input.follow_up_days);
+    if (typeof input?.estimate_hours === "number") patch.estimate_hours = input.estimate_hours > 0 ? input.estimate_hours : null;
     let moveProj: any = null;
     if (input?.project) { moveProj = projects.find((p: any) => p.name && p.name.toLowerCase().includes(String(input.project).toLowerCase())); if (!moveProj) return `לא מצאתי בורד בשם "${input.project}".`; }
     let targets: any[] = [];
@@ -196,7 +201,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       Object.assign(c, upd); changed.push(c.id); ok++;
     }
     if (!ok) return "לא הצלחתי לעדכן.";
-    const what = [patch.deadline !== undefined ? "דדליין" : null, patch.priority ? "עדיפות" : null, patch.title ? "כותרת" : null, patch.description !== undefined ? "תיאור" : null, moveProj ? "בורד" : null].filter(Boolean).join(", ");
+    const what = [patch.deadline !== undefined ? "דדליין" : null, patch.priority ? "עדיפות" : null, patch.title ? "כותרת" : null, patch.description !== undefined ? "תיאור" : null, moveProj ? "בורד" : null, patch.card_type ? (patch.card_type === "waiting" ? "המתנה" : "עבודה") : null, patch.waiting_on !== undefined ? "ממתין על" : null, patch.estimate_hours !== undefined ? "הערכת שעות" : null, patch.follow_up_days ? "מעקב" : null].filter(Boolean).join(", ");
     return targets.length > 1 ? `עדכנתי ${ok} כרטיסים${what ? ` (${what})` : ""}${fail ? ` (${fail} נכשלו)` : ""}.` : `עדכנתי את "${targets[0].title}"${what ? ` (${what})` : ""}.`;
   }
   // item 10 — a genuine progress update becomes an activity note (comment) on the card.
@@ -267,11 +272,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   } catch { /* calendar optional — a momentary failure must not become "no access" */ }
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
-    boardSummary: summarize(projects, cards, cols),
+    boardSummary: summarize(projects, cards, cols) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : ""),
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}. רמת יצירת כרטיסים: "${cardLevel}".
-כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
+כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 
   // append the new user turn — merging if history already ends with a user row
   // (would otherwise be two consecutive "user" messages → 400).

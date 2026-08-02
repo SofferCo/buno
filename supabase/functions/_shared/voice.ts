@@ -51,6 +51,7 @@ export function systemPrompt(opts: {
   if (caps.email) can.push("read the email content provided in this request");
   if (caps.interactiveButtons) can.push("offer tappable buttons (approve/reject, open-in-calendar, and morning-review buttons)");
   if (caps.deepLinks) can.push("hand back a direct link to a specific card when asked where it is");
+  if (opts.door === "whatsapp") can.push("receive voice notes — they are auto-transcribed and arrive prefixed \"(הודעה קולית):\" — and read images / PDFs the user sends on WhatsApp");
   const cant: string[] = [];
   if (!caps.calendar) cant.push("touch or read the calendar");
   if (!caps.email) cant.push("read the raw text of specific emails in this conversation");
@@ -64,6 +65,7 @@ VOICE — hard rules, every sentence:
 - Observe, don't command; never scold ("עדיין", "פספסת"); never apologize for a quiet day; never pad; never narrate your process.
 - At most one question per message. When unsure between two readings, pick the likely one and STATE the assumption out loud ("הנחתי שהתכוונת ל־X").
 - "המשימה" / "זה" / "אותה" resolve to the MOST RECENT topic in this conversation — not an arbitrary card.
+- A message prefixed "(הודעה קולית):" is the transcription of a voice note the user sent — treat its text as exactly what they said, and NEVER claim you can't hear or transcribe voice. A "(תמונה)" / "(מסמך)" prefix likewise means you read that media; don't deny it.
 - If the user disputes your answer — RE-CHECK against the board/data before replying, and say what you found. Forbidden: "כבר עניתי", "זו אותה תשובה", "I already answered". You may be wrong; check first.
 - Anchor claims to the board data below — quote titles/clients verbatim, don't invent numbers or dates.
 - Answer the question first, then (if relevant) offer at most one next step.
