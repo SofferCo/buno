@@ -301,6 +301,19 @@ export default function App() {
     });
   }, [loaded, identity]);
 
+  // Deep link (item 7): buno.io/?card=<id> from a buno-sent link opens that card.
+  const cardLinkDone = useRef(false);
+  useEffect(() => {
+    if (cardLinkDone.current || !loaded) return;
+    const cardId = new URLSearchParams(location.search).get("card");
+    if (!cardId) { cardLinkDone.current = true; return; }
+    const c = cards[cardId];
+    if (!c) return; // the board may still be loading — try again on the next cards update
+    cardLinkDone.current = true;
+    setCurrentId(c.clientId); openPage(null); setEditing(cardId);
+    const u = new URL(location.href); u.searchParams.delete("card"); window.history.replaceState({}, "", u.pathname + u.search);
+  }, [loaded, cards]);
+
   // Google Calendar events → grouped by YYYY-MM-DD for the calendar + My Day.
   useEffect(() => {
     if (!cloud || !loaded) return;

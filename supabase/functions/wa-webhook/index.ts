@@ -158,11 +158,16 @@ Deno.serve(async (req) => {
           const prev = await lastAssistantText(admin, userId);
           if (prev && prev === out.reply.trim()) out.reply = "לא עניתי טוב קודם — תנסח לי בדיוק מה חסר ואחזור עם תשובה מדויקת.";
 
-          // threshold (same as web): 3+ new drafts → a guided one-by-one walk.
-          if ((out.created?.length || 0) >= 3) {
+          // WhatsApp has no inline chips — so EVERY draft created here must be
+          // approvable from the channel. Any 1+ drafts open a guided walk with real
+          // [אשר]/[דחה] buttons (web keeps 1–2 as chips, 3+ as a walk).
+          if ((out.created?.length || 0) >= 1) {
+            const n = out.created.length;
             const queue = out.created.map((c: any) => ({ kind: "draft", cardId: c.id, title: c.title, project: c.project }));
             await setSession(admin, userId, queue as any, 0);
-            const opening = draftsOpening(queue as any);
+            const first = currentRender({ queue: queue as any, cursor: 0 });
+            const preamble = n >= 3 ? `קלטתי ${n} דברים — נעבור אחד־אחד:` : n === 2 ? "פתחתי 2 טיוטות — נאשר אחת־אחת:" : "פתחתי טיוטה — לאשר?";
+            const opening = { text: `${preamble}\n${first.text}`, actions: first.actions };
             const sent = await sendRender(from, opening);
             await recordOutbound(admin, userId, opening.text, { actions: opening.actions }, sent);
             await noteProc(admin, userId, true);

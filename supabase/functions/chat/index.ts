@@ -157,6 +157,7 @@ const CREATE_CARDS_TOOL = {
 };
 const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, or move to another board. Supports BULK — filter_project edits every open card of a project ('all codata → Tuesday'). Only fields you pass change. Single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string" }, filter_project: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string" } } } };
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Only for genuine progress, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string" }, note: { type: "string" } }, required: ["card", "note"] } };
+const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -406,6 +407,14 @@ Deno.serve(async (req) => {
     if (error) return "לא הצלחתי לרשום התקדמות."; changed.push(card.id);
     return `רשמתי ל"${card.title}": ${note}`;
   }
+  // item 7 — direct link to a card (searches all cards, active or not).
+  function doGetCardLink(input: any): string {
+    const s = String(input?.card || "").toLowerCase().trim(); if (!s) return "לא צוין כרטיס.";
+    const all = cards.data || [];
+    const c = all.find((x: any) => (x.title || "").toLowerCase() === s) || all.find((x: any) => (x.title || "").toLowerCase().includes(s));
+    if (!c) return `לא מצאתי כרטיס בשם "${input?.card}".`;
+    return `הנה הקישור ל"${c.title}": https://buno.io/?card=${c.id}`;
+  }
 
   // item 9 — inject the rolling conversation summary (older history, updated nightly)
   let convSummary = "";
@@ -420,7 +429,7 @@ Deno.serve(async (req) => {
     // capabilities reflect exactly what THIS request sends: the create + organize
     // tools are always attached; calendar is context-only when we have events;
     // email is never available in the chat. Keeps the prompt honest to itself.
-    capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: false },
+    capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "web",
   }) + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `
 
@@ -460,7 +469,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         max_tokens: 2048,
         output_config: { effort: "low" },
         system: sys,
-        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
+        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
         messages,
       });
       if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
@@ -476,6 +485,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
         else if (tu.name === "update_card") out = await doUpdateCard(tu.input);
         else if (tu.name === "log_progress") out = await doLogProgress(tu.input);
+        else if (tu.name === "get_card_link") out = doGetCardLink(tu.input);
         else if (tu.name === "create_project") out = await doCreateProject(tu.input);
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);

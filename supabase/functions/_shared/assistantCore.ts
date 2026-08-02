@@ -31,6 +31,7 @@ const CREATE_PROJECT_TOOL = { name: "create_project", description: "Open a NEW b
 const CREATE_CARDS_TOOL = { name: "create_cards", description: "Create MANY task cards at once. ALWAYS use this (one call, array) when the user asks for more than one task — never call create_card repeatedly.", input_schema: { type: "object", properties: { project: { type: "string" }, cards: { type: "array", items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] } }, required: ["title"] } } }, required: ["cards"] } };
 const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, or move to another board. Supports BULK — pass filter_project to edit every open card of a project (e.g. 'all codata cards → Tuesday'). Only the fields you pass change. Identify a single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title of a single card to edit (omit if using filter_project)." }, filter_project: { type: "string", description: "Bulk: edit every open card in this project." }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string", description: "Move the card(s) to this board." } } } };
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון של Air Doctor, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Use ONLY for genuine progress updates, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title (or part) of the card the update is about." }, note: { type: "string", description: "The progress note, first-person from the user, ≤15 words Hebrew." } }, required: ["card", "note"] } };
+const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 
 function summarize(projects: any[], cards: any[], cols: any[]): string {
   const colTitle = new Map<string, string>(cols.map((c: any) => [c.id, c.title]));
@@ -207,6 +208,13 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     changed.push(card.id);
     return `רשמתי ל"${card.title}": ${note}`;
   }
+  // item 7 — a direct link to a card (searches all cards, not just active).
+  function doGetCardLink(input: any): string {
+    const s = String(input?.card || "").toLowerCase().trim(); if (!s) return "לא צוין כרטיס.";
+    const c = cards.find((x: any) => (x.title || "").toLowerCase() === s) || cards.find((x: any) => (x.title || "").toLowerCase().includes(s));
+    if (!c) return `לא מצאתי כרטיס בשם "${input?.card}".`;
+    return `הנה הקישור ל"${c.title}": https://buno.io/?card=${c.id}`;
+  }
 
   // shared thread + recent history
   let threadId: string | undefined;
@@ -260,7 +268,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
     boardSummary: summarize(projects, cards, cols),
-    capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: false },
+    capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}. רמת יצירת כרטיסים: "${cardLevel}".
 כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
@@ -276,7 +284,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
         model: "claude-opus-5", max_tokens: 1500, output_config: { effort: "low" },
-        system: sys, tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
+        system: sys, tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
       });
       if (res.stop_reason === "refusal") { reply = "מצטער, לא אוכל לעזור בזה."; break; }
       const textNow = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
@@ -291,6 +299,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
         else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
         else if (tu.name === "update_card") out = await doUpdateCard(tu.input);
         else if (tu.name === "log_progress") out = await doLogProgress(tu.input);
+        else if (tu.name === "get_card_link") out = doGetCardLink(tu.input);
         else if (tu.name === "create_project") out = await doCreateProject(tu.input);
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
