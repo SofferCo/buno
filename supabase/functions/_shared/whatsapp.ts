@@ -50,11 +50,20 @@ async function post(payload: any): Promise<{ ok: boolean; status: number; body: 
   return { ok: res.ok, status: res.status, body: await res.text() };
 }
 
+// item 13 — WhatsApp interactive bodies don't render markdown, and stray bullets /
+// dashes look broken. Strip asterisks, normalize "• "/"–" bullets, collapse blanks.
+function cleanInteractive(s: string): string {
+  return String(s || "")
+    .replace(/\*\*?/g, "")
+    .replace(/^[\s]*[•\-–—]\s?/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 // interactive reply buttons (up to 3, title ≤20 chars)
 export async function sendWhatsAppButtons(to: string, body: string, buttons: { id: string; title: string }[]) {
   return post({
     messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "interactive",
-    interactive: { type: "button", body: { text: String(body).slice(0, 1024) }, action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })) } },
+    interactive: { type: "button", body: { text: cleanInteractive(body).slice(0, 1024) }, action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id.slice(0, 256), title: cleanInteractive(b.title).slice(0, 20) } })) } },
   });
 }
 
@@ -62,7 +71,7 @@ export async function sendWhatsAppButtons(to: string, body: string, buttons: { i
 export async function sendWhatsAppList(to: string, body: string, buttonLabel: string, rows: { id: string; title: string; description?: string }[]) {
   return post({
     messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "interactive",
-    interactive: { type: "list", body: { text: String(body).slice(0, 1024) }, action: { button: buttonLabel.slice(0, 20), sections: [{ title: "פעולות", rows: rows.slice(0, 10).map((r) => ({ id: r.id.slice(0, 200), title: r.title.slice(0, 24), description: (r.description || "").slice(0, 72) })) }] } },
+    interactive: { type: "list", body: { text: cleanInteractive(body).slice(0, 1024) }, action: { button: buttonLabel.slice(0, 20), sections: [{ title: "פעולות", rows: rows.slice(0, 10).map((r) => ({ id: r.id.slice(0, 200), title: cleanInteractive(r.title).slice(0, 24), description: cleanInteractive(r.description || "").slice(0, 72) })) }] } },
   });
 }
 

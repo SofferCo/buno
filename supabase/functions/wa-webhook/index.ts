@@ -31,6 +31,45 @@ async function recordOutbound(admin: any, userId: string, text: string, extraMet
   } catch { /* recording best-effort */ }
 }
 
+const FALLBACK = "מצטער, לא הצלחתי להשיב כרגע.";
+
+// item 3 — processing-failure health (parallel to send-failure health in 0016).
+async function noteProc(admin: any, userId: string, ok: boolean, err?: string): Promise<number> {
+  try {
+    if (ok) { await admin.from("whatsapp_link").update({ proc_fail_streak: 0 }).eq("user_id", userId); return 0; }
+    const { data } = await admin.from("whatsapp_link").select("proc_fail_streak").eq("user_id", userId).maybeSingle();
+    const streak = (Number(data?.proc_fail_streak) || 0) + 1;
+    await admin.from("whatsapp_link").update({ proc_fail_streak: streak, proc_last_error: String(err || "").slice(0, 300), proc_last_at: new Date().toISOString() }).eq("user_id", userId);
+    return streak;
+  } catch { return 0; }
+}
+// item 2 — the previous assistant reply, to refuse an identical repeat.
+async function lastAssistantText(admin: any, userId: string): Promise<string> {
+  try {
+    const threadId = await getThread(admin, userId); if (!threadId) return "";
+    const { data } = await admin.from("assistant_message").select("content").eq("thread_id", threadId).eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return String(data?.content || "").trim();
+  } catch { return ""; }
+}
+// item 8 — media: one honest, varied acknowledgment per type per conversation.
+function mediaAckLine(type: string): string {
+  const m: Record<string, string> = {
+    image: "קיבלתי תמונה — עדיין לא יודע לקרוא תמונות, זה בדרך 🙂",
+    audio: "קיבלתי הקלטה קולית — עדיין לא מתמלל אותן, בקרוב 🙂",
+    voice: "קיבלתי הקלטה קולית — עדיין לא מתמלל אותן, בקרוב 🙂",
+    video: "קיבלתי וידאו — עדיין לא צופה בהם, בקרוב 🙂",
+    document: "קיבלתי קובץ — עדיין לא קורא מסמכים, בקרוב 🙂",
+  };
+  return m[type] || "קיבלתי — עדיין לא יודע לעבד את זה, בקרוב 🙂";
+}
+async function ackedMediaBefore(admin: any, userId: string, type: string): Promise<boolean> {
+  try {
+    const threadId = await getThread(admin, userId); if (!threadId) return false;
+    const { data } = await admin.from("assistant_message").select("meta").eq("thread_id", threadId).eq("door", "whatsapp").order("created_at", { ascending: false }).limit(30);
+    return (data || []).some((r: any) => r?.meta?.mediaAck === type);
+  } catch { return false; }
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -82,7 +121,19 @@ Deno.serve(async (req) => {
             if (id.startsWith("rv:")) { const r = await handleAction(admin, userId, id); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
             continue;
           }
-          if (msg.type !== "text") { await sendWhatsApp(from, "כרגע אני קורא טקסט וכפתורים. כתוב לי מה תרצה 🙂"); continue; }
+          // item 8 — media: recognize the type, acknowledge once per type honestly.
+          if (msg.type !== "text") {
+            const type = String(msg.type || "");
+            const acked = await ackedMediaBefore(admin, userId, type);
+            if (type === "sticker") {
+              const line = acked ? "🙂" : "😄";
+              const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent);
+            } else if (!acked) {
+              const line = mediaAckLine(type);
+              const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent);
+            } // repeat non-sticker media: stay quiet, don't re-explain
+            continue;
+          }
           const text = String(msg.text?.body || "").trim();
           if (!text) continue;
 
@@ -90,22 +141,35 @@ Deno.serve(async (req) => {
           const s = await getSession(admin, userId);
           if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { const r = currentRender(s); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
 
-          const out = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : { reply: "מצטער, אני לא זמין כרגע.", created: [], threadId: await getThread(admin, userId) };
+          const out = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : { reply: FALLBACK, created: [], threadId: await getThread(admin, userId) };
 
-          // threshold (same as web): 3+ new drafts → a guided one-by-one walk with
-          // real buttons; 1–2 stay a plain reply. Keeps both doors identical.
+          // item 3 — a processing failure (empty / canned fallback) is never silent:
+          // one honest message; a 2nd consecutive failure alerts Tal (logged + health).
+          if (!out.reply || !out.reply.trim() || out.reply.trim() === FALLBACK) {
+            const streak = await noteProc(admin, userId, false, "empty/fallback reply");
+            const line = streak >= 2 ? "משהו תקוע אצלי כרגע — טל מקבל התראה, ואחזור אליך." : "לא הצלחתי לענות כרגע — נסה שוב בעוד רגע.";
+            const sent = await sendWhatsApp(from, line);
+            await recordOutbound(admin, userId, line, streak >= 2 ? { procAlert: true } : {}, sent);
+            if (streak >= 2) console.error("wa: PROC FAIL ALERT — user", userId, "streak", streak);
+            continue;
+          }
+
+          // item 2 — loop breaker: never send a reply identical to the previous one.
+          const prev = await lastAssistantText(admin, userId);
+          if (prev && prev === out.reply.trim()) out.reply = "לא עניתי טוב קודם — תנסח לי בדיוק מה חסר ואחזור עם תשובה מדויקת.";
+
+          // threshold (same as web): 3+ new drafts → a guided one-by-one walk.
           if ((out.created?.length || 0) >= 3) {
             const queue = out.created.map((c: any) => ({ kind: "draft", cardId: c.id, title: c.title, project: c.project }));
             await setSession(admin, userId, queue as any, 0);
             const opening = draftsOpening(queue as any);
             const sent = await sendRender(from, opening);
             await recordOutbound(admin, userId, opening.text, { actions: opening.actions }, sent);
+            await noteProc(admin, userId, true);
             continue;
           }
 
           const sent = await sendWhatsApp(from, out.reply);
-          // persist the assistant reply WITH the send outcome — so a failed WhatsApp
-          // delivery is never swallowed: it's logged, recorded, and still shows in web.
           if (out.threadId) {
             const meta: any = {};
             if (out.created?.length) meta.created = out.created;
@@ -113,6 +177,7 @@ Deno.serve(async (req) => {
             await admin.from("assistant_message").insert({ thread_id: out.threadId, role: "assistant", door: "whatsapp", content: out.reply, meta: Object.keys(meta).length ? meta : null });
           }
           const streak = await noteWaSend(admin, userId, sent);
+          await noteProc(admin, userId, true); // a real reply went out → reset processing health
           if (!sent.ok) console.error("wa: SEND FAILED", sent.status, waErrorReason(sent), "streak", streak);
         } catch (e) {
           console.error("wa: handler error", String((e as any)?.message || e));

@@ -6,8 +6,30 @@
 // Iron rules hold: only amber DRAFTS are created (approval pending), the
 // snapshot is a private chat message, gathered content is DATA.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { sweepUser, daySnapshot } from "../_shared/sweep.ts";
 import { sendWhatsApp, sendRender, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
+
+// item 9 — fold older conversation into a rolling per-user summary (updated nightly).
+async function updateSummary(admin: any, userId: string, apiKey: string) {
+  try {
+    const { data: thread } = await admin.from("assistant_thread").select("id").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!thread?.id) return;
+    const { data: msgs } = await admin.from("assistant_message").select("role,content").eq("thread_id", thread.id).order("created_at", { ascending: false }).limit(120);
+    const rows = (msgs || []).reverse().filter((m: any) => String(m.content || "").trim());
+    if (rows.length < 20) return; // not enough history to summarize yet
+    const { data: prev } = await admin.from("conversation_summary").select("summary").eq("user_id", userId).maybeSingle();
+    const transcript = rows.map((m: any) => `${m.role === "user" ? "משתמש" : "בונו"}: ${String(m.content).slice(0, 300)}`).join("\n").slice(0, 12000);
+    const anthropic = new Anthropic({ apiKey });
+    const res: any = await anthropic.messages.create({
+      model: "claude-opus-5", max_tokens: 700, output_config: { effort: "low" },
+      system: "אתה מתחזק תקציר מתגלגל של שיחה בעברית (עד ~200 מילים, גוף שלישי): פרויקטים ולקוחות, החלטות, העדפות, משימות פתוחות, ומה המשתמש ביקש ומתי. ענייני וקצר — זהו זיכרון ארוך־טווח, לא סיכום מילולי.",
+      messages: [{ role: "user", content: `תקציר קודם:\n${prev?.summary || "(אין)"}\n\nהודעות אחרונות:\n${transcript}\n\nהחזר תקציר מעודכן בלבד.` }],
+    });
+    const summary = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    if (summary) await admin.from("conversation_summary").upsert({ user_id: userId, summary: summary.slice(0, 4000), covered_through: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  } catch (e) { console.error("summary update failed", String((e as any)?.message || e)); }
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -60,13 +82,15 @@ Deno.serve(async (req) => {
       try {
         const { data: link } = await admin.from("whatsapp_link").select("phone,verified").eq("user_id", userId).maybeSingle();
         if (link?.verified && link.phone) {
-          const s = await sendWhatsApp(link.phone, snapshot); waSent = s.ok;
+          // item 14 — ONE morning message: the snapshot text (which already carries
+          // the single offer line) + one button. No separate second "shall we?" ask.
+          const open = { text: snapshot, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
+          const s = await sendRender(link.phone, open); waSent = s.ok;
           const streak = await noteWaSend(admin, userId, s);
           if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waErrorReason(s), "streak", streak);
-          // if there are thread updates/invites, offer the guided walk with a button
-          if (s.ok && r.reviewOpening) await sendRender(link.phone, r.reviewOpening);
         }
       } catch { /* whatsapp push best-effort */ }
+      await updateSummary(admin, userId, apiKey); // item 9 — refresh the rolling memory summary
       results.push({ userId, created: r.created.length, considered: r.considered, waSent });
     } catch (e) {
       results.push({ userId, error: String(e) });

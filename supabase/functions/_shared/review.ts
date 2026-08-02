@@ -82,8 +82,16 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   // peek: report the live session without touching it (chat-open continuity chip).
   if (actionId === "rv:peek") return s ? { text: "", actions: [], pending: s.queue.length - s.cursor, started: s.cursor > 0 } : { text: "", actions: [], done: true, pending: 0 };
   if (!s) return { text: "הכול מעודכן 👍 רוצה שאסרוק שוב?", actions: [], done: true, pending: 0 };
-  // skip the rest of the walk in one go.
-  if (actionId === "rv:skipall") { await clearSession(admin, userId); return { text: "בסדר, דילגתי על השאר. הכול מעודכן 👍", actions: [], done: true, pending: 0 }; }
+  // skip the rest of the walk in one go — and (item 1) never leave un-approved
+  // draft cards behind: archive every remaining draft that wasn't explicitly approved.
+  if (actionId === "rv:skipall") {
+    try {
+      const remaining = s.queue.slice(s.cursor).filter((it: any) => it.kind === "draft" && it.cardId).map((it: any) => it.cardId);
+      if (remaining.length) await admin.from("card").update({ archived: true, archived_at: new Date().toISOString(), removed_by: "assistant" }).in("id", remaining).not("draft", "is", null);
+    } catch { /* best-effort cleanup */ }
+    await clearSession(admin, userId);
+    return { text: "בסדר — דילגתי על השאר וניקיתי מה שלא אושר. הכול מעודכן 👍", actions: [], done: true, pending: 0 };
+  }
   const item = s.queue[s.cursor];
   if (!item) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true, pending: 0 }; }
 
