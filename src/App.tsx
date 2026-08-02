@@ -6,6 +6,7 @@ import { CalendarPanel } from "./components/screens/CalendarPanel";
 import { ChatPanel } from "./components/screens/ChatPanel";
 import { ClientModal } from "./components/screens/ClientModal";
 import { MyDay } from "./components/screens/MyDay";
+import { Onboarding } from "./components/screens/Onboarding";
 import { PersonalDashboard } from "./components/screens/PersonalDashboard";
 import { ReportPanel } from "./components/screens/ReportPanel";
 import { SettingsPanel } from "./components/screens/SettingsPanel";
@@ -56,6 +57,11 @@ export default function App() {
   const [calOpen, setCalOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifSeen, setNotifSeen] = useState(() => Date.now() - 6 * 3600e3);
+  // A1 first-run onboarding (real): shown once for a brand-new cloud account
+  // right after the empty-board seed. onbBoards maps a vertical key → the created
+  // board id, so the first-task step lands the card on the right board.
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const onbBoards = useRef<Record<string, string>>({});
   function openPage(name) {
     setDayOpen(name === "day"); setArchiveOpen(name === "archive"); setReportOpen(name === "report");
     setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
@@ -234,6 +240,7 @@ export default function App() {
                 applyBoard(st);
                 const os = ownerSharing(st.clients); setRoles(os.roles); setRosters(os.rosters);
                 engineRef.current!.schedule(st);
+                setShowOnboarding(true); // brand-new account → run first-run onboarding
               }
             }
           }
@@ -472,6 +479,25 @@ export default function App() {
   }
 
   if (!loaded) return <div className="adk" style={{ display: "grid", placeItems: "center", height: "100vh" }}><div style={{ color: "var(--muted)", fontWeight: 600 }}>טוען את הלוח…</div></div>;
+
+  // A1 real onboarding callbacks: seed a board per picked vertical, land the first
+  // real task on the right board, then finish to "היום שלי". Boards are ordinary
+  // clients; the seeded task goes to the intake column. Everything syncs normally.
+  const onbSeed = (verts: { key: string; label: string; color: string }[]) => {
+    const created: Record<string, string> = {};
+    const newClients = verts.map((v) => { const id = uid("cl"); created[v.key] = id; return { id, name: v.label, color: v.color, home: false, contact: "", email: "", notes: "", logo: null, why: "" }; });
+    onbBoards.current = created;
+    if (newClients.length) { setClients((p) => [...p, ...newClients]); setCurrentId(newClients[0].id); }
+  };
+  const onbAddTask = (boardKey: string, text: string) => {
+    const t = String(text || "").trim(); if (!t) return;
+    const cid = onbBoards.current[boardKey] || clients.find((c) => c.home)?.id || clients[0]?.id; if (!cid) return;
+    const id = uid("card");
+    setCards((p) => ({ ...p, [id]: { id, clientId: cid, title: t, creator: profile.name || identity?.name || "אני", cc: [], comments: [], attachments: [], subtasks: [], description: "", deadline: todayStr(), priority: "regular", routine: "none", dayFlex: false, time: "", activeColumn: "col-brief", timeSpent: 0, timerStart: null, createdAt: Date.now(), cardType: "work" } }));
+    setOrder((p) => ({ ...p, ["col-brief"]: [...(p["col-brief"] || []), id] }));
+  };
+  const onbComplete = () => { setShowOnboarding(false); openPage("day"); };
+  if (showOnboarding) return <Onboarding onSeed={onbSeed} onAddTask={onbAddTask} onComplete={onbComplete} />;
 
   const current = clients.find((c) => c.id === currentId);
   const clientCards = (id) => Object.values(cards).filter((c) => c.clientId === id);

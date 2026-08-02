@@ -38,9 +38,21 @@ const CAL_ITEMS = [
   { id: "c2", text: "רופא שיניים — שני הבא", board: "home" },
 ];
 
-export function Onboarding({ onDone }: { onDone?: () => void }) {
-  const [step, setStep] = useState<Step>("welcome");
-  const [msgs, setMsgs] = useState<Msg[]>([
+export function Onboarding({ onDone, onSeed, onAddTask, onComplete }: {
+  onDone?: () => void;
+  onSeed?: (verts: { key: string; label: string; color: string }[]) => void;   // seed real boards
+  onAddTask?: (boardKey: string, text: string) => void;                          // land the first task
+  onComplete?: () => void;                                                       // finish → My Day
+}) {
+  // REAL mode = wired into the app (post-login first-run): the user is already
+  // authenticated, so skip the phone/OTP intro and start at verticals. Without
+  // callbacks it stays the pure design preview (?onboarding=1).
+  const realMode = !!onSeed;
+  const [step, setStep] = useState<Step>(realMode ? "verticals" : "welcome");
+  const [msgs, setMsgs] = useState<Msg[]>(realMode ? [
+    { by: "twin", text: "היי, אני בונו — העוזר האישי שלך. 👋" },
+    { by: "twin", text: "בשביל מה אתה צריך אותי? אפשר לסמן כמה שרוצים — אני יודע להחזיק הכול ביחד." },
+  ] : [
     { by: "twin", text: "היי, אני בונו — העוזר האישי שלך. 👋" },
     { by: "twin", text: "מה המספר שלך? אשלח לך קוד כניסה." },
   ]);
@@ -92,6 +104,8 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     say("בכל מקרה, תמיד אפשר להוסיף אנשים אחר כך — בורד הוא דבר שחי ומשתנה.");
     setStep("boards");
     const list = picked.length ? picked : ["personal"];
+    // REAL mode: create the boards for real (they sync + appear in the app).
+    onSeed?.(list.map((k) => ({ key: k, label: vLabel(k), color: vColor(k) })));
     const at = (ms: number, fn: () => void) => setTimeout(fn, ms);
     // staged build — buno narrates the "why", then the boards fall in one by one,
     // their cards cascade, and only then he hands the turn back to the user.
@@ -108,6 +122,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     if (skip || !task.trim()) { me("אחר כך"); say("אפשר גם אחר כך — הכרטיס מחכה."); goCalendarOffer(); return; }
     const board = picked.includes("business") ? "business" : boards[0];
     me(task.trim());
+    onAddTask?.(board, task.trim());   // REAL mode: create the card on that board
     setExtraCards((e) => ({ ...e, [board]: [...(e[board] || []), task.trim()] }));
     closeCard("first");
     say(`נשמע כמו משהו של ${vLabel(board)} — שמתי שם. טעיתי? תגרור.`,
@@ -121,6 +136,8 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
   function calendarConnect() {
     me("חבר יומן");
     closeCard("cal");
+    // REAL mode: the calendar OAuth lives in Settings — don't show mock events here.
+    if (realMode) { say("מעולה — נחבר את היומן מההגדרות אחרי שנסיים, ואז אני אראה מה קורה לך השבוע ואשלב את זה ב\"היום שלי\"."); goWhatsapp(); return; }
     say("מצאתי כמה דברים ביומן. תגיד לי מה שווה מעקב:");
     setMsgs((m) => [...m, { kind: "calendar" }]);
     setStep("calendar");
@@ -131,7 +148,9 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     goWhatsapp();
   }
   function goWhatsapp() {
-    say("ודבר אחרון ששווה לדעת — אני זמין לך גם בוואטסאפ, באותו מספר שנכנסת איתו.",
+    say(realMode
+      ? "ודבר אחרון ששווה לדעת — אני זמין לך גם בוואטסאפ. אפשר לחבר את המספר מההגדרות, ואז מה שתזרוק לי שם יופיע כאן."
+      : "ודבר אחרון ששווה לדעת — אני זמין לך גם בוואטסאפ, באותו מספר שנכנסת איתו.",
       "זה אני. אותו בונו, אותו זיכרון, אותם בורדים. תזרוק לי משימה בוואטסאפ תוך כדי יום — היא תופיע פה. תשאל אותי שם מה על הלוח — אני אדע.");
     setStep("whatsapp");
   }
@@ -233,7 +252,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
             <div className="ob-control ob-done"><button className="ob-cta ob-big" onClick={goMyDay}>הבנתי, בונו</button></div>
           )}
           {step === "my_day" && (
-            <div className="ob-control ob-done"><button className="ob-cta ob-big" onClick={() => onDone?.()}>קח אותי ל"היום שלי"</button></div>
+            <div className="ob-control ob-done"><button className="ob-cta ob-big" onClick={() => (onComplete || onDone)?.()}>קח אותי ל"היום שלי"</button></div>
           )}
         </div>
       </div>
