@@ -93,6 +93,25 @@ export async function sendRender(to: string, render: { text: string; actions: { 
   return sendWhatsAppButtons(to, body, btns.map((b) => ({ id: b.id, title: b.label })));
 }
 
+// Send an Authentication-category template with a one-time code (login OTP).
+// Meta standardizes the body of Authentication templates; the code fills {{1}}
+// and — for a Copy-code / one-tap button — the same code fills the button param.
+// `templateName`/`lang` must match what was approved in Meta (e.g. "buno_login_code","he").
+export async function sendWhatsAppTemplate(to: string, templateName: string, lang: string, code: string) {
+  return post({
+    messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "template",
+    template: {
+      name: templateName, language: { code: lang },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: String(code) }] },
+        // Authentication templates require the code echoed on the button too. If the
+        // approved button is Copy-code, "url" is the correct sub_type here.
+        { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(code) }] },
+      ],
+    },
+  });
+}
+
 // Status reaction on an inbound message (Cloud API). An empty emoji removes it;
 // a new emoji on the same message_id overrides the previous one.
 export async function sendReaction(to: string, messageId: string, emoji: string) {

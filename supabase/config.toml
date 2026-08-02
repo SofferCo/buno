@@ -26,3 +26,9 @@ verify_jwt = true
 # X-Hub-Signature-256 HMAC over the raw body (WA_APP_SECRET).
 [functions.wa-webhook]
 verify_jwt = false
+
+# Supabase "Send SMS Hook" target — Supabase Auth calls it (no user JWT);
+# authenticity via the Standard-Webhooks HMAC (SEND_SMS_HOOK_SECRET). It routes
+# the OTP delivery to WhatsApp (Authentication template) instead of SMS.
+[functions.wa-otp-hook]
+verify_jwt = false
