@@ -8,7 +8,7 @@
 // buno conversation (shared thread, door='whatsapp') → reply via sendWhatsApp.
 // Unknown number → one short onboarding line.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
+import { sendWhatsApp, sendWhatsAppList, sendRender, verifyWaSignature, noteWaSend, waErrorReason, sendReaction, fetchWaMedia } from "../_shared/whatsapp.ts";
 import { assistantReply, getThread } from "../_shared/assistantCore.ts";
 import { getSession, currentRender, handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 
@@ -61,6 +61,22 @@ function mediaAckLine(type: string): string {
     document: "קיבלתי קובץ — עדיין לא קורא מסמכים, בקרוב 🙂",
   };
   return m[type] || "קיבלתי — עדיין לא יודע לעבד את זה, בקרוב 🙂";
+}
+// item 8 phase B — transcribe a WhatsApp voice note to Hebrew text (Whisper).
+// Needs a transcription key (OPENAI_API_KEY); absent/failed → null → graceful phase A.
+async function transcribeVoice(mediaId: string): Promise<string | null> {
+  const key = Deno.env.get("OPENAI_API_KEY"); if (!key) return null;
+  const media = await fetchWaMedia(mediaId); if (!media) return null;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([media.bytes], { type: media.mime || "audio/ogg" }), "voice.ogg");
+    form.append("model", "whisper-1");
+    form.append("language", "he");
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form });
+    if (!res.ok) { console.error("transcribe failed", res.status, (await res.text()).slice(0, 200)); return null; }
+    const j = await res.json(); const t = String(j?.text || "").trim();
+    return t || null;
+  } catch (e) { console.error("transcribe error", String((e as any)?.message || e)); return null; }
 }
 async function ackedMediaBefore(admin: any, userId: string, type: string): Promise<boolean> {
   try {
@@ -121,25 +137,37 @@ Deno.serve(async (req) => {
             if (id.startsWith("rv:")) { const r = await handleAction(admin, userId, id); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
             continue;
           }
-          // item 8 — media: recognize the type, acknowledge once per type honestly.
+          // item 8 — media. Voice notes are transcribed (phase B) and enter the
+          // pipeline as if typed; other media get a typed, honest ack once per type.
+          let voiceText = "";
           if (msg.type !== "text") {
             const type = String(msg.type || "");
-            const acked = await ackedMediaBefore(admin, userId, type);
-            if (type === "sticker") {
-              const line = acked ? "🙂" : "😄";
-              const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent);
-            } else if (!acked) {
-              const line = mediaAckLine(type);
-              const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent);
-            } // repeat non-sticker media: stay quiet, don't re-explain
-            continue;
+            if ((type === "audio" || type === "voice") && msg.audio?.id) {
+              const t = await transcribeVoice(msg.audio.id);
+              if (t) voiceText = `(הודעה קולית) ${t}`;
+              else { const line = "קיבלתי הקלטה — לא הצלחתי להבין אותה, אפשר בטקסט? 🙂"; const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, {}, sent); continue; }
+            } else {
+              const acked = await ackedMediaBefore(admin, userId, type);
+              if (type === "sticker") { const line = acked ? "🙂" : "😄"; const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent); }
+              else if (!acked) { const line = mediaAckLine(type); const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { mediaAck: type }, sent); }
+              continue;
+            }
           }
-          const text = String(msg.text?.body || "").trim();
+          const text = voiceText || String(msg.text?.body || "").trim();
           if (!text) continue;
+
+          // status reaction (Cloud API): 👀 on receipt for anything that needs work,
+          // 👍 on success, removed on failure. Small-talk / lone emoji get no reaction,
+          // and a reaction never replaces the verbal reply (guaranteed response holds).
+          const bare = text.replace(/^\(הודעה קולית\)\s*/, "");
+          const trivial = /^[\p{Extended_Pictographic}\s\p{P}]+$/u.test(bare) || /^(בוקר טוב|בוקר אור|תודה|תודה רבה|היי|הי|שלום|אחלה|סבבה|ok|okay|אוקיי)\W*$/i.test(bare);
+          const msgId = msg.id;
+          const react = !trivial && !!msgId;
+          if (react) { try { await sendReaction(from, msgId, "👀"); } catch { /* reaction best-effort */ } }
 
           // resume a paused guided review with a natural phrase
           const s = await getSession(admin, userId);
-          if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { const r = currentRender(s); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); continue; }
+          if (s && /^(בוא נעבור|נמשיך|כן|יאללה|בוא)\b/.test(text)) { const r = currentRender(s); const sent = await sendRender(from, r); await recordOutbound(admin, userId, r.text, { actions: r.actions }, sent); if (react) await sendReaction(from, msgId, "👍"); continue; }
 
           const out = apiKey ? await assistantReply(admin, userId, text, apiKey, "whatsapp") : { reply: FALLBACK, created: [], threadId: await getThread(admin, userId) };
 
@@ -150,6 +178,7 @@ Deno.serve(async (req) => {
             const line = streak >= 2 ? "משהו תקוע אצלי כרגע — טל מקבל התראה, ואחזור אליך." : "לא הצלחתי לענות כרגע — נסה שוב בעוד רגע.";
             const sent = await sendWhatsApp(from, line);
             await recordOutbound(admin, userId, line, streak >= 2 ? { procAlert: true } : {}, sent);
+            if (react) { try { await sendReaction(from, msgId, ""); } catch { /* remove best-effort */ } }
             if (streak >= 2) console.error("wa: PROC FAIL ALERT — user", userId, "streak", streak);
             continue;
           }
@@ -171,6 +200,7 @@ Deno.serve(async (req) => {
             const sent = await sendRender(from, opening);
             await recordOutbound(admin, userId, opening.text, { actions: opening.actions }, sent);
             await noteProc(admin, userId, true);
+            if (react) await sendReaction(from, msgId, "👍");
             continue;
           }
 
@@ -178,14 +208,17 @@ Deno.serve(async (req) => {
           if (out.threadId) {
             const meta: any = {};
             if (out.created?.length) meta.created = out.created;
+            if (voiceText) meta.voice = true;
             if (!sent.ok) { meta.waSendFailed = true; meta.waStatus = sent.status; }
             await admin.from("assistant_message").insert({ thread_id: out.threadId, role: "assistant", door: "whatsapp", content: out.reply, meta: Object.keys(meta).length ? meta : null });
           }
           const streak = await noteWaSend(admin, userId, sent);
           await noteProc(admin, userId, true); // a real reply went out → reset processing health
+          if (react) await sendReaction(from, msgId, sent.ok ? "👍" : "");
           if (!sent.ok) console.error("wa: SEND FAILED", sent.status, waErrorReason(sent), "streak", streak);
         } catch (e) {
           console.error("wa: handler error", String((e as any)?.message || e));
+          try { await sendReaction(from, msg.id, ""); } catch { /* remove reaction best-effort */ }
           try { await sendWhatsApp(from, "נתקלתי בתקלה זמנית בצד שלי — כבר מטפלים בזה."); } catch { /* nothing more */ }
         }
       }

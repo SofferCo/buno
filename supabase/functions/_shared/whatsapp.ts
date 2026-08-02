@@ -93,6 +93,26 @@ export async function sendRender(to: string, render: { text: string; actions: { 
   return sendWhatsAppButtons(to, body, btns.map((b) => ({ id: b.id, title: b.label })));
 }
 
+// Status reaction on an inbound message (Cloud API). An empty emoji removes it;
+// a new emoji on the same message_id overrides the previous one.
+export async function sendReaction(to: string, messageId: string, emoji: string) {
+  return post({ messaging_product: "whatsapp", to: String(to).replace(/\D/g, ""), type: "reaction", reaction: { message_id: messageId, emoji } });
+}
+
+// Download an inbound media object (two-step: media_id → temporary URL → bytes).
+// Both requests carry the WA access token. Returns null on any failure.
+export async function fetchWaMedia(mediaId: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  const token = Deno.env.get("WA_ACCESS_TOKEN"); if (!token || !mediaId) return null;
+  try {
+    const meta = await fetch(`${GRAPH}/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!meta.ok) return null;
+    const info = await meta.json(); const url = info?.url; if (!url) return null;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return { bytes: new Uint8Array(await res.arrayBuffer()), mime: info?.mime_type || "audio/ogg" };
+  } catch { return null; }
+}
+
 // Verify the X-Hub-Signature-256 header = "sha256=" + HMAC_SHA256(appSecret, rawBody).
 export async function verifyWaSignature(rawBody: string, header: string | null, appSecret: string): Promise<boolean> {
   if (!header || !header.startsWith("sha256=") || !appSecret) return false;
