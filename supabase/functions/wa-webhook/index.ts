@@ -33,6 +33,20 @@ async function recordOutbound(admin: any, userId: string, text: string, extraMet
 
 const FALLBACK = "מצטער, לא הצלחתי להשיב כרגע.";
 
+// Hard idempotency (layer 1): claim a wamid before ANY work. First sighting inserts
+// and returns true (process); a Meta retry hits the PK and returns false (skip with
+// zero processing → no duplicate reply). Fail-open if wa_seen isn't there yet
+// (pre-0020) so nothing breaks before the migration lands.
+async function claimMessage(admin: any, wamid: string): Promise<boolean> {
+  if (!wamid) return true;
+  try {
+    const { error } = await admin.from("wa_seen").insert({ message_id: wamid });
+    if (!error) return true;
+    if (String((error as any).code) === "23505" || /duplicate key/i.test((error as any).message || "")) return false;
+    return true; // table missing / other error → fail-open
+  } catch { return true; }
+}
+
 // item 3 — processing-failure health (parallel to send-failure health in 0016).
 async function noteProc(admin: any, userId: string, ok: boolean, err?: string): Promise<number> {
   try {
@@ -146,6 +160,18 @@ Deno.serve(async (req) => {
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
+  // Layer 2 — FAST ACK: return 200 in <1s and run the (slow) media/LLM processing
+  // in the background, so Meta never times out and retries. waitUntil keeps the
+  // isolate alive to finish the work after the response is sent.
+  const work = processInbound(admin, payload, apiKey);
+  const wu = (globalThis as any).EdgeRuntime?.waitUntil;
+  if (typeof wu === "function") wu.call((globalThis as any).EdgeRuntime, work);
+  else await work; // fallback for a runtime without waitUntil
+  return new Response("ok", { status: 200 });
+});
+
+async function processInbound(admin: any, payload: any, apiKey: string | undefined) {
+ try {
   for (const entry of payload?.entry || []) {
     for (const change of entry?.changes || []) {
       const value = change?.value || {};
@@ -153,6 +179,8 @@ Deno.serve(async (req) => {
       for (const msg of value.messages || []) {
         const from = digits(msg.from);
         try {
+          // layer 1 — claim the wamid before any processing; a retry is dropped here.
+          if (!(await claimMessage(admin, msg.id))) continue;
           const { data: links } = await admin.from("whatsapp_link").select("user_id,phone");
           const link = (links || []).find((l: any) => digits(l.phone) === from);
           if (!link) { await sendWhatsApp(from, ONBOARD); continue; }
@@ -284,6 +312,5 @@ Deno.serve(async (req) => {
       }
     }
   }
-
-  return new Response("ok", { status: 200 });
-});
+ } catch (e) { console.error("wa: processInbound error", String((e as any)?.message || e)); }
+}
