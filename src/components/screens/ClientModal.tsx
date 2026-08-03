@@ -124,7 +124,6 @@ export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any)
           <div className="adk-field"><label>תעריף שעתי (₪) — לחישוב רווחיות בדשבורד</label><input className="adk-input" type="number" min="0" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} placeholder="למשל 250" /></div>
           <div className="adk-field"><label>למה הבורד הזה קיים? (המטרה — בונו מזכיר אותה כשמשימה נתקעת)</label><textarea className="adk-textarea" rows={2} value={f.why || ""} onChange={(e) => setF({ ...f, why: e.target.value })} placeholder="למשל: לבנות מותג שאנשים סומכים עליו" /></div>
           <div className="adk-field"><label>הערות</label><textarea className="adk-textarea" rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="פרטים, תעריף, דגשים…" /></div>
-          {sharing && <SharingSection sharing={sharing} />}
           <div className="adk-field"><label>שמות למוזכרים (@) והצעות מכותבים</label>
             {members.length > 0 && (
               <div className="adk-cc" style={{ marginBottom: 8 }}>

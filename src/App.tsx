@@ -10,6 +10,7 @@ import { Onboarding } from "./components/screens/Onboarding";
 import { PersonalDashboard } from "./components/screens/PersonalDashboard";
 import { ReportPanel } from "./components/screens/ReportPanel";
 import { SettingsPanel } from "./components/screens/SettingsPanel";
+import { ShareModal } from "./components/screens/ShareModal";
 import { Badge } from "./components/ui/Badge";
 import { DemoTag } from "./components/ui/DemoTag";
 import { Icon } from "./components/ui/Icon";
@@ -49,6 +50,7 @@ export default function App() {
   const [dropCol, setDropCol] = useState<any>(null);
   const [clientMenu, setClientMenu] = useState(false);
   const [clientEdit, setClientEdit] = useState<any>(null);
+  const [shareFor, setShareFor] = useState<any>(null);   // dedicated share dialog target
   const [dayOpen, setDayOpen] = useState(true); // default landing = "היום שלי" (board is one click away)
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -660,7 +662,7 @@ export default function App() {
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
           <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
-          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setClientEdit(current)}><Icon name="users" /></button>}
+          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setShareFor(current)}><Icon name="users" /></button>}
           <button className="adk-icon-btn" data-label="תצוגת לקוח" onClick={() => setViewer(true)}><Icon name="eye" /></button>
         </div>
         </>)}
@@ -736,6 +738,9 @@ export default function App() {
 
       {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient}
         sharing={cloud && clientEdit !== "new" ? { role: roles[clientEdit.id], roster: rosters[clientEdit.id] || [], projectId: clientEdit.id, supabase, meId: identity?.id, meName: profile.name || identity?.name, origin: location.origin } : null} />}
+
+      {shareFor && cloud && <ShareModal boardName={shareFor.name} onClose={() => setShareFor(null)}
+        sharing={{ role: roles[shareFor.id], roster: rosters[shareFor.id] || [], projectId: shareFor.id, supabase, meId: identity?.id, meName: profile.name || identity?.name, origin: location.origin }} />}
 
       {(invitePrompt || inviteError) && (
         <div className="adk-overlay">
@@ -839,7 +844,7 @@ export default function App() {
           onSetName={(name) => setProfile((p) => ({ ...p, name }))}
           onSetAssistant={(k, v) => setProfile((p) => ({ ...p, assistant: { ...(p.assistant || {}), [k]: v } }))}
           onOpenClient={(id) => { setCurrentId(id); setDashOpen(false); }}
-          onShareClient={cloud ? ((cl: any) => { setClientEdit(cl); setDashOpen(false); }) : undefined} />
+          onShareClient={cloud ? ((cl: any) => { setShareFor(cl); setDashOpen(false); }) : undefined} />
       )}
     </div>
   );
