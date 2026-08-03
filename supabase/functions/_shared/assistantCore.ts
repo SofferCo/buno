@@ -250,6 +250,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  // current IL wall-clock time — lets the model mark past (✅) vs upcoming (⬜️) day items.
+  const ilNow = new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
   // item 4 — deterministic calendar: WhatsApp gets the SAME calendar context as web,
   // so "what's on today/this week" is grounded identically. Failure = say so, never invent.
   let calendarSummary = "";
@@ -275,7 +277,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     boardSummary: summarize(projects, cards, cols) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : ""),
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
-  }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}. רמת יצירת כרטיסים: "${cardLevel}".
+  }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
 כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 
   // append the new user turn — merging if history already ends with a user row

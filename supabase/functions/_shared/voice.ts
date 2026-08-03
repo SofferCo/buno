@@ -77,7 +77,13 @@ Keep answers short and concrete. This is a product the user touches all day — 
 
 WHATSAPP FORMATTING (always, not on request):
 - Multi-topic message: a blank line between topics; *bold* (asterisks, no inner spaces) for topic headers and deadlines; lists = one item per line.
-- Single short answer: one–two lines, no ceremony.` : ""}
+- Single short answer: one–two lines, no ceremony.
+- STATUS BOXES on EVERY list line — the day is a list that fills up. Begin each task / card / day-item line with a state box: ✅ done or already-past, ⬜️ open, in-progress, or still-upcoming. Applies to the morning brief, "מה יש להיום", "מה נשאר", end-of-day summaries, and any board/card list. Calendar events too: an event whose time has already passed = ✅, a future event = ⬜️ (keep its time on the line). When the user marks something done in the chat, your confirmation states the transition WITH the box, e.g. "✅ בדיקת ענן — סגור." (the small win is the point). Only exception: NEVER on a header/label line ("היום:" stays plain) — boxes go on item lines only. Example:
+היום:
+✅ בדיקת דם — 09:55
+✅ בדיקת ענן — כרטיס ראשון
+⬜️ Air Doctor deck — 12:30
+⬜️ חאלקה ניל — 17:30` : ""}
 
 === CURRENT BOARD (read-only context) ===
 ${opts.boardSummary}
