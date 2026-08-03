@@ -107,6 +107,7 @@ export function profileToRow(profile: any, lastReset: string, currentId: string 
       daily_capacity_hours: Number(profile.settings?.dailyCapacity) || 6,
       last_reset: lastReset || null,
       current_project: currentId || null,
+      onboarding: profile.settings?.onboarding || null,   // A1 first-run state (jsonb; no migration)
     },
   };
 }
@@ -117,6 +118,6 @@ export function rowToProfile(r: any, asst: any) {
     assistant: asst
       ? { cards: asst.cards, calendar: asst.calendar, outbound: asst.outbound }
       : { cards: "draft", calendar: "draft", outbound: "suggest" },
-    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour", dailyCapacity: Number(r?.settings?.daily_capacity_hours) || 6 },
+    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour", dailyCapacity: Number(r?.settings?.daily_capacity_hours) || 6, onboarding: r?.settings?.onboarding || null },
   };
 }

@@ -38,11 +38,17 @@ const CAL_ITEMS = [
   { id: "c2", text: "רופא שיניים — שני הבא", board: "home" },
 ];
 
-export function Onboarding({ onDone, onSeed, onAddTask, onComplete }: {
+export function Onboarding({ onDone, onSeed, onAddTask, onComplete, calEvents, boardOptions, inferBoard, onCreateEventCard, onWhatsappSeen, onTrack }: {
   onDone?: () => void;
   onSeed?: (verts: { key: string; label: string; color: string }[]) => void;   // seed real boards
   onAddTask?: (boardKey: string, text: string) => void;                          // land the first task
   onComplete?: () => void;                                                       // finish → My Day
+  calEvents?: any[];                                                             // up to 6 real upcoming events (A2)
+  boardOptions?: { id: string; name: string; color: string }[];                  // board options for the dropdown
+  inferBoard?: (ev: any) => string | null;                                       // auto-assign an event to a board
+  onCreateEventCard?: (ev: any, boardId: string) => void;                        // create a prep card for an event
+  onWhatsappSeen?: () => void;                                                    // close the "discover WA" setup card
+  onTrack?: (event: string, props?: any) => void;                                // analytics
 }) {
   // REAL mode = wired into the app (post-login first-run): the user is already
   // authenticated, so skip the phone/OTP intro and start at verticals. Without
@@ -136,8 +142,21 @@ export function Onboarding({ onDone, onSeed, onAddTask, onComplete }: {
   function calendarConnect() {
     me("חבר יומן");
     closeCard("cal");
-    // REAL mode: the calendar OAuth lives in Settings — don't show mock events here.
-    if (realMode) { say("מעולה — נחבר את היומן מההגדרות אחרי שנסיים, ואז אני אראה מה קורה לך השבוע ואשלב את זה ב\"היום שלי\"."); goWhatsapp(); return; }
+    if (realMode) {
+      onTrack?.("calendar_offer_accept");
+      // A2 co-creation: if the calendar is already connected we have real upcoming
+      // events — assign each to a board and offer to create prep cards. Otherwise
+      // defer the OAuth to Settings (no mid-flow redirect that would lose state).
+      if (calEvents && calEvents.length) {
+        say(`מצאתי ${calEvents.length} דברים קרובים ביומן — לכל אחד שיבצתי בורד. תקן אם צריך, ואפתח מהם משימות.`);
+        setMsgs((m) => [...m, { kind: "calendar" }]);
+        setStep("calendar");
+        return;
+      }
+      say("מעולה — נחבר את היומן מההגדרות אחרי שנסיים, ואז אני אראה מה קורה לך השבוע ואשלב את זה ב\"היום שלי\".");
+      goWhatsapp();
+      return;
+    }
     say("מצאתי כמה דברים ביומן. תגיד לי מה שווה מעקב:");
     setMsgs((m) => [...m, { kind: "calendar" }]);
     setStep("calendar");
@@ -148,6 +167,7 @@ export function Onboarding({ onDone, onSeed, onAddTask, onComplete }: {
     goWhatsapp();
   }
   function goWhatsapp() {
+    onWhatsappSeen?.();   // REAL mode: reaching the WhatsApp reveal closes its setup card
     say(realMode
       ? "ודבר אחרון ששווה לדעת — אני זמין לך גם בוואטסאפ. אפשר לחבר את המספר מההגדרות, ואז מה שתזרוק לי שם יופיע כאן."
       : "ודבר אחרון ששווה לדעת — אני זמין לך גם בוואטסאפ, באותו מספר שנכנסת איתו.",
@@ -180,7 +200,9 @@ export function Onboarding({ onDone, onSeed, onAddTask, onComplete }: {
               <div key={i} className="ob-msg twin"><div className="ob-bubble ob-typing"><span /><span /><span /></div></div>
             );
             if (m.kind === "boards") return <BoardsWidget key={i} boards={boards} cards={cards} extra={extraCards} />;
-            if (m.kind === "calendar") return <CalendarBlock key={i} onDone={goWhatsapp} />;
+            if (m.kind === "calendar") return realMode
+              ? <RealCalendarBlock key={i} events={calEvents || []} boards={boardOptions || []} inferBoard={inferBoard} onCreate={onCreateEventCard} onDone={goWhatsapp} />
+              : <CalendarBlock key={i} onDone={goWhatsapp} />;
             return (
               <div key={i} className={"ob-msg " + m.by}>
                 <div className="ob-bubble">{m.text}</div>
@@ -279,6 +301,46 @@ function BoardsWidget({ boards, cards, extra }: { boards: string[]; cards: Card[
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// A2 — REAL calendar co-creation: up to 6 upcoming events, each auto-assigned to a
+// board (inferBoard) with a dropdown to correct, and a per-event create/skip.
+function RealCalendarBlock({ events, boards, inferBoard, onCreate, onDone }: {
+  events: any[]; boards: { id: string; name: string; color: string }[];
+  inferBoard?: (ev: any) => string | null;
+  onCreate?: (ev: any, boardId: string) => void; onDone: () => void;
+}) {
+  const keyOf = (e: any) => String(e.id || e.start || Math.random());
+  const defBoard = (ev: any) => inferBoard?.(ev) || boards[0]?.id || "";
+  const [assign, setAssign] = useState<Record<string, string>>(() => Object.fromEntries(events.map((e) => [keyOf(e), defBoard(e)])));
+  const [acted, setActed] = useState<Record<string, "add" | "skip">>({});
+  const boardOf = (id: string) => boards.find((b) => b.id === id);
+  const fmt = (iso: string) => { try { return new Intl.DateTimeFormat("he-IL", { weekday: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)); } catch { return ""; } };
+  return (
+    <div className="ob-cal">
+      {events.map((ev) => {
+        const k = keyOf(ev); const bid = assign[k]; const b = boardOf(bid);
+        return (
+          <div key={k} className={"ob-cal-item" + (acted[k] ? " acted" : "")} style={{ ["--bc" as any]: b?.color || "#455A64" }}>
+            <div className="ob-cal-tx"><span className="ob-cal-cal"><Icon name="calendar" size={13} /></span><b>{ev.title || "פגישה"}</b> <span style={{ color: "var(--faint)", fontWeight: 600 }}>{fmt(ev.start)}</span></div>
+            <div className="ob-cal-assign">
+              שייכתי לבורד
+              <select className="ob-cal-board" value={bid} onChange={(e) => setAssign((a) => ({ ...a, [k]: e.target.value }))} style={{ marginInlineStart: 6 }}>
+                {boards.map((b2) => <option key={b2.id} value={b2.id}>{b2.name}</option>)}
+              </select>
+            </div>
+            {acted[k]
+              ? <div className="ob-cal-status">{acted[k] === "add" ? "נוצרה משימה ✓" : "דילגתי"}</div>
+              : <div className="ob-cal-acts">
+                  <button className="ob-mini ok" onClick={() => { onCreate?.(ev, assign[k]); setActed((a) => ({ ...a, [k]: "add" })); }}>צור משימה</button>
+                  <button className="ob-mini" onClick={() => setActed((a) => ({ ...a, [k]: "skip" }))}>לא רלוונטי</button>
+                </div>}
+          </div>
+        );
+      })}
+      <button className="ob-cta ob-big" style={{ marginTop: 4 }} onClick={onDone}>המשך</button>
     </div>
   );
 }

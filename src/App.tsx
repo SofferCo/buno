@@ -61,7 +61,8 @@ export default function App() {
   // right after the empty-board seed. onbBoards maps a vertical key → the created
   // board id, so the first-task step lands the card on the right board.
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const onbBoards = useRef<Record<string, string>>({});
+  const onbBoards = useRef<Record<string, string>>({});   // vertical key → board id
+  const onbSetup = useRef<Record<string, string>>({});    // setup-card key → card id
   function openPage(name) {
     setDayOpen(name === "day"); setArchiveOpen(name === "archive"); setReportOpen(name === "report");
     setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
@@ -480,24 +481,68 @@ export default function App() {
 
   if (!loaded) return <div className="adk" style={{ display: "grid", placeItems: "center", height: "100vh" }}><div style={{ color: "var(--muted)", fontWeight: 600 }}>טוען את הלוח…</div></div>;
 
-  // A1 real onboarding callbacks: seed a board per picked vertical, land the first
-  // real task on the right board, then finish to "היום שלי". Boards are ordinary
-  // clients; the seeded task goes to the intake column. Everything syncs normally.
+  // ---- A1/A2 real onboarding -----------------------------------------------
+  // Boards are ordinary clients; the 4 setup cards are REAL cards that auto-close
+  // on their event; the first task + calendar co-creation write real cards.
+  // Progress + analytics persist in profile.settings.onboarding (jsonb; no migration).
+  const onbSetState = (patch: any) => setProfile((p: any) => ({ ...p, settings: { ...p.settings, onboarding: { ...(p.settings?.onboarding || {}), ...patch } } }));
+  const onbTrack = (event: string, props?: any) => setProfile((p: any) => {
+    const ob = p.settings?.onboarding || {};
+    return { ...p, settings: { ...p.settings, onboarding: { ...ob, events: [...(ob.events || []), { event, at: Date.now(), ...(props || {}) }].slice(-100) } } };
+  });
+  const mkCard = (clientId: string, title: string, o: any = {}) => {
+    const id = uid("card"); const col = o.col || "col-brief";
+    setCards((p) => ({ ...p, [id]: { id, clientId, title, creator: o.creator || profile.name || identity?.name || "אני", cc: [], comments: [], attachments: [], subtasks: [], description: o.description || "", deadline: o.deadline ?? todayStr(), priority: "regular", routine: "none", dayFlex: false, time: "", activeColumn: col, timeSpent: 0, timerStart: null, createdAt: Date.now(), cardType: "work", origin: o.origin } }));
+    setOrder((p) => ({ ...p, [col]: [...(p[col] || []), id] }));
+    return id;
+  };
+  const onbCloseSetup = (key: string) => {
+    const id = onbSetup.current[key]; if (!id) return;
+    setOrder((p) => { const n: Record<string, string[]> = {}; Object.keys(p).forEach((k) => (n[k] = p[k].filter((x) => x !== id))); (n["col-done"] = n["col-done"] || []).push(id); return n; });
+    setCards((p) => (p[id] ? { ...p, [id]: { ...p[id], activeColumn: "col-done" } } : p));
+  };
   const onbSeed = (verts: { key: string; label: string; color: string }[]) => {
-    const created: Record<string, string> = {};
-    const newClients = verts.map((v) => { const id = uid("cl"); created[v.key] = id; return { id, name: v.label, color: v.color, home: false, contact: "", email: "", notes: "", logo: null, why: "" }; });
+    // idempotent by board name (so a restart never double-seeds).
+    const created: Record<string, string> = {}; const add: any[] = [];
+    verts.forEach((v) => {
+      const ex = clients.find((c) => c.name === v.label && !c.home);
+      if (ex) { created[v.key] = ex.id; return; }
+      const id = uid("cl"); created[v.key] = id;
+      add.push({ id, name: v.label, color: v.color, home: false, contact: "", email: "", notes: "", logo: null, why: "" });
+    });
     onbBoards.current = created;
-    if (newClients.length) { setClients((p) => [...p, ...newClients]); setCurrentId(newClients[0].id); }
+    if (add.length) setClients((p) => [...p, ...add]);
+    const firstBoard = created[verts[0]?.key] || add[0]?.id;
+    if (firstBoard) setCurrentId(firstBoard);
+    if (firstBoard && !onbSetup.current.first) onbSetup.current = {
+      know: mkCard(firstBoard, "להכיר את בונו", { col: "col-done", creator: "buno" }),
+      cal: mkCard(firstBoard, "לחבר את יומן גוגל", { creator: "buno" }),
+      wa: mkCard(firstBoard, "לגלות את בונו בוואטסאפ", { creator: "buno" }),
+      first: mkCard(firstBoard, "להוסיף את המשימה הראשונה שלך", { creator: "buno" }),
+    };
+    onbSetState({ started: true, completed: false, verticals: verts.map((v) => v.key), startedAt: profile.settings?.onboarding?.startedAt || Date.now(), step: "boards" });
+    onbTrack("verticals_selected", { verticals: verts.map((v) => v.key) });
   };
   const onbAddTask = (boardKey: string, text: string) => {
     const t = String(text || "").trim(); if (!t) return;
     const cid = onbBoards.current[boardKey] || clients.find((c) => c.home)?.id || clients[0]?.id; if (!cid) return;
-    const id = uid("card");
-    setCards((p) => ({ ...p, [id]: { id, clientId: cid, title: t, creator: profile.name || identity?.name || "אני", cc: [], comments: [], attachments: [], subtasks: [], description: "", deadline: todayStr(), priority: "regular", routine: "none", dayFlex: false, time: "", activeColumn: "col-brief", timeSpent: 0, timerStart: null, createdAt: Date.now(), cardType: "work" } }));
-    setOrder((p) => ({ ...p, ["col-brief"]: [...(p["col-brief"] || []), id] }));
+    mkCard(cid, t); onbCloseSetup("first"); onbTrack("first_task_added");
   };
-  const onbComplete = () => { setShowOnboarding(false); openPage("day"); };
-  if (showOnboarding) return <Onboarding onSeed={onbSeed} onAddTask={onbAddTask} onComplete={onbComplete} />;
+  const onbCreateEventCard = (ev: any, boardId: string) => {
+    const cid = boardId || clients.find((c) => c.home)?.id || clients[0]?.id; if (!cid) return;
+    mkCard(cid, `הכנה ל${ev.title || "פגישה"}`, { description: (ev.attendees || []).filter((a: any) => !a.self).map((a: any) => a.email).slice(0, 4).join(", "), deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), origin: { type: "calendar", ref: "cal-" + (ev.id || "") } });
+    onbCloseSetup("cal"); onbTrack("calendar_event_added");
+  };
+  const onbWhatsappSeen = () => { onbCloseSetup("wa"); onbTrack("whatsapp_seen"); };
+  const onbComplete = () => { onbSetState({ completed: true, completedAt: Date.now(), step: "my_day" }); onbTrack("completed"); setShowOnboarding(false); openPage("day"); };
+  // up to 6 upcoming real events for the co-creation step (only if calendar connected).
+  const onbUpcoming = Object.values(calEvents).flat().filter((e: any) => e && !e.allDay && e.start && new Date(e.start).getTime() >= Date.now() - 6 * 3600e3).sort((a: any, b: any) => String(a.start).localeCompare(String(b.start))).slice(0, 6);
+  if (showOnboarding) return <Onboarding
+    onSeed={onbSeed} onAddTask={onbAddTask}
+    calEvents={onbUpcoming} boardOptions={clients.map((c: any) => ({ id: c.id, name: c.name, color: c.color }))}
+    inferBoard={(ev: any) => inferEventProjectId(ev.attendees || [], clients, ev.organizer)}
+    onCreateEventCard={onbCreateEventCard} onWhatsappSeen={onbWhatsappSeen}
+    onComplete={onbComplete} onTrack={onbTrack} />;
 
   const current = clients.find((c) => c.id === currentId);
   const clientCards = (id) => Object.values(cards).filter((c) => c.clientId === id);
