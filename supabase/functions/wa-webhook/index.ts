@@ -42,7 +42,7 @@ async function claimMessage(admin: any, wamid: string): Promise<boolean> {
   try {
     const { error } = await admin.from("wa_seen").insert({ message_id: wamid });
     if (!error) return true;
-    if (String((error as any).code) === "23505" || /duplicate key/i.test((error as any).message || "")) return false;
+    if (String((error as any).code) === "23505" || /duplicate key/i.test((error as any).message || "")) { console.log("wa: DEDUP drop (Meta retry) wamid", wamid); return false; }
     return true; // table missing / other error → fail-open
   } catch { return true; }
 }
