@@ -128,6 +128,24 @@ async function ackedMediaBefore(admin: any, userId: string, type: string): Promi
   } catch { return false; }
 }
 
+// Attach the ACTUAL media file (not just its text) to a card buno created from it,
+// using the same storage convention as the client (bucket "attachments", key
+// project/card/att). The client signs it and shows it on the card.
+async function attachMediaToCard(admin: any, cardId: string, media: { bytes: Uint8Array; mime: string; kind: string }) {
+  try {
+    const { data: card } = await admin.from("card").select("project_id").eq("id", cardId).maybeSingle();
+    const projectId = card?.project_id; if (!projectId) return;
+    const mime = media.mime || "application/octet-stream";
+    const isImg = /^image\//i.test(mime) || media.kind === "image";
+    const ext = /png/i.test(mime) ? "png" : /webp/i.test(mime) ? "webp" : /gif/i.test(mime) ? "gif" : /pdf/i.test(mime) ? "pdf" : isImg ? "jpg" : "bin";
+    const attId = crypto.randomUUID();
+    const key = `${projectId}/${cardId}/${attId}`;
+    const { error: upErr } = await admin.storage.from("attachments").upload(key, new Blob([media.bytes], { type: mime }), { contentType: mime, upsert: true });
+    if (upErr) { console.error("wa: media upload failed", (upErr as any).message); return; }
+    await admin.from("attachment").insert({ id: attId, card_id: cardId, type: isImg ? "image" : "file", name: isImg ? `תמונה מוואטסאפ.${ext}` : `קובץ מוואטסאפ.${ext}`, storage_key: key });
+  } catch (e) { console.error("wa: attachMediaToCard error", String((e as any)?.message || e)); }
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -196,6 +214,7 @@ async function processInbound(admin: any, payload: any, apiKey: string | undefin
           // item 8 — media. Voice notes are transcribed (phase B) and enter the
           // pipeline as if typed; other media get a typed, honest ack once per type.
           let voiceText = "";
+          let pendingMedia: { bytes: Uint8Array; mime: string; kind: string } | null = null; // image/PDF to attach to the card buno creates
           if (msg.type !== "text") {
             const type = String(msg.type || "");
             if ((type === "audio" || type === "voice") && msg.audio?.id) {
@@ -225,6 +244,7 @@ async function processInbound(admin: any, payload: any, apiKey: string | undefin
                 const line = `קראתי את ה${kindWord} אבל לא הצלחתי להוציא ממנו משהו ברור — תרצה לספר לי בקצרה מה חשוב בו?`;
                 const sent = await sendWhatsApp(from, line); await recordOutbound(admin, userId, line, { media: type }, sent); continue;
               }
+              pendingMedia = { bytes: media.bytes, mime: media.mime, kind: type }; // keep the file to attach to the created card
               voiceText = caption
                 ? `(${kindWord}) ${caption}\n\n[תוכן ה${kindWord} שקראתי: ${extracted}]`
                 : `(${kindWord} ללא טקסט) [תוכן ה${kindWord} שקראתי: ${extracted}]\n\n[הנחיה פנימית: תאר בקצרה מה קיבלת ושאל אם לפתוח מזה משימות; אל תפתח טיוטות לפני אישור.]`;
@@ -277,6 +297,8 @@ async function processInbound(admin: any, payload: any, apiKey: string | undefin
           // approvable from the channel. Any 1+ drafts open a guided walk with real
           // [אשר]/[דחה] buttons (web keeps 1–2 as chips, 3+ as a walk).
           if ((out.created?.length || 0) >= 1) {
+            // attach the original image/PDF to the first card buno opened from it.
+            if (pendingMedia) await attachMediaToCard(admin, out.created[0].id, pendingMedia);
             const n = out.created.length;
             const queue = out.created.map((c: any) => ({ kind: "draft", cardId: c.id, title: c.title, project: c.project }));
             await setSession(admin, userId, queue as any, 0);
