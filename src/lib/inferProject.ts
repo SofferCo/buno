@@ -7,6 +7,16 @@ const PERSONAL = new Set(["gmail.com", "googlemail.com", "outlook.com", "hotmail
 const domainOf = (email: string) => (email || "").split("@")[1]?.toLowerCase().trim() || "";
 const core = (domain: string) => domain.split(".")[0]; // codata.io → codata
 
+// The non-personal email domains on an event (organizer first) — the key we use
+// for contact→board affinity (A2 co-creation memory).
+export function eventDomains(attendees: any[], organizer?: string | null): string[] {
+  const domains = [
+    ...(organizer ? [domainOf(organizer)] : []),
+    ...(attendees || []).filter((a) => !a.self).map((a) => domainOf(a.email)),
+  ].filter((d) => d && !PERSONAL.has(d));
+  return [...new Set(domains)];
+}
+
 export function inferEventProjectId(attendees: any[], clients: any[], organizer?: string | null): string | null {
   const domains = [
     ...(organizer ? [domainOf(organizer)] : []),        // organizer is the strongest signal

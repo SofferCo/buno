@@ -6,7 +6,7 @@ import { resizeImage } from "../../lib/image";
 import { initials, nameColor } from "../../lib/people";
 import { cardSeconds } from "../../lib/time";
 
-export function PersonalDashboard({ clients, cards, cardColumn, now, profile, onClose, onSetPhoto, onSetName, onSetAssistant, onOpenClient }) {
+export function PersonalDashboard({ clients, cards, cardColumn, now, profile, onClose, onSetPhoto, onSetName, onSetAssistant, onOpenClient, onShareClient }: any) {
   const photoRef = useRef<any>();
   const seq = last12Months();
   const [period, setPeriod] = useState("12m");
@@ -68,6 +68,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                       <span className="sw" style={{ background: p.cl.color }} />
                       {p.cl.name}
                       <span className="pct">{Math.round((p.sec / denom) * 100)}%</span>
+                      {onShareClient && <button title="שיתוף" onClick={() => onShareClient(p.cl)} style={{ marginInlineStart: 6, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0, display: "inline-flex" }}><Icon name="users" size={14} /></button>}
                     </div>
                   ))}
                 </div>

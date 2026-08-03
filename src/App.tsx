@@ -26,7 +26,7 @@ import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant, sendReviewAction } from "./data/assistant";
 import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow } from "./data/integrations";
-import { inferEventProjectId } from "./lib/inferProject";
+import { inferEventProjectId, eventDomains } from "./lib/inferProject";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
@@ -113,6 +113,7 @@ export default function App() {
   const [importPending, setImportPending] = useState<any>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
   const [calEvents, setCalEvents] = useState<Record<string, any[]>>({});
+  const [contactAffinity, setContactAffinity] = useState<any[]>([]); // A2: contact→board memory
   const [connectToast, setConnectToast] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState<any>(null); // {ev, projectId}
   const [gcalInteg, setGcalInteg] = useState<any>(null);
@@ -342,6 +343,14 @@ export default function App() {
     return () => { alive = false; };
   }, [cloud, loaded, clients.length]); // re-run once projects are loaded so inference has them
 
+  // A2 — load the contact→board affinity (own rows). Fail-open before 0021 lands.
+  useEffect(() => {
+    if (!cloud || !loaded || !supabase) return;
+    let alive = true;
+    (async () => { try { const { data } = await supabase!.from("contact_board_affinity").select("contact,project_id,weight"); if (alive && data) setContactAffinity(data); } catch { /* table not there yet */ } })();
+    return () => { alive = false; };
+  }, [cloud, loaded]);
+
   // Returning from Google consent (?connected=…) → one-line status toast.
   useEffect(() => {
     const c = new URLSearchParams(location.search).get("connected");
@@ -528,19 +537,29 @@ export default function App() {
     const cid = onbBoards.current[boardKey] || clients.find((c) => c.home)?.id || clients[0]?.id; if (!cid) return;
     mkCard(cid, t); onbCloseSetup("first"); onbTrack("first_task_added");
   };
+  // A2 — prefer a board this contact was assigned to before; else infer from domain.
+  const affinityBoard = (ev: any): string | null => {
+    const domains = eventDomains(ev.attendees || [], ev.organizer);
+    if (!domains.length) return null;
+    let best: string | null = null, bestW = 0;
+    for (const r of contactAffinity) if (domains.includes(r.contact) && (r.weight || 0) > bestW && clients.some((c) => c.id === r.project_id)) { best = r.project_id; bestW = r.weight || 0; }
+    return best;
+  };
   const onbCreateEventCard = (ev: any, boardId: string) => {
     const cid = boardId || clients.find((c) => c.home)?.id || clients[0]?.id; if (!cid) return;
     mkCard(cid, `הכנה ל${ev.title || "פגישה"}`, { description: (ev.attendees || []).filter((a: any) => !a.self).map((a: any) => a.email).slice(0, 4).join(", "), deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), origin: { type: "calendar", ref: "cal-" + (ev.id || "") } });
     onbCloseSetup("cal"); onbTrack("calendar_event_added");
+    // record the contact→board affinity so future auto-assignment improves (fail-open).
+    if (supabase) for (const d of eventDomains(ev.attendees || [], ev.organizer)) { supabase.rpc("bump_contact_affinity", { p_contact: d, p_project: cid }).then(() => {}, () => {}); }
   };
   const onbWhatsappSeen = () => { onbCloseSetup("wa"); onbTrack("whatsapp_seen"); };
   const onbComplete = () => { onbSetState({ completed: true, completedAt: Date.now(), step: "my_day" }); onbTrack("completed"); setShowOnboarding(false); openPage("day"); };
   // up to 6 upcoming real events for the co-creation step (only if calendar connected).
-  const onbUpcoming = Object.values(calEvents).flat().filter((e: any) => e && !e.allDay && e.start && new Date(e.start).getTime() >= Date.now() - 6 * 3600e3).sort((a: any, b: any) => String(a.start).localeCompare(String(b.start))).slice(0, 6);
+  const onbUpcoming = Object.values(calEvents).flat().map((w: any) => w.ev || w).filter((e: any) => e && !e.allDay && e.start && new Date(e.start).getTime() >= Date.now() - 6 * 3600e3).sort((a: any, b: any) => String(a.start).localeCompare(String(b.start))).slice(0, 6);
   if (showOnboarding) return <Onboarding
     onSeed={onbSeed} onAddTask={onbAddTask}
     calEvents={onbUpcoming} boardOptions={clients.map((c: any) => ({ id: c.id, name: c.name, color: c.color }))}
-    inferBoard={(ev: any) => inferEventProjectId(ev.attendees || [], clients, ev.organizer)}
+    inferBoard={(ev: any) => affinityBoard(ev) || inferEventProjectId(ev.attendees || [], clients, ev.organizer)}
     onCreateEventCard={onbCreateEventCard} onWhatsappSeen={onbWhatsappSeen}
     onComplete={onbComplete} onTrack={onbTrack} />;
 
@@ -641,6 +660,7 @@ export default function App() {
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
           <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
+          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setClientEdit(current)}><Icon name="users" /></button>}
           <button className="adk-icon-btn" data-label="תצוגת לקוח" onClick={() => setViewer(true)}><Icon name="eye" /></button>
         </div>
         </>)}
@@ -818,7 +838,8 @@ export default function App() {
           onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}
           onSetName={(name) => setProfile((p) => ({ ...p, name }))}
           onSetAssistant={(k, v) => setProfile((p) => ({ ...p, assistant: { ...(p.assistant || {}), [k]: v } }))}
-          onOpenClient={(id) => { setCurrentId(id); setDashOpen(false); }} />
+          onOpenClient={(id) => { setCurrentId(id); setDashOpen(false); }}
+          onShareClient={cloud ? ((cl: any) => { setClientEdit(cl); setDashOpen(false); }) : undefined} />
       )}
     </div>
   );
