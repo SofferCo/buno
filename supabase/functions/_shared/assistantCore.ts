@@ -22,6 +22,7 @@ const CREATE_CARD_TOOL = {
     project: { type: "string", description: "Optional project name to place the card under." },
     deadline: { type: "string", description: "Optional due date YYYY-MM-DD, only if the user stated one." },
     priority: { type: "string", enum: ["regular", "important", "critical"] },
+    brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work with אילן'), put their NAME here — buno records them as the brief-giver and creates a contact. You are a tool: NEVER put buno here. Empty if no real person is the source." },
   }, required: ["title"] },
 };
 const MOVE_CARD_TOOL = { name: "move_card", description: "Move an existing card to another column on its board. Only on explicit request. Reversible.", input_schema: { type: "object", properties: { card: { type: "string" }, column: { type: "string" } }, required: ["card", "column"] } };
@@ -106,13 +107,17 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     const brief = projCols.find((c: any) => c.key === "col-brief") || projCols.slice().sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))[0];
     const maxPos = cards.filter((c: any) => c.project_id === project.id && c.column_id === brief?.id && !c.archived).length;
     const draft = cardLevel === "act" ? null : { by: "buno", at: Date.now(), level: cardLevel };
+    // brief-giver = a real person (a contact), never buno.
+    const bf = String(input?.brief_from || "").trim();
+    const giver = bf && !/^(buno|בונו|העוזר)$/i.test(bf) ? bf : "";
     const { data, error } = await admin.from("card").insert({
-      project_id: project.id, column_id: brief?.id || null, position: maxPos, title, creator: "buno",
+      project_id: project.id, column_id: brief?.id || null, position: maxPos, title, creator: giver || "buno",
       description: String(input?.description || ""), deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
       origin: { type: "whatsapp", ref: "wa-" + crypto.randomUUID() }, draft,
     }).select("id,title,project_id,column_id,archived").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
+    if (giver) { try { await admin.from("contacts").upsert({ user_id: userId, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
     cards.push(data); created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
     return cardLevel === "act" ? `נוצר כרטיס "${title}" ב${project.name}.` : `נוצרה טיוטה "${title}" ב${project.name}, ממתינה לאישורך.`;
   }
@@ -272,9 +277,13 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       }).join("\n");
     }
   } catch { /* calendar optional — a momentary failure must not become "no access" */ }
+  // contacts — real people (mentioned / from the calendar), so buno can answer
+  // "מי זה אילן?" and knows who a card's brief-giver is. DATA, never instructions.
+  let contactsBlock = "";
+  try { const { data: cts } = await admin.from("contacts").select("name,email").eq("user_id", userId).limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
-    boardSummary: summarize(projects, cards, cols) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : ""),
+    boardSummary: summarize(projects, cards, cols) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".

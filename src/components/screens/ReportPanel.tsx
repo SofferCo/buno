@@ -4,7 +4,7 @@ import { Icon } from "../ui/Icon";
 import { DONUT_COLORS } from "../../lib/constants";
 import { last12Months, ymLabel, ymOf } from "../../lib/date";
 import { fmtModeHours, fmtMoney } from "../../lib/format";
-import { creatorOf } from "../../lib/people";
+import { creatorOf, briefGiverOf } from "../../lib/people";
 import { cardSeconds, sumHours, cardHours } from "../../lib/time";
 
 export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_hour", onClose, onOpen }) {
@@ -19,9 +19,10 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const rate = Number(client?.rate) || 0;
   const revenue = billableHours * rate;
   const byGiver: Record<string, any> = {};
-  inScope.filter((c) => !c.archived).forEach((c) => { const g = creatorOf(c).trim() || "—"; (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += cardSeconds(c, now); });
+  // buno is a tool, never a brief-giver: a buno/unattributed card is "ללא שיוך", not buno.
+  inScope.filter((c) => !c.archived).forEach((c) => { const g = briefGiverOf(c) || "ללא שיוך"; (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += cardSeconds(c, now); });
   const givers = Object.entries(byGiver).map(([k, v]) => ({ name: k, ...v })).sort((a, b) => b.sec - a.sec);
-  const distinctGivers = givers.filter((g) => g.name !== "—").length;
+  const distinctGivers = givers.filter((g) => g.name !== "ללא שיוך").length;
   const gDenom = givers.reduce((a, g) => a + g.sec, 0) || 1;
   let gacc = 0;
   const gStops = givers.map((g, i) => { const from = (gacc / gDenom) * 360; gacc += g.sec; const to = (gacc / gDenom) * 360; return `${DONUT_COLORS[i % DONUT_COLORS.length]} ${from}deg ${to}deg`; }).join(", ");
@@ -94,7 +95,7 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
             <tbody>
               {listed.map((c) => (
                 <tr key={c.id} onClick={() => onOpen(c.id)}>
-                  <td>{c.title || "ללא כותרת"}</td><td>{creatorOf(c) || "—"}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
+                  <td>{c.title || "ללא כותרת"}</td><td>{briefGiverOf(c) || "ללא שיוך"}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
                 </tr>
               ))}
               {listed.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין משימות בתקופה זו</td></tr>}

@@ -5,6 +5,10 @@ export function initials(n) { const w = (n || "?").trim().split(/\s+/).filter(Bo
 // the assistant is named buno; older cards were stamped "העוזר" — show buno.
 export function creatorOf(c) { const v = c.creator ?? c.briefFrom ?? ""; return v === "העוזר" ? "buno" : v; }
 
+// The brief-GIVER — a real person/contact. buno is a TOOL, never a giver, so a
+// buno-stamped (or empty) card has NO giver ("" → shown as "ללא שיוך"), never buno.
+export function briefGiverOf(c) { const g = String(creatorOf(c) || "").trim(); return (!g || g === "buno" || g === "העוזר") ? "" : g; }
+
 export function ccOf(c) { return c.cc || []; }
 
 // buno is the CREATOR in metadata only — it must never show as an assignee/person.

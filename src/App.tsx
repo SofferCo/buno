@@ -28,6 +28,7 @@ import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant, sendReviewAction } from "./data/assistant";
 import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
+import { upsertContact } from "./data/contacts";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
@@ -341,6 +342,8 @@ export default function App() {
         (by[d] = by[d] || []).push({ t: e.title, time, location: e.location, ev: e, projectId });
       }
       setCalEvents(by);
+      // (ב) calendar attendees are real people (they have an email) → contacts.
+      if (identity) { const seen = new Set<string>(); for (const e of r.events) for (const a of ((e as any).attendees || [])) { if (a.self || !a.email || seen.has(a.email)) continue; seen.add(a.email); const nm = String(a.displayName || String(a.email).split("@")[0] || "").trim(); if (nm) upsertContact(identity.id, { name: nm, email: a.email, source: "calendar" }); } }
     }).catch(() => {});
     return () => { alive = false; };
   }, [cloud, loaded, clients.length]); // re-run once projects are loaded so inference has them

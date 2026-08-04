@@ -82,6 +82,7 @@ const CREATE_CARD_TOOL = {
       project: { type: "string", description: "Optional project name to place the card under (match one of the user's projects)." },
       deadline: { type: "string", description: "Optional due date as YYYY-MM-DD, only if the user stated a real one." },
       priority: { type: "string", enum: ["regular", "important", "critical"], description: "Optional priority; default regular." },
+      brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work summarized with אילן', 'a task from דנה'), put that person's NAME here. buno records them as the brief-giver and creates a contact. You are a tool — NEVER put yourself/buno here. Leave empty if no real person is the source." },
     },
     required: ["title"],
   },
@@ -280,9 +281,13 @@ Deno.serve(async (req) => {
     const maxPos = (cards.data || [])
       .filter((c) => c.project_id === project!.id && c.column_id === brief?.id && !c.archived).length;
     const draft = cardLevel === "act" ? null : { by: "buno", at: Date.now(), level: cardLevel };
+    // the brief-GIVER is a real person (a contact), never buno. buno's authorship
+    // lives in draft/origin metadata only.
+    const bf = String(input?.brief_from || "").trim();
+    const giver = bf && !/^(buno|בונו|העוזר)$/i.test(bf) ? bf : "";
     const row: any = {
       project_id: project.id, column_id: brief?.id || null, position: maxPos,
-      title, creator: "buno", description: String(input?.description || ""),
+      title, creator: giver || "buno", description: String(input?.description || ""),
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
       origin: { type: "chat", ref: "chat-" + crypto.randomUUID() },
@@ -290,6 +295,7 @@ Deno.serve(async (req) => {
     };
     const { data, error } = await supabase.from("card").insert(row).select("id,title").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
+    if (giver) { try { await supabase.from("contacts").upsert({ user_id: user.id, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
     created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
     return cardLevel === "act"
       ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}.`
@@ -429,11 +435,14 @@ Deno.serve(async (req) => {
   // D1 — the board's "why" (project purpose) rides alongside the summary so buno
   // can connect a task to what it serves.
   const whyBlock = projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n");
+  // contacts — real people so buno can answer "מי זה אילן?" + know a card's giver.
+  let contactsBlock = "";
+  try { const { data: cts } = await supabase.from("contacts").select("name,email").limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
     profileName: prof.data?.name || "",
-    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()) + (whyBlock ? `\n\n=== מטרות הבורדים (why) ===\n${whyBlock}` : ""),
+    boardSummary: summarizeBoard(projects, cards.data || [], cols.data || [], commentsByCard, attachByCard, todayStr2, nowD.getTime()) + (whyBlock ? `\n\n=== מטרות הבורדים (why) ===\n${whyBlock}` : "") + contactsBlock,
     // capabilities reflect exactly what THIS request sends: the create + organize
     // tools are always attached; calendar is context-only when we have events;
     // email is never available in the chat. Keeps the prompt honest to itself.
