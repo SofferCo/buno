@@ -27,6 +27,10 @@ verify_jwt = true
 [functions.wa-webhook]
 verify_jwt = false
 
+# invite emails via Resend — the inviter is authenticated (JWT-gated).
+[functions.invite-email]
+verify_jwt = true
+
 # Supabase "Send SMS Hook" target — Supabase Auth calls it (no user JWT);
 # authenticity via the Standard-Webhooks HMAC (SEND_SMS_HOOK_SECRET). It routes
 # the OTP delivery to WhatsApp (Authentication template) instead of SMS.

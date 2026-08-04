@@ -2,6 +2,7 @@
 // (invites.ts + roster/roles) but on its own, not buried inside the edit-client form.
 import { useState, useEffect } from "react";
 import { Avatar } from "../ui/Avatar";
+import { supabase } from "../../lib/supabase";
 import { listInvites, createInvite, revokeInvite, setMemberRole, removeMember } from "../../data/invites";
 
 const ROLE_HE: Record<string, string> = { owner: "בעלים", member: "חבר צוות", viewer: "צופה" };
@@ -25,6 +26,8 @@ export function ShareModal({ boardName, sharing, onClose }: { boardName: string;
     try {
       const { invite, link } = await createInvite(sharing.supabase, sharing.projectId, e, role, sharing.meId, sharing.origin);
       setInvites((p) => [invite, ...p]); setEmail(""); setLastLink(link);
+      // fire the real invite email (best-effort — the copy-link works regardless).
+      try { await supabase?.functions.invoke("invite-email", { body: { to: e, boardName, inviter: sharing.meName || "מישהו", link, role } }); } catch { /* email optional */ }
     } catch (e: any) { setErr(e.message || String(e)); } finally { setBusy(false); }
   }
   async function changeRole(userId: string, r: string) { try { await setMemberRole(sharing.supabase, sharing.projectId, userId, r); setRoster((p) => p.map((m) => m.userId === userId ? { ...m, role: r } : m)); } catch {} }
@@ -35,8 +38,8 @@ export function ShareModal({ boardName, sharing, onClose }: { boardName: string;
   const roleSel: any = { padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
   return (
-    <div className="adk-overlay" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 18, width: "min(94vw, 460px)", padding: 22, boxShadow: "0 24px 60px rgba(0,0,0,.28)" }}>
+    <div className="adk-overlay" onClick={onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 18, width: "min(94vw, 460px)", maxHeight: "88vh", overflowY: "auto", padding: 22, boxShadow: "0 24px 60px rgba(0,0,0,.28)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <b style={{ fontSize: 18, flex: 1 }}>שיתוף ‘{boardName}’</b>
           <button className="adk-x" onClick={onClose}>×</button>
