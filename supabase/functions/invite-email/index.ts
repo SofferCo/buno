@@ -31,7 +31,9 @@ Deno.serve(async (req) => {
 
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return json({ sent: false, reason: "no_resend_key" }); // inert until configured — the copy-link still works
-  const from = Deno.env.get("INVITE_FROM") || "buno <onboarding@resend.dev>";
+  // buno.io is verified in Resend → send from invite@buno.io by default (override
+  // with INVITE_FROM if ever needed).
+  const from = Deno.env.get("INVITE_FROM") || "buno <invite@buno.io>";
   const roleHe = role === "viewer" ? "צופה" : role === "owner" ? "בעלים" : "חבר צוות";
 
   // clean, Ink-on-white, RTL — buno brand.
