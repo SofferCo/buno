@@ -434,7 +434,9 @@ export default function App() {
     setNow(Date.now());
   }
   function moveCard(id, toCol, beforeId = null) {
-    setCards((p) => (p[id] && toCol !== "col-done" ? { ...p, [id]: { ...p[id], activeColumn: toCol } } : p));
+    // stamp the column-change time (client-side mirror of the 0013 trigger) so
+    // "היום שלי" knows when a card was completed today.
+    setCards((p) => (p[id] ? { ...p, [id]: { ...p[id], columnChangedAt: Date.now(), ...(toCol !== "col-done" ? { activeColumn: toCol } : {}) } } : p));
     setOrder((prev) => {
       const n = {}; Object.keys(prev).forEach((k) => (n[k] = prev[k].filter((x) => x !== id)));
       if (!n[toCol]) n[toCol] = [];
@@ -581,6 +583,11 @@ export default function App() {
   const byTime = (a, b) => { const ta = a.card.time || "99:99", tb = b.card.time || "99:99"; return ta < tb ? -1 : ta > tb ? 1 : 0; };
   const planTasks = dayTasks.filter(inPlan).sort((a, b) => byTime(a, b) || (PRI_ORDER[a.card.priority] - PRI_ORDER[b.card.priority]) || ((a.d ?? 99) - (b.d ?? 99)));
   const upcoming = dayTasks.filter((t) => !inPlan(t) && t.d !== null && t.d >= 1 && t.d <= 7).sort((a, b) => a.d - b.d);
+  // "היום שלי" as a living timeline: what closed today (above the now-line, dimmed),
+  // and today's no-deadline additions (so a day with actions never looks empty).
+  const isTodayMs = (ms: any) => !!ms && new Date(ms).toDateString() === new Date().toDateString();
+  const completedToday = Object.values(cards).filter((c: any) => !c.archived && cardColumn[c.id] === "col-done" && isTodayMs(c.columnChangedAt) && String(c.title || "").trim()).map((c: any) => ({ card: c, at: c.columnChangedAt })).sort((a: any, b: any) => (a.at || 0) - (b.at || 0));
+  const addedToday = Object.values(cards).filter((c: any) => !c.archived && !c.draft && cardColumn[c.id] !== "col-done" && !c.deadline && isTodayMs(c.createdAt) && String(c.title || "").trim()).map((c: any) => ({ card: c }));
   const runningCard = Object.values(cards).find((c) => c.timerStart);
   const firstImage = (c) => { const a = (c.attachments || []).find((x) => x.type === "image"); return a ? assets[a.id] : null; };
 
@@ -765,7 +772,7 @@ export default function App() {
       )}
 
       {dayOpen && (
-        <MyDay planTasks={planTasks} upcoming={upcoming} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
+        <MyDay planTasks={planTasks} upcoming={upcoming} completedToday={completedToday} addedToday={addedToday} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
           profileName={profile.name} roundMode={roundMode} capacity={(profile.settings && profile.settings.dailyCapacity) || 6}
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
           onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}

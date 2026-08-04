@@ -63,6 +63,7 @@ export function rowToCard(r: any) {
     removedBy: r.removed_by || undefined,
     origin: r.origin || undefined, draft: r.draft || undefined, proposed: r.proposed || undefined,
     activeColumn: r.active_column_key || undefined,
+    columnChangedAt: toMs(r.column_changed_at) || undefined,   // when it last changed column (done time for col-done)
     createdAt: toMs(r.created_at) || Date.now(),
     // B1 — two-time model (undefined pre-0018 → safe defaults). Read-only in the
     // client for now; buno sets these via the update_card tool, server-side.
