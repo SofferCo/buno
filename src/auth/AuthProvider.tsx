@@ -57,7 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!supabase) return;
       await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin },
+        // preserve ?invite (and any other query) so an invited user lands back on
+        // the same contextual flow after Google auth.
+        options: { redirectTo: window.location.origin + window.location.search },
       });
     },
     async signInWithEmail(email: string) {

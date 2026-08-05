@@ -28,7 +28,7 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace }: any) {
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -60,6 +60,17 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       } catch { /* peek is best-effort */ }
     }).catch(() => {});
   }, [live]);
+  // invited onboarding: a freshly-joined member opens on a CONTEXTUAL greeting
+  // (board, role, what's open) instead of the generic hello — then "tour or work".
+  useEffect(() => {
+    if (!invited) return;
+    const extra = invited.open ? `יש כאן ${invited.open} משימות פתוחות` : "הלוח עדיין ריק";
+    const ppl = invited.people > 1 ? ` · ${invited.people} אנשים בצוות` : "";
+    setMsgs([{ by: "twin",
+      text: `הצטרפת ללוח "${invited.boardName}" בתור ${invited.roleHe}. ${extra}${ppl}.\nרוצה סיור קצר או ישר לעבודה?`,
+      at: Date.now(), actions: [{ id: "inv:tour", label: "סיור קצר" }, { id: "inv:work", label: "ישר לעבודה" }] } as any]);
+    onInvitedSeen?.();
+  }, [invited]);
   const suggestions = live
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
@@ -148,9 +159,29 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   // so the button reads as pressed (not untouched) once the walk moves on.
   async function reviewClick(action: any, mi: number) {
     if (action?.url) { window.open(action.url, "_blank"); return; }
+    if (String(action?.id || "").startsWith("inv:")) { await invitedClick(action.id, mi); return; }
     if (typing || !onReviewAction) return;
     setMsgs((m) => m.map((x: any, k) => (k === mi ? { ...x, resolved: action.id } : x)));
     await pushReview(action.id);
+  }
+  // invited-onboarding chips (local, never the guided-review edge path).
+  const personalOffered = useRef(false);
+  function offerPersonalSpace() {
+    if (personalOffered.current) return;
+    personalOffered.current = true;
+    setMsgs((m) => [...m, { by: "twin", at: Date.now(),
+      text: "אגב — אפשר לפתוח לך גם מרחב אישי משלך, לצד הלוח המשותף. רוצה?",
+      actions: [{ id: "inv:personal-yes", label: "כן, פתח לי" }, { id: "inv:personal-no", label: "לא צריך" }] } as any]);
+  }
+  async function invitedClick(id: string, mi: number) {
+    setMsgs((m) => m.map((x: any, k) => (k === mi ? { ...x, resolved: id } : x)));
+    if (id === "inv:tour") { await send("סכם לי בקצרה מה פתוח בלוח הזה ומה הכי דחוף"); setTimeout(offerPersonalSpace, 400); return; }
+    if (id === "inv:work") {
+      setMsgs((m) => [...m, { by: "twin", text: "מעולה. אני כאן — כתוב לי כל דבר ואפעל.", at: Date.now() } as any]);
+      setTimeout(offerPersonalSpace, 400); return;
+    }
+    if (id === "inv:personal-yes") { onWantPersonalSpace?.(); return; }
+    if (id === "inv:personal-no") { setMsgs((m) => [...m, { by: "twin", text: "בסדר גמור — נשארים בלוח המשותף. 🙂", at: Date.now() } as any]); return; }
   }
   // the contextual-chip set, chosen by state: an in-progress walk offers resume/skip;
   // a queued-but-unstarted session (e.g. after a morning snapshot) offers to begin;

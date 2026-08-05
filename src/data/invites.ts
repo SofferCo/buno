@@ -66,3 +66,14 @@ export async function acceptInvite(sb: SupabaseClient, tok: string): Promise<str
   if (error) throw new Error(error.message);
   return data as string; // project_id
 }
+
+// PUBLIC summary for the pre-auth contextual entry screen — anon-callable, no email
+// binding (just board name + inviter + role). Returns null for an invalid/expired token.
+export async function publicInviteSummary(sb: SupabaseClient, tok: string):
+  Promise<{ projectName: string; inviter: string; role: string } | null> {
+  try {
+    const { data } = await sb.rpc("invite_public_summary", { invite_token: tok });
+    const row = Array.isArray(data) ? data[0] : data;
+    return row ? { projectName: row.project_name, inviter: row.inviter_name, role: row.role } : null;
+  } catch { return null; }
+}

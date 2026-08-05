@@ -95,6 +95,7 @@ export default function App() {
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [rosters, setRosters] = useState<Record<string, any[]>>({});
   const [invitePrompt, setInvitePrompt] = useState<any>(null); // {token, projectName, role, inviter}
+  const [invitedWelcome, setInvitedWelcome] = useState<any>(null); // {projectId, role} → contextual chat greeting
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const cloud = !!(supabase && identity);
@@ -245,17 +246,28 @@ export default function App() {
                 applyBoard(st);
                 const os = ownerSharing(st.clients); setRoles(os.roles); setRosters(os.rosters);
                 engineRef.current!.schedule(st);
-                setShowOnboarding(true); // brand-new account → run first-run onboarding
+                // brand-new account → first-run onboarding, UNLESS arriving via an invite
+                // (invitees get the contextual invited flow, never the generic verticals).
+                if (!new URLSearchParams(location.search).get("invite")) setShowOnboarding(true);
               }
             }
           }
-          // a pending invite in the URL? surface it (email-bound, token-gated)
+          // a pending invite → accept SEAMLESSLY (no manual prompt) and land on the
+          // shared board with a contextual buno greeting. Only if the email matches
+          // (accept is email-bound) do we fall back to the info prompt otherwise.
           try {
             const tok = new URLSearchParams(location.search).get("invite");
             if (tok && supabase) {
-              const info = await peekInvite(supabase, tok);
-              if (info) setInvitePrompt({ token: tok, ...info });
-              else setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת.");
+              try {
+                const projectId = await acceptInvite(supabase, tok);
+                window.history.replaceState({}, "", location.pathname);
+                await refreshBoardFromCloud(projectId);          // reload with the shared project + focus it
+                setInvitedWelcome({ projectId, role: null });    // trigger the contextual chat greeting
+                setChatOpen(true);
+              } catch {
+                try { const info = await peekInvite(supabase, tok); if (info) setInvitePrompt({ token: tok, ...info }); else setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת."); }
+                catch { setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת."); }
+              }
             }
           } catch { /* ignore a bad token */ }
         } catch (e: any) { setSyncErr("הטעינה מהענן נכשלה: " + (e.message || e)); }
@@ -809,6 +821,16 @@ export default function App() {
 
       {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
+        invited={invitedWelcome ? (() => {
+          const proj = clients.find((c) => c.id === invitedWelcome.projectId);
+          const open = Object.values(cards).filter((c: any) => c.clientId === invitedWelcome.projectId && !c.archived && cardColumn[c.id] !== "col-done").length;
+          const people = (rosters[invitedWelcome.projectId] || []).length;
+          const role = roles[invitedWelcome.projectId];
+          const roleHe = role === "viewer" ? "צופה" : role === "owner" ? "בעלים" : "חבר צוות";
+          return { boardName: proj?.name || "הלוח", roleHe, open, people };
+        })() : null}
+        onInvitedSeen={() => setInvitedWelcome(null)}
+        onWantPersonalSpace={() => { setChatOpen(false); setShowOnboarding(true); }}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
         onOpenSettings={() => { setChatOpen(false); openPage("settings"); }}
         onApproveCard={(id) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
