@@ -22,7 +22,7 @@ async function updateSummary(admin: any, userId: string, apiKey: string) {
     const transcript = rows.map((m: any) => `${m.role === "user" ? "משתמש" : "בונו"}: ${String(m.content).slice(0, 300)}`).join("\n").slice(0, 12000);
     const anthropic = new Anthropic({ apiKey });
     const res: any = await anthropic.messages.create({
-      model: "claude-opus-5", max_tokens: 700, output_config: { effort: "low" },
+      model: "claude-sonnet-5", max_tokens: 700, output_config: { effort: "low" },
       system: "אתה מתחזק תקציר מתגלגל של שיחה בעברית (עד ~200 מילים, גוף שלישי): פרויקטים ולקוחות, החלטות, העדפות, משימות פתוחות, ומה המשתמש ביקש ומתי. ענייני וקצר — זהו זיכרון ארוך־טווח, לא סיכום מילולי.",
       messages: [{ role: "user", content: `תקציר קודם:\n${prev?.summary || "(אין)"}\n\nהודעות אחרונות:\n${transcript}\n\nהחזר תקציר מעודכן בלבד.` }],
     });

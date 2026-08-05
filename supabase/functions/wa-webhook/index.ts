@@ -112,7 +112,7 @@ async function describeMedia(kind: "image" | "document", media: { bytes: Uint8Ar
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-opus-5", max_tokens: 2048, output_config: { effort: "low" }, messages: [{ role: "user", content: [block, { type: "text", text: instruction }] }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 2048, output_config: { effort: "low" }, messages: [{ role: "user", content: [block, { type: "text", text: instruction }] }] }),
     });
     if (!res.ok) { console.error("describeMedia failed", res.status, (await res.text()).slice(0, 200)); return null; }
     const j = await res.json();

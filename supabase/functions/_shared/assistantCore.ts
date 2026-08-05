@@ -299,8 +299,9 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     const anthropic = new Anthropic({ apiKey });
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
-        model: "claude-opus-5", max_tokens: 1500, output_config: { effort: "low" },
-        system: sys, tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
+        model: "claude-sonnet-5", max_tokens: 1500, output_config: { effort: "low" },
+        // cache the tools+system prefix (reused across tool-loop hops + stable turns).
+        system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }], tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
       });
       if (res.stop_reason === "refusal") { reply = "מצטער, לא אוכל לעזור בזה."; break; }
       const textNow = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();

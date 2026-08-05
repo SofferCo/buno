@@ -482,10 +482,12 @@ After any tool call, tell the user plainly in one line what actually happened. I
   try {
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
-        model: "claude-opus-5",
+        model: "claude-sonnet-5",
         max_tokens: 2048,
         output_config: { effort: "low" },
-        system: sys,
+        // cache the tools+system prefix: reused across the 2–6 tool-loop hops of a
+        // single turn, and across turns while the board is unchanged (~0.1× reads).
+        system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
         tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
         messages,
       });
