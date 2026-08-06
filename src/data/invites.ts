@@ -77,3 +77,23 @@ export async function publicInviteSummary(sb: SupabaseClient, tok: string):
     return row ? { projectName: row.project_name, inviter: row.inviter_name, role: row.role } : null;
   } catch { return null; }
 }
+
+export type InviteOutlineCol = { name: string; count: number; titles: string[] };
+export type InviteContext = {
+  projectName: string; inviter: string; role: string;
+  email: string; color: string; outline: InviteOutlineCol[];
+};
+// PUBLIC rich context (anon): header + invited email + a safe board outline
+// (column titles + card titles + counts + board color; no inner content).
+// Returns null for an invalid/expired/accepted token. See migration 0024.
+export async function publicInviteContext(sb: SupabaseClient, tok: string): Promise<InviteContext | null> {
+  try {
+    const { data } = await sb.rpc("invite_public_context", { invite_token: tok });
+    if (!data) return null;
+    return {
+      projectName: data.projectName, inviter: data.inviter, role: data.role,
+      email: data.email || "", color: data.color || "#0E8F8C",
+      outline: Array.isArray(data.outline) ? data.outline : [],
+    };
+  } catch { return null; }
+}

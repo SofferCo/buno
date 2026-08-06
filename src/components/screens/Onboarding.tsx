@@ -38,7 +38,7 @@ const CAL_ITEMS = [
   { id: "c2", text: "רופא שיניים — שני הבא", board: "home" },
 ];
 
-export function Onboarding({ onDone, onSeed, onAddTask, onComplete, calEvents, boardOptions, inferBoard, onCreateEventCard, onWhatsappSeen, onTrack }: {
+export function Onboarding({ onDone, onSeed, onAddTask, onComplete, calEvents, boardOptions, inferBoard, onCreateEventCard, onWhatsappSeen, onTrack, initialStep }: {
   onDone?: () => void;
   onSeed?: (verts: { key: string; label: string; color: string }[]) => void;   // seed real boards
   onAddTask?: (boardKey: string, text: string) => void;                          // land the first task
@@ -49,13 +49,19 @@ export function Onboarding({ onDone, onSeed, onAddTask, onComplete, calEvents, b
   onCreateEventCard?: (ev: any, boardId: string) => void;                        // create a prep card for an event
   onWhatsappSeen?: () => void;                                                    // close the "discover WA" setup card
   onTrack?: (event: string, props?: any) => void;                                // analytics
+  initialStep?: string | null;                                                   // resume a paused run at this step
 }) {
   // REAL mode = wired into the app (post-login first-run): the user is already
   // authenticated, so skip the phone/OTP intro and start at verticals. Without
   // callbacks it stays the pure design preview (?onboarding=1).
   const realMode = !!onSeed;
-  const [step, setStep] = useState<Step>(realMode ? "verticals" : "welcome");
-  const [msgs, setMsgs] = useState<Msg[]>(realMode ? [
+  // resume: a paused run picks up at its saved step (boards already exist, so
+  // verticals/seed won't re-fire) instead of restarting from the top.
+  const resuming = !!(realMode && initialStep);
+  const [step, setStep] = useState<Step>(resuming ? (initialStep as Step) : (realMode ? "verticals" : "welcome"));
+  const [msgs, setMsgs] = useState<Msg[]>(resuming ? [
+    { by: "twin", text: "היי, אני בונו 👋 בוא נמשיך מאיפה שעצרנו." },
+  ] : realMode ? [
     { by: "twin", text: "היי, אני בונו — העוזר האישי שלך. 👋" },
     { by: "twin", text: "בשביל מה אתה צריך אותי? אפשר לסמן כמה שרוצים — אני יודע להחזיק הכול ביחד." },
   ] : [

@@ -16,10 +16,11 @@ function Root() {
   if (new URLSearchParams(location.search).get("onboarding") === "1") return <Onboarding onDone={() => { location.search = ""; }} />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
-  // logged-out invitee → contextual entry (board behind + "X invited you to ‹board›"),
-  // not the generic login page.
+  // ANY invite link → the one contextual entry, whether logged out or in. It
+  // adapts (Google / one-tap join / switch-account) and hands off to the app via
+  // ?welcome after joining — so every path is consistent, never the bare login.
   const inviteTok = new URLSearchParams(location.search).get("invite");
-  if (!session && inviteTok) return <InvitedEntry token={inviteTok} />;
+  if (inviteTok) return <InvitedEntry token={inviteTok} />;
   if (!session) return <LoginScreen />;
   return <App />;
 }

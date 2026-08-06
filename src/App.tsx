@@ -66,9 +66,11 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const onbBoards = useRef<Record<string, string>>({});   // vertical key → board id
   const onbSetup = useRef<Record<string, string>>({});    // setup-card key → card id
+  const onbResumeStep = useRef<string | null>(null);      // resume point for a paused onboarding run
   function openPage(name) {
     setDayOpen(name === "day"); setArchiveOpen(name === "archive"); setReportOpen(name === "report");
     setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
+    setMobileView("board"); // on mobile, navigating brings the main surface in front of buno
   }
   const notifs = useMemo(() => {
     const out = [];
@@ -88,10 +90,10 @@ export default function App() {
     return out.sort((a, b) => b.at - a.at).slice(0, 30);
   }, [cards, clients]);
   const unreadCount = notifs.filter((n) => n.at > notifSeen).length;
-  const [chatOpen, setChatOpen] = useState(false);
+  // buno is permanent — no open/close state. On mobile, where both can't share
+  // the screen, this toggles which surface is in front (chat is the default).
+  const [mobileView, setMobileView] = useState<"chat" | "board">("chat");
   const [chatSeed, setChatSeed] = useState<any>(null);
-  const [viewer, setViewer] = useState(false);
-  const [viewerQ, setViewerQ] = useState("");
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [rosters, setRosters] = useState<Record<string, any[]>>({});
   const [invitePrompt, setInvitePrompt] = useState<any>(null); // {token, projectName, role, inviter}
@@ -223,7 +225,15 @@ export default function App() {
             cloudCards = applied.cards;
             if (r.changed) eng.schedule(applied);
             storage.delete(KEY).catch(() => {}); // consume any pre-auth local board; cloud is source of truth
-
+            // onboarding recovery: a run that was started but never completed is a
+            // PAUSE, not a loss — resume at the saved step instead of dropping onto
+            // My Day. (Skipped for invite/welcome landings, which own the view.)
+            const ob = (applied as any).profile?.settings?.onboarding;
+            const qp = new URLSearchParams(location.search);
+            if (ob?.started && !ob.completed && !qp.get("invite") && !qp.get("welcome")) {
+              onbResumeStep.current = ob.step || "verticals";
+              setShowOnboarding(true);
+            }
           } else {
             // cloud board is empty — offer to import the local board, or seed
             let blob: any = null;
@@ -252,24 +262,17 @@ export default function App() {
               }
             }
           }
-          // a pending invite → accept SEAMLESSLY (no manual prompt) and land on the
-          // shared board with a contextual buno greeting. Only if the email matches
-          // (accept is email-bound) do we fall back to the info prompt otherwise.
+          // just joined via the contextual invite entry (InvitedEntry → ?welcome=<id>):
+          // land ON the shared board (not My Day) and let buno greet in-context.
           try {
-            const tok = new URLSearchParams(location.search).get("invite");
-            if (tok && supabase) {
-              try {
-                const projectId = await acceptInvite(supabase, tok);
-                window.history.replaceState({}, "", location.pathname);
-                await refreshBoardFromCloud(projectId);          // reload with the shared project + focus it
-                setInvitedWelcome({ projectId, role: null });    // trigger the contextual chat greeting
-                setChatOpen(true);
-              } catch {
-                try { const info = await peekInvite(supabase, tok); if (info) setInvitePrompt({ token: tok, ...info }); else setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת."); }
-                catch { setInviteError("ההזמנה אינה תקפה, פגה, או נשלחה לכתובת אחרת."); }
-              }
+            const wid = new URLSearchParams(location.search).get("welcome");
+            if (wid) {
+              setCurrentId(wid);
+              setDayOpen(false);                              // fix: land on the board, never the empty My Day
+              setInvitedWelcome({ projectId: wid });          // contextual chat greeting
+              window.history.replaceState({}, "", location.pathname); // strip ?welcome
             }
-          } catch { /* ignore a bad token */ }
+          } catch { /* ignore */ }
         } catch (e: any) { setSyncErr("הטעינה מהענן נכשלה: " + (e.message || e)); }
       } else {
         try {
@@ -580,7 +583,7 @@ export default function App() {
     calEvents={onbUpcoming} boardOptions={clients.map((c: any) => ({ id: c.id, name: c.name, color: c.color }))}
     inferBoard={(ev: any) => affinityBoard(ev) || inferEventProjectId(ev.attendees || [], clients, ev.organizer)}
     onCreateEventCard={onbCreateEventCard} onWhatsappSeen={onbWhatsappSeen}
-    onComplete={onbComplete} onTrack={onbTrack} />;
+    onComplete={onbComplete} onTrack={onbTrack} initialStep={onbResumeStep.current} />;
 
   const current = clients.find((c) => c.id === currentId);
   const clientCards = (id) => Object.values(cards).filter((c) => c.clientId === id);
@@ -632,25 +635,10 @@ export default function App() {
   );
 
   return (
-    <div className={"adk" + (chatOpen && !viewer ? " chat-open" : "")}>
+    <div className={"adk chat-open " + (mobileView === "chat" ? "mv-chat" : "mv-board")}>
       <img src="/bunologo.svg" className="adk-brand-wm" alt="" aria-hidden="true" />
       <div className="adk-shell">
       <div className="adk-top">
-        {viewer ? (<>
-          <div className="adk-csel-btn" style={{ cursor: "default", minWidth: 0, background: "transparent", border: "none", padding: "6px 4px" }}>
-            <Badge client={current} />
-            <div><div className="nm">{current?.name}</div><div className="sub">פרויקט · תצוגת לקוח</div></div>
-          </div>
-          <div className="adk-portal-search" style={{ maxWidth: 300 }}>
-            <Icon name="search" size={16} />
-            <input value={viewerQ} onChange={(e) => setViewerQ(e.target.value)} placeholder="חיפוש משימה…" />
-          </div>
-          <div style={{ marginInlineStart: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="adk-portal-brief" onClick={() => { const col = columns.find((c) => c.id === "col-brief") || columns[0]; if (col) addCard(col.id, current?.contact || (current?.members && current.members[0]) || "לקוח"); }}><Icon name="plus" size={16} /> בריף חדש</button>
-            <DemoTag text="תצוגת לקוח · הדגמה" />
-            <button className="adk-day-btn" style={{ margin: 0 }} onClick={() => { setViewer(false); setViewerQ(""); }}>יציאה</button>
-          </div>
-        </>) : (<>
         <div className="adk-csel">
           <div className="adk-csel-btn" onClick={() => setClientMenu((v) => !v)}>
             <Badge client={current} />
@@ -685,12 +673,10 @@ export default function App() {
           <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
           {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setShareFor(current)}><Icon name="users" /></button>}
-          <button className="adk-icon-btn" data-label="תצוגת לקוח" onClick={() => setViewer(true)}><Icon name="eye" /></button>
         </div>
-        </>)}
       </div>
 
-      {!viewer && (<>
+      {(<>
         <button className="adk-float-av" style={{ background: nameColor(profile.name || identity?.name || identity?.email || "אני") }} title="הדשבורד שלי" onClick={() => openPage("dash")}>
           {(profile.photo || identity?.photo) ? <img src={profile.photo || identity?.photo || undefined} alt="" /> : <span>{(profile.name || identity?.name) ? initials(profile.name || identity?.name) : (identity?.email ? initials(identity.email) : "אני")}</span>}
         </button>
@@ -727,8 +713,7 @@ export default function App() {
         <button className="adk-float-gear bare" data-label="הגדרות" onClick={() => openPage("settings")}><Icon name="gear" size={20} /></button>
       </>)}
 
-      <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={viewer || roleViewer} canManageColumns={canManageColumns}
-        filter={viewer && viewerQ.trim() ? ((c) => (c.title + " " + (c.description || "")).toLowerCase().includes(viewerQ.trim().toLowerCase())) : undefined}
+      <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={roleViewer} canManageColumns={canManageColumns}
         dnd={{ dragId, setDragId, dropCol, setDropCol, moveCard }}
         onOpenCard={(id) => setEditing(id)} onToggleTimer={toggleTimer} onAddCard={addCard}
         onRenameCol={renameCol} onDeleteColumn={deleteColumn} onAddColumn={addColumn} />
@@ -738,8 +723,8 @@ export default function App() {
         <div className="adk-scrim" onClick={() => setEditing(null)} />
         <CardPanel card={cards[editing]} now={now} assets={assets} client={clients.find((c) => c.id === cards[editing].clientId)}
           projects={clients}
-          onMoveProject={(viewer || roleViewer) ? undefined : (pid) => updateCard(editing, { clientId: pid })}
-          onCreateProject={(viewer || roleViewer) ? undefined : (name) => {
+          onMoveProject={roleViewer ? undefined : (pid) => updateCard(editing, { clientId: pid })}
+          onCreateProject={roleViewer ? undefined : (name) => {
             const color = SWATCHES.find((s) => !clients.some((c) => c.color === s)) || SWATCHES[clients.length % SWATCHES.length];
             const nc = { id: uid("cl"), name, color, home: false, contact: "", email: "", notes: "", logo: null };
             saveClient(nc); updateCard(editing, { clientId: nc.id });
@@ -748,9 +733,9 @@ export default function App() {
             ...((clients.find((c) => c.id === cards[editing].clientId)?.members) || []),
             ...Object.values(cards).filter((c) => c.clientId === cards[editing].clientId).flatMap((c) => peopleOf(c)),
           ].map((s) => (s || "").trim()).filter(Boolean)))}
-          profileName={viewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || identity?.name || "אני")}
-          viewer={viewer || roleViewer}
-          onClose={() => setEditing(null)} onChange={(viewer || roleViewer) ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, (viewer || roleViewer) ? "client" : "owner")}
+          profileName={roleViewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || identity?.name || "אני")}
+          viewer={roleViewer}
+          onClose={() => setEditing(null)} onChange={roleViewer ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, roleViewer ? "client" : "owner")}
           onComplete={() => { moveCard(editing, "col-done"); setEditing(null); }}
           onToggleTimer={() => toggleTimer(editing)} onAddFiles={(fl) => addFiles(editing, fl)} onAddLink={() => addLink(editing)}
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
@@ -790,7 +775,7 @@ export default function App() {
         <MyDay planTasks={planTasks} upcoming={upcoming} completedToday={completedToday} addedToday={addedToday} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
           profileName={profile.name} roundMode={roundMode} capacity={(profile.settings && profile.settings.dailyCapacity) || 6}
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
-          onAsk={(question) => { setChatSeed(question); setChatOpen(true); }}
+          onAsk={(question) => { setChatSeed(question); setMobileView("chat"); }}
           onClose={() => setDayOpen(false)}
           onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); openPage(null); setEditing(id); } }}
           onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")}
@@ -817,9 +802,14 @@ export default function App() {
           onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}
 
-      {!chatOpen && !viewer && <button className="adk-fab" onClick={() => setChatOpen(true)} title="buno"><img src="/bunologo.svg" alt="buno" /></button>}
+      {/* mobile-only surface toggle — buno and the board can't share a phone
+          screen, so one button flips between them (no closing, just switching). */}
+      <button className="adk-mtoggle" onClick={() => setMobileView((v) => (v === "chat" ? "board" : "chat"))} title={mobileView === "chat" ? "הלוח" : "buno"}>
+        {mobileView === "chat" ? <Icon name="grid" size={22} /> : <img src="/bunologo.svg" alt="buno" style={{ width: 26, height: 26 }} />}
+      </button>
 
-      {chatOpen && <ChatPanel onClose={() => { setChatOpen(false); setChatSeed(null); }} seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
+      {<ChatPanel seed={chatSeed} onSeedUsed={() => setChatSeed(null)} onAction={assistantAction} asstLevel={asstLevel}
+        onGoBoard={() => setMobileView("board")}
         live={cloud} ask={askAssistantLive} profileName={profile.name || identity?.name || ""}
         invited={invitedWelcome ? (() => {
           const proj = clients.find((c) => c.id === invitedWelcome.projectId);
@@ -830,9 +820,9 @@ export default function App() {
           return { boardName: proj?.name || "הלוח", roleHe, open, people };
         })() : null}
         onInvitedSeen={() => setInvitedWelcome(null)}
-        onWantPersonalSpace={() => { setChatOpen(false); setShowOnboarding(true); }}
+        onWantPersonalSpace={() => { setShowOnboarding(true); }}
         calConnected={gcalInteg?.status === "connected"} mailConnected={gcalInteg?.status === "connected" && hasGmailScope(gcalInteg)}
-        onOpenSettings={() => { setChatOpen(false); openPage("settings"); }}
+        onOpenSettings={() => openPage("settings")}
         onApproveCard={(id) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
         onRejectCard={(id) => deleteCard(id, "owner")}
         onSweepNow={async () => { const r = await sweepNow(); if (r?.ok && (r?.created?.length || r?.review)) await refreshBoardFromCloud(currentId); return r; }}
