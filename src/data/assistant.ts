@@ -32,6 +32,29 @@ export async function askAssistant(
 
 export const assistantLive = !!supabase;
 
+export type PushMsg = { by: "me" | "twin"; text: string; at?: number; cards?: CreatedCard[]; events?: any[]; actions?: ReviewAction[]; id?: string };
+
+// Live PROACTIVE pushes (D4 reminders, the daily sweep brief) — buno is always
+// open, so a message the server inserts should appear without a reload. We
+// subscribe to inserts on this thread and surface only proactive doors
+// (reminder/sweep); normal web turns are already shown from the request/response.
+export function subscribeAssistant(threadId: string, onMessage: (m: PushMsg) => void): () => void {
+  if (!supabase || !threadId) return () => {};
+  const ch = supabase
+    .channel("asst:" + threadId)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "assistant_message", filter: `thread_id=eq.${threadId}` }, (payload: any) => {
+      const x = payload?.new;
+      if (!x || (x.door !== "reminder" && x.door !== "sweep")) return; // proactive only
+      onMessage({
+        by: x.role === "user" ? "me" : "twin", text: x.content, id: x.id,
+        at: x.created_at ? new Date(x.created_at).getTime() : Date.now(),
+        cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined,
+      });
+    })
+    .subscribe();
+  return () => { try { supabase!.removeChannel(ch); } catch { /* ignore */ } };
+}
+
 // Load the user's ongoing twin conversation (one entity, continuous across
 // open/close and — later — across doors). Returns the latest thread + its
 // messages, mapped to the ChatPanel's shape.

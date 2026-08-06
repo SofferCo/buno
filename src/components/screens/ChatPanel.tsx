@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "../ui/Icon";
-import { loadAssistantThread, sendReviewAction } from "../../data/assistant";
+import { loadAssistantThread, sendReviewAction, subscribeAssistant } from "../../data/assistant";
 
 // buno writes plain Hebrew, but the model still occasionally emits Markdown
 // (**bold**, #, *). Render **bold** as bold and strip the rest so the bubble
@@ -43,12 +43,15 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const boxRef = useRef<any>();
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const pushSeen = useRef<Set<string>>(new Set()); // dedup live proactive pushes
   // one continuous conversation: on open, load the ongoing twin thread so the
   // chat isn't empty each time. Falls back to the greeting for a first-timer.
   useEffect(() => {
     if (!live) return;
     loadAssistantThread().then(async (r) => {
       threadRef.current = r.threadId;
+      setThreadId(r.threadId);
       if (r.messages.length) setMsgs(r.messages as any);
       // continuity: if a guided-review session is open, greet with a resume prompt
       try {
@@ -71,6 +74,17 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       at: Date.now(), actions: [{ id: "inv:tour", label: "סיור קצר" }, { id: "inv:work", label: "ישר לעבודה" }] } as any]);
     onInvitedSeen?.();
   }, [invited]);
+  // live proactive pushes (D4 reminders / sweep brief) — buno is always open, so
+  // they land in the thread without a reload. Dedup by row id (StrictMode + reconnects).
+  useEffect(() => {
+    if (!live || !threadId) return;
+    const off = subscribeAssistant(threadId, (m) => {
+      if (m.id && pushSeen.current.has(m.id)) return;
+      if (m.id) pushSeen.current.add(m.id);
+      setMsgs((cur) => [...cur, m as any]);
+    });
+    return off;
+  }, [live, threadId]);
   const suggestions = live
     ? ["מה פתוח היום?", "מה הכי דחוף עכשיו?", "סכם לי מה קורה בלוח", "כמה משימות בכל פרויקט?"]
     : ["כמה שעות עבדתי החודש?", "מי הלקוח הכי רווחי?", "מה דחוף היום?", "פתח לי טיוטת משימה"];
