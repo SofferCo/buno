@@ -6,6 +6,7 @@ import { listIntegrations, connectGoogle, disconnectGoogle, scanGmail, hasGmailS
 
 export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut, cloud, onScanned }: any) {
   const photoRef = useRef<any>();
+  const [cat, setCat] = useState<"profile" | "assistant" | "connections" | "prefs">("profile");
   const timeRound = (profile.settings && profile.settings.timeRound) || "ceil_hour";
   const capacity = Number(profile.settings && profile.settings.dailyCapacity) || 6;
   const [integ, setInteg] = useState<any[]>([]);
@@ -38,6 +39,13 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
           <div className="sp" />
         </div>
 
+        <div className="adk-set-tabs">
+          {([["profile", "פרופיל"], ["assistant", "העוזר"], ...(cloud ? [["connections", "חיבורים"]] : []), ["prefs", "העדפות"]] as any).map(([k, label]: any) => (
+            <button key={k} className={"adk-set-tab" + (cat === k ? " on" : "")} onClick={() => setCat(k)}>{label}</button>
+          ))}
+        </div>
+
+        {cat === "profile" && (
         <div className="adk-pcard-foot">
           <p className="adk-block-title">פרופיל</p>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -57,7 +65,9 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             )}
           </div>
         </div>
+        )}
 
+        {cat === "assistant" && (
         <div className="adk-pcard-foot">
           <p className="adk-block-title"><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="sun" size={15} /> העוזר הדיגיטלי · הרשאות</span></p>
           <div className="adk-asst-set">
@@ -79,14 +89,15 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             <div className="adk-asst-legend"><span><span className="d s" />מציע: מראה ולא נוגע</span><span><span className="d d" />טיוטה: יוצר וממתין לאישור</span><span><span className="d a" />פועל: מבצע ישירות (הפיך)</span></div>
           </div>
         </div>
+        )}
 
-        {cloud && (
+        {cat === "connections" && cloud && (
           <div className="adk-pcard-foot" style={{ borderBottom: "1px solid var(--border)" }}>
             <p className="adk-block-title"><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="calendar" size={15} /> חיבורים</span></p>
             <div className="adk-asst-row" style={{ borderBottom: "none" }}>
               <div className="adk-asst-info">
                 <b>Google — יומן ומייל</b>
-                <span>{gcal?.status === "connected" ? `מחובר${gcal.external_id ? ` · ${gcal.external_id}` : ""}${gmailReady ? " · יומן + מייל" : " · יומן"}` : gcal?.status === "error" ? "החיבור פג — התחבר מחדש" : "קריאת אירועים ומייל ל‑”היום שלי”, ללוח־השנה, ולזיהוי משימות"}</span>
+                <span>{gcal?.status === "connected" ? `מחובר${gcal.external_id ? ` · ${gcal.external_id}` : ""}${gmailReady ? " · יומן + מייל" : " · יומן"}` : gcal?.status === "error" ? "החיבור פג — התחבר מחדש" : "קורא את היומן והמייל ל‑”היום שלי” ולזיהוי משימות — ויכול לעזור לנהל פגישות (דחייה/תזמון/ביטול), באישורך"}</span>
               </div>
               {gcal?.status === "connected"
                 ? <button className="adk-btn danger" style={{ margin: 0 }} onClick={disconnect}>נתק</button>
@@ -105,10 +116,11 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
               </div>
             )}
             {scanMsg && <div style={{ fontSize: 12.5, color: "var(--accent-d)", fontWeight: 700, marginTop: 2 }}>{scanMsg}</div>}
-            <div style={{ fontSize: 11.5, color: "var(--faint)", fontWeight: 600, marginTop: 6 }}>קריאה בלבד. הגישה מאובטחת בשרת — הדפדפן לא רואה טוקנים. המייל נסרק רק לחודש האחרון, ורק דפוסים שמתאימים ל‑buno.</div>
+            <div style={{ fontSize: 11.5, color: "var(--faint)", fontWeight: 600, marginTop: 6 }}>היומן — קריאה וניהול בעזרתך (דחייה/תזמון/ביטול, תמיד באישור). המייל — קריאה בלבד, לחודש האחרון, ורק דפוסים שמתאימים ל‑buno. הגישה מאובטחת בשרת — הדפדפן לא רואה טוקנים.</div>
           </div>
         )}
 
+        {cat === "prefs" && (
         <div className="adk-pcard-foot">
           <p className="adk-block-title">העדפות</p>
           <div className="adk-asst-row" style={{ borderBottom: "none" }}>
@@ -129,6 +141,7 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

@@ -142,7 +142,7 @@ export function Onboarding({ onDone, onSeed, onAddTask, onComplete, calEvents, b
     goCalendarOffer();
   }
   function goCalendarOffer() {
-    say("בוא נסגור עוד משימה מהרשימה — היומן. אם תחבר אותו, אני אראה מה קורה לך השבוע ואשלב את זה ב\"היום שלי\". בלי לגעת בכלום, רק לקרוא.");
+    say("בוא נסגור עוד משימה מהרשימה — היומן. אם תחבר אותו, אני אראה מה קורה לך השבוע ואשלב את זה ב\"היום שלי\" — ואוכל גם לעזור לנהל: לדחות פגישה, להציע זמן חלופי או לבטל. תמיד באישורך.");
     setStep("calendar_offer");
   }
   function calendarConnect() {

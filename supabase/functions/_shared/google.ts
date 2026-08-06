@@ -181,3 +181,61 @@ export async function listCalendarEvents(accessToken: string, timeMinISO: string
       })),
     }));
 }
+
+// ---- calendar WRITE (B6) — needs the calendar.events scope -----------------
+const CAL_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+
+// raw single-event fetch (start/end/summary) — used to compute a shifted time
+async function getRawEvent(accessToken: string, eventId: string): Promise<any | null> {
+  const res = await fetch(`${CAL_BASE}/${encodeURIComponent(eventId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+// PATCH an event; returns {ok, error?}. Callers pass only the fields to change.
+export async function patchCalendarEvent(accessToken: string, eventId: string, patch: any): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${CAL_BASE}/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) return { ok: false, error: `patch ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  return { ok: true };
+}
+
+// cancel (delete) an event; notifies attendees.
+export async function deleteCalendarEvent(accessToken: string, eventId: string): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${CAL_BASE}/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+    method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok && res.status !== 410) return { ok: false, error: `delete ${res.status}` }; // 410 = already gone
+  return { ok: true };
+}
+
+// shift a timed event by N minutes (keeps duration). No-op for all-day events.
+export async function shiftCalendarEvent(accessToken: string, eventId: string, minutes: number): Promise<{ ok: boolean; error?: string; start?: string }> {
+  const ev = await getRawEvent(accessToken, eventId);
+  if (!ev) return { ok: false, error: "event not found" };
+  if (!ev.start?.dateTime || !ev.end?.dateTime) return { ok: false, error: "all-day event — no time to shift" };
+  const ns = new Date(new Date(ev.start.dateTime).getTime() + minutes * 60000).toISOString();
+  const ne = new Date(new Date(ev.end.dateTime).getTime() + minutes * 60000).toISOString();
+  const r = await patchCalendarEvent(accessToken, eventId, {
+    start: { dateTime: ns, timeZone: ev.start.timeZone || undefined },
+    end: { dateTime: ne, timeZone: ev.end.timeZone || undefined },
+  });
+  return { ...r, start: ns };
+}
+
+// move a timed event to an explicit new start (keeps duration).
+export async function moveCalendarEvent(accessToken: string, eventId: string, startISO: string): Promise<{ ok: boolean; error?: string; start?: string }> {
+  const ev = await getRawEvent(accessToken, eventId);
+  if (!ev) return { ok: false, error: "event not found" };
+  const durMs = ev.start?.dateTime && ev.end?.dateTime ? new Date(ev.end.dateTime).getTime() - new Date(ev.start.dateTime).getTime() : 30 * 60000;
+  const ns = new Date(startISO);
+  const ne = new Date(ns.getTime() + durMs).toISOString();
+  const r = await patchCalendarEvent(accessToken, eventId, {
+    start: { dateTime: ns.toISOString(), timeZone: ev.start?.timeZone || undefined },
+    end: { dateTime: ne, timeZone: ev.end?.timeZone || undefined },
+  });
+  return { ...r, start: ns.toISOString() };
+}

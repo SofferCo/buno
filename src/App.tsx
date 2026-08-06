@@ -26,7 +26,7 @@ import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant, sendReviewAction } from "./data/assistant";
-import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow } from "./data/integrations";
+import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
 import { upsertContact } from "./data/contacts";
 import { EventPanel } from "./components/screens/EventPanel";
@@ -199,6 +199,7 @@ export default function App() {
   async function askAssistantLive(message: string, history: any[], threadId?: string) {
     const res = await askAssistant(message, history, threadId, currentId);
     if (res?.created?.length || res?.changed) await refreshBoardFromCloud(currentId); // stay on the current board
+    if (res?.calendarChanged) await refreshCalendar(); // buno postponed/cancelled a meeting → refresh the day
     return res;
   }
 
@@ -342,24 +343,27 @@ export default function App() {
   }, [loaded, cards]);
 
   // Google Calendar events → grouped by YYYY-MM-DD for the calendar + My Day.
+  // Extracted so a write action (B6) can refresh the same way after it lands.
+  async function refreshCalendar() {
+    const r = await fetchCalendar();
+    if (!r.connected) return;
+    const by: Record<string, any[]> = {};
+    for (const e of r.events) {
+      const d = (e.start || "").slice(0, 10);
+      if (!d) continue;
+      const time = e.allDay ? "" : (e.start || "").slice(11, 16);
+      const projectId = inferEventProjectId(e.attendees || [], clients, e.organizer);
+      (by[d] = by[d] || []).push({ t: e.title, time, location: e.location, ev: e, projectId });
+    }
+    setCalEvents(by);
+    // (ב) calendar attendees are real people (they have an email) → contacts.
+    if (identity) { const seen = new Set<string>(); for (const e of r.events) for (const a of ((e as any).attendees || [])) { if (a.self || !a.email || seen.has(a.email)) continue; seen.add(a.email); const nm = String(a.displayName || String(a.email).split("@")[0] || "").trim(); if (nm) upsertContact(identity.id, { name: nm, email: a.email, source: "calendar" }); } }
+  }
   useEffect(() => {
     if (!cloud || !loaded) return;
     let alive = true;
     listIntegrations().then((list) => { if (alive) setGcalInteg(list.find((i) => i.kind === "gcal") || null); }).catch(() => {});
-    fetchCalendar().then((r) => {
-      if (!alive || !r.connected) return;
-      const by: Record<string, any[]> = {};
-      for (const e of r.events) {
-        const d = (e.start || "").slice(0, 10);
-        if (!d) continue;
-        const time = e.allDay ? "" : (e.start || "").slice(11, 16);
-        const projectId = inferEventProjectId(e.attendees || [], clients, e.organizer);
-        (by[d] = by[d] || []).push({ t: e.title, time, location: e.location, ev: e, projectId });
-      }
-      setCalEvents(by);
-      // (ב) calendar attendees are real people (they have an email) → contacts.
-      if (identity) { const seen = new Set<string>(); for (const e of r.events) for (const a of ((e as any).attendees || [])) { if (a.self || !a.email || seen.has(a.email)) continue; seen.add(a.email); const nm = String(a.displayName || String(a.email).split("@")[0] || "").trim(); if (nm) upsertContact(identity.id, { name: nm, email: a.email, source: "calendar" }); } }
-    }).catch(() => {});
+    if (alive) refreshCalendar().catch(() => {});
     return () => { alive = false; };
   }, [cloud, loaded, clients.length]); // re-run once projects are loaded so inference has them
 
@@ -741,7 +745,10 @@ export default function App() {
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
       </>)}
 
-      {eventOpen && <EventPanel ev={eventOpen.ev} project={clients.find((c) => c.id === eventOpen.projectId) || null} onClose={() => setEventOpen(null)} onPrepTask={prepTaskFromEvent} />}
+      {eventOpen && <EventPanel ev={eventOpen.ev} project={clients.find((c) => c.id === eventOpen.projectId) || null} onClose={() => setEventOpen(null)} onPrepTask={prepTaskFromEvent}
+        canManage={gcalInteg?.status === "connected"}
+        onEventAction={async (action: any, opts: any) => { const r = await calendarAction(action, eventOpen.ev.id, opts); if (r.ok) await refreshCalendar(); return r; }}
+        onProposeTime={(ev: any) => { setEventOpen(null); setChatSeed(`הצע לי זמן חלופי לפגישה "${ev.title}" ובצע את הדחייה`); setMobileView("chat"); }} />}
 
       {clientEdit && <ClientModal client={clientEdit === "new" ? null : clientEdit} onClose={() => setClientEdit(null)} onSave={saveClient} onDelete={deleteClient}
         sharing={cloud && clientEdit !== "new" ? { role: roles[clientEdit.id], roster: rosters[clientEdit.id] || [], projectId: clientEdit.id, supabase, meId: identity?.id, meName: profile.name || identity?.name, origin: location.origin } : null} />}

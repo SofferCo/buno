@@ -91,6 +91,11 @@
 .adk-bc-bar.hl{background:var(--accent-d);}
 .adk-bc-x{font-size:10px;color:var(--faint);font-weight:700;white-space:nowrap;}
 .adk-pcard-foot{padding:24px 28px;border-top:1px solid var(--border);}
+/* settings categories (D3): one section in view at a time */
+.adk-set-tabs{display:flex;gap:6px;padding:14px 28px 0;flex-wrap:wrap;}
+.adk-set-tab{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:transparent;border-radius:999px;padding:8px 16px;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .12s;}
+.adk-set-tab:hover{border-color:var(--ink);color:var(--ink);}
+.adk-set-tab.on{background:var(--ink);border-color:var(--ink);color:#fff;}
 
 /* fit the month view to the shell — no calendar scroll (loaded last so it
    overrides .adk-pcard.cal{overflow-y:auto} from chat.css). Rows share the

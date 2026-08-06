@@ -41,6 +41,19 @@ export async function fetchCalendar(timeMin?: string, timeMax?: string): Promise
   return data as { connected: boolean; events: CalEvent[] };
 }
 
+// calendar WRITE (B6) — postpone by minutes / move to a time / cancel. Server
+// verifies the user and notifies attendees. Returns {ok, start?, error?}.
+export async function calendarAction(
+  action: "postpone" | "move" | "cancel",
+  eventId: string,
+  opts?: { minutes?: number; startISO?: string }
+): Promise<{ ok: boolean; start?: string; error?: string }> {
+  if (!supabase) return { ok: false, error: "לא במצב מחובר" };
+  const { data, error } = await supabase.functions.invoke("calendar", { body: { action, eventId, ...opts } });
+  if (error) return { ok: false, error: error.message };
+  return data as { ok: boolean; start?: string; error?: string };
+}
+
 export type ScanResult = { connected: boolean; considered?: number; proposed?: number; created?: { id: string; title: string; project: string }[]; skipped?: number; error?: string };
 
 // "Scan my last month" — triage recent email into draft task cards (server-side).

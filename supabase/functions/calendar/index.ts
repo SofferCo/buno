@@ -3,7 +3,7 @@
 // then uses the service role only to fetch that user's token from Vault and
 // mint an access token. The browser never sees a Google token.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
+import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +33,21 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const access = await freshAccessToken(admin, u.user.id, "gcal");
   if (!access) return json({ connected: false, events: [] });
+
+  // WRITE actions (B6) — buno helps MANAGE the meeting, not just read it. Each
+  // is an explicit user action (a button, or a confirmed chat command). Google
+  // notifies attendees (sendUpdates=all).
+  const action = body?.action as string | undefined;
+  if (action) {
+    const id = String(body?.eventId || "");
+    if (!id) return json({ ok: false, error: "missing eventId" }, 400);
+    try {
+      if (action === "postpone") { const r = await shiftCalendarEvent(access, id, Number(body?.minutes) || 30); return json(r.ok ? { ok: true, start: r.start } : { ok: false, error: r.error }); }
+      if (action === "move")     { const r = await moveCalendarEvent(access, id, String(body?.startISO)); return json(r.ok ? { ok: true, start: r.start } : { ok: false, error: r.error }); }
+      if (action === "cancel")   { const r = await deleteCalendarEvent(access, id); return json(r); }
+      return json({ ok: false, error: "unknown action" }, 400);
+    } catch (e: any) { return json({ ok: false, error: String(e?.message || e) }, 500); }
+  }
 
   try {
     const events = await listCalendarEvents(access, timeMin, timeMax);

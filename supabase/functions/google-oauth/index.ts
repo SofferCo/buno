@@ -121,7 +121,9 @@ Deno.serve(async (req) => {
       client_id: GOOGLE_CLIENT_ID,
       redirect_uri: REDIRECT_URI,
       response_type: "code",
-      scope: "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly",
+      // calendar.events (read/write) replaces calendar.readonly so buno can help
+      // MANAGE meetings (postpone / reschedule / cancel), not just read them (B6).
+      scope: "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly",
       access_type: "offline",
       include_granted_scopes: "true",
       prompt: "consent",

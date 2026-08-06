@@ -1,8 +1,9 @@
-// buno — read-only detail panel for a Google Calendar event, opened from the
-// calendar or My Day. Deep like the native event: Meet join, your RSVP,
-// reminders, attendees (with optional/RSVP), dial-in, description, and a link
-// back to Google Calendar. A one-click "prep task" files a draft under the
-// inferred project — the bridge from schedule to board.
+// buno — detail panel for a Google Calendar event, opened from the calendar or
+// My Day. Deep like the native event: Meet join, your RSVP, reminders,
+// attendees (with optional/RSVP), dial-in, description, and a link back to
+// Google Calendar. A one-click "prep task" files a draft under the inferred
+// project; when connected, buno can also postpone / reschedule / cancel (B6).
+import { useState } from "react";
 import { Icon } from "../ui/Icon";
 import { Avatar } from "../ui/Avatar";
 
@@ -21,7 +22,18 @@ function reminderText(r: any): string {
   return r.map((x: any) => `${x.method === "email" ? "מייל" : "התראה"} ${one(x.minutes)} לפני`).join(" · ");
 }
 
-export function EventPanel({ ev, project, onClose, onPrepTask }: any) {
+export function EventPanel({ ev, project, onClose, onPrepTask, onEventAction, onProposeTime, canManage }: any) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function manage(action: "postpone" | "cancel", label: string) {
+    if (busy) return;
+    if (action === "cancel" && !confirm(`לבטל את "${ev.title}"? המשתתפים יקבלו עדכון.`)) return;
+    setBusy(action); setMsg(null);
+    const r = await onEventAction?.(action, action === "postpone" ? { minutes: 30 } : {});
+    setBusy(null);
+    if (r?.ok) { setMsg(label); if (action === "cancel") setTimeout(onClose, 900); }
+    else setMsg(r?.error ? "לא הצלחתי — " + r.error : "לא הצלחתי כרגע.");
+  }
   const start = ev.start ? new Date(ev.start) : null;
   const end = ev.end ? new Date(ev.end) : null;
   const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -84,9 +96,20 @@ export function EventPanel({ ev, project, onClose, onPrepTask }: any) {
             <a className="adk-ev-open" href={ev.htmlLink} target="_blank" rel="noreferrer">פתח ב‑Google יומן ↗</a>
           )}
         </div>
-        {project && (
-          <div className="adk-panel-foot">
-            <button className="adk-btn primary" onClick={() => onPrepTask(ev, project)}>צור משימת הכנה תחת {project.name}</button>
+        {(project || (canManage && !ev.allDay)) && (
+          <div className="adk-panel-foot" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+            {project && (
+              <button className="adk-btn primary" onClick={() => onPrepTask(ev, project)}>צור משימת הכנה תחת {project.name}</button>
+            )}
+            {canManage && !ev.allDay && (<>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="adk-btn" disabled={!!busy} onClick={() => manage("postpone", "נדחתה בחצי שעה ✓")}>{busy === "postpone" ? "דוחה…" : "דחה 30 דק׳"}</button>
+                <button className="adk-btn" disabled={!!busy} onClick={() => onProposeTime?.(ev)}>הצע זמן חדש</button>
+                <button className="adk-btn danger" disabled={!!busy} onClick={() => manage("cancel", "הפגישה בוטלה ✓")}>{busy === "cancel" ? "מבטל…" : "בטל פגישה"}</button>
+              </div>
+              {msg && <div style={{ fontSize: 12.5, fontWeight: 700, color: msg.includes("✓") ? "var(--accent-d)" : "var(--rec)" }}>{msg}</div>}
+              <div style={{ fontSize: 11, color: "var(--faint)", fontWeight: 600 }}>שינוי מעדכן את כל המשתתפים ביומן.</div>
+            </>)}
           </div>
         )}
       </div>

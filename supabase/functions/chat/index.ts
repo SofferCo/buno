@@ -15,7 +15,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
-import { freshAccessToken, listCalendarEvents } from "../_shared/google.ts";
+import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 
@@ -159,6 +159,7 @@ const CREATE_CARDS_TOOL = {
 const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, move to another board, or set the two-time model (work vs waiting), a time estimate, or a follow-up window. Supports BULK — filter_project edits every open card of a project ('all codata → Tuesday'). Only fields you pass change. Single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string" }, filter_project: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string" }, card_type: { type: "string", enum: ["work", "waiting"], description: "WORK = something the user does; WAITING = delegated / awaiting a reply." }, waiting_on: { type: "string", description: "Who/what a waiting card waits on, e.g. 'העירייה'. Empty string clears." }, follow_up_days: { type: "number", description: "For a waiting card: silent days before a follow-up nudge (supplier 7, authority 30, other 14)." }, estimate_hours: { type: "number", description: "Time estimate in hours for a work card (drives daily capacity). 0 clears." } } } };
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Only for genuine progress, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string" }, note: { type: "string" } }, required: ["card", "note"] } };
 const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
+const MANAGE_EVENT_TOOL = { name: "manage_event", description: "Manage a Google Calendar MEETING the user asks to change ('דחה את הפגישה עם X', 'בטל את הפגישה מחר', 'תזמן מחדש ל-15:00'). Identify the meeting by title or attendee (name/email) from the calendar context. Actions: postpone (shift by `minutes`, default 30), move (to an explicit `start_iso`, ISO 8601 in the user's timezone), cancel (delete + notify). Attendees are notified automatically. If the request is vague about which meeting or (for a reschedule) to when, ASK first — don't guess. After it runs, tell the user plainly what changed.", input_schema: { type: "object", properties: { match: { type: "string", description: "Title or attendee name/email identifying the meeting." }, action: { type: "string", enum: ["postpone", "move", "cancel"] }, minutes: { type: "number", description: "For postpone: minutes to shift (default 30)." }, start_iso: { type: "string", description: "For move: the new start, ISO 8601." } }, required: ["match", "action"] } };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -469,6 +470,33 @@ create_project — open a NEW board, ONLY on an explicit request ("תפתח בו
 move_card / complete_card / archive_card — organize the board on the user's EXPLICIT request only (e.g. "העבר ל'בעבודה'", "סמן שסיימתי", "תארכב"). Act directly (reversible), identify by title.
 After any tool call, tell the user plainly in one line what actually happened. If a tool reported it couldn't find the card/column, say so honestly — don't pretend it worked.`;
 
+  // calendar WRITE from chat (B6ג) — resolve the meeting by title/attendee within
+  // the next 14 days, then postpone / move / cancel. Ambiguity → ask, never guess.
+  let calendarChanged = false;
+  async function doManageEvent(input: any): Promise<string> {
+    const match = String(input?.match || "").trim().toLowerCase();
+    const action = String(input?.action || "");
+    if (!match || !action) return "לא בוצע: חסר זיהוי הפגישה או הפעולה.";
+    try {
+      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const access = await freshAccessToken(admin, user.id, "gcal");
+      if (!access) return "היומן לא מחובר — אי אפשר לנהל פגישות.";
+      const list = await listCalendarEvents(access, new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).toISOString(), new Date(nowD.getTime() + 14 * 864e5).toISOString());
+      const cands = list.filter((e: any) => !e.allDay && (
+        String(e.title || "").toLowerCase().includes(match) ||
+        (e.attendees || []).some((a: any) => String(a.email || "").toLowerCase().includes(match) || String(a.name || "").toLowerCase().includes(match))
+      ));
+      if (!cands.length) return `לא מצאתי פגישה שמתאימה ל"${input.match}".`;
+      if (cands.length > 1) return `יש כמה פגישות שמתאימות ל"${input.match}": ${cands.slice(0, 4).map((c: any) => c.title).join(", ")} — תגיד לי איזו במדויק.`;
+      const ev = cands[0];
+      const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+      if (action === "postpone") { const r = await shiftCalendarEvent(access, ev.id, Number(input?.minutes) || 30); if (!r.ok) return "לא הצלחתי לדחות: " + r.error; calendarChanged = true; return `דחיתי את "${ev.title}" ל-${hhmm(r.start!)} — המשתתפים עודכנו.`; }
+      if (action === "move") { if (!input?.start_iso) return "כדי לתזמן מחדש אני צריך שעה חדשה — מתי?"; const r = await moveCalendarEvent(access, ev.id, String(input.start_iso)); if (!r.ok) return "לא הצלחתי לתזמן מחדש: " + r.error; calendarChanged = true; return `העברתי את "${ev.title}" ל-${new Date(r.start!).toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} — המשתתפים עודכנו.`; }
+      if (action === "cancel") { const r = await deleteCalendarEvent(access, ev.id); if (!r.ok) return "לא הצלחתי לבטל: " + r.error; calendarChanged = true; return `ביטלתי את "${ev.title}" — המשתתפים קיבלו עדכון.`; }
+      return "פעולה לא מוכרת.";
+    } catch (e) { console.error("manage_event", String((e as any)?.message || e)); return "נתקלתי בתקלה בניהול היומן — נסה שוב."; }
+  }
+
   const anthropic = new Anthropic({ apiKey });
   const messages: any[] = [
     ...history
@@ -488,7 +516,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         // cache the tools+system prefix: reused across the 2–6 tool-loop hops of a
         // single turn, and across turns while the board is unchanged (~0.1× reads).
         system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
-        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL],
+        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL, MANAGE_EVENT_TOOL],
         messages,
       });
       if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
@@ -509,6 +537,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
+        else if (tu.name === "manage_event") out = await doManageEvent(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });
@@ -558,8 +587,8 @@ After any tool call, tell the user plainly in one line what actually happened. I
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, pending: reviewActions ? created.length : undefined, started: reviewActions ? true : undefined, changed: changed.length + (boardChanged ? 1 : 0), events: eventsOut, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, pending: reviewActions ? created.length : undefined, started: reviewActions ? true : undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, events: eventsOut, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
-    return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, voiceOk: lint.ok, voiceHits: lint.hits });
   }
 });
