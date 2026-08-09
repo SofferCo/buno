@@ -56,10 +56,10 @@ button.adk-tl-rail:hover .adk-tl-node.done{filter:brightness(.92);}
    plus a horizontal line that crosses the whole (left) column to the edge.
    Hovering the row reveals the time label. No loud marker, no fixed text. */
 .adk-tl-nowrow{position:relative;display:flex;align-items:center;min-height:20px;margin:2px 0;cursor:default;}
-.adk-tl-nowrow .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;position:relative;z-index:2;}
+.adk-tl-nowrow .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;align-items:center;position:relative;z-index:2;}
 .adk-tl-nowrow .adk-tl-node.now{margin-top:0;width:11px;height:11px;border:none;background:#aeb8bb;box-shadow:none;}
 /* the line starts AT the rail (inset-inline-end 20px = the spine) and runs to the edge — connected */
-.adk-tl-nowline{position:absolute;inset-inline-start:20px;inset-inline-end:0;top:50%;transform:translateY(-50%);height:2px;background:#ccd5d7;border-radius:2px;z-index:1;}
+.adk-tl-nowline{position:absolute;inset-inline-start:20px;inset-inline-end:-26px;top:50%;transform:translateY(-50%);height:2px;background:#ccd5d7;border-radius:2px;z-index:1;}
 .adk-tl-nowlbl{display:none;position:absolute;inset-inline-end:44px;top:50%;transform:translateY(-50%);background:var(--surface);padding:0 6px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;z-index:3;}
 .adk-tl-nowrow:hover .adk-tl-nowlbl{display:inline-block;}
 .adk-tl-nowrow:hover .adk-tl-node.now{background:var(--muted);}

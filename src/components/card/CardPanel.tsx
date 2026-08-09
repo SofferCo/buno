@@ -191,7 +191,7 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
           <div className="adk-field"><label>אנשים</label>
             <div className="adk-tagbox">
               {creator && <span className="adk-cc-chip locked" title="יוצר — פתח/ה את המשימה"><Avatar name={creator} size={18} /> {creator}</span>}
-              {cc.map((n) => (
+              {cc.filter((n) => n !== creator).map((n) => (
                 <span className="adk-cc-chip" key={n}><Avatar name={n} size={18} /> {n} <button onClick={() => removeCc(n)}>×</button></span>
               ))}
               <GiverInput bare value={ccInput} onChange={setCcInput} onPick={addCc} suggestions={giverSuggestions.filter((s) => s !== creator && !cc.includes(s))} placeholder="+ הוסף אדם" />

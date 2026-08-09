@@ -158,7 +158,7 @@ export default function App() {
       // else any other named participant — and if none, the USER themself (never buno).
       const other = atts.find((a) => !a.self);
       const briefGiver = (orgAtt && !orgAtt.self && nm(orgAtt)) || (other && nm(other)) || (orgAtt?.self ? "" : ev.organizerName) || profile?.name || "";
-      card = { id, clientId: cid, title: ev.title || "פגישה", creator: briefGiver, cc: people, comments: [], attachments: [], subtasks: [], description: ev.description || "", deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), priority: "regular", routine: "none", dayFlex: false, time: ev.allDay ? "" : String(ev.start || "").slice(11, 16), activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: { type: "calendar", ref } };
+      card = { id, clientId: cid, title: ev.title || "פגישה", creator: briefGiver, cc: people.filter((n: string) => n !== briefGiver), comments: [], attachments: [], subtasks: [], description: ev.description || "", deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), priority: "regular", routine: "none", dayFlex: false, time: ev.allDay ? "" : String(ev.start || "").slice(11, 16), activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: { type: "calendar", ref } };
       setCards((p: any) => ({ ...p, [id]: card }));
       setOrder((p: any) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
     }

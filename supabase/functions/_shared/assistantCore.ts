@@ -267,7 +267,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       const raw = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
       const fmtDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(d);
       const todayKey = fmtDay(now); const tomorrowKey = fmtDay(new Date(now.getTime() + 864e5));
-      const ordered = [...(raw || [])].sort((a: any, b: any) => a.allDay === b.allDay ? String(a.start || "").localeCompare(String(b.start || "")) : (a.allDay ? 1 : -1)).slice(0, 40);
+      // an opened event became a real card ("cal-<id>") with its own done-state — drop
+      // the raw copy so buno reads the card, not a stale "not done" event (web/WA parity).
+      const linkedRefs = new Set((cards || []).filter((c: any) => !c.archived && typeof c.origin?.ref === "string" && c.origin.ref.startsWith("cal-")).map((c: any) => c.origin.ref));
+      const deduped = (raw || []).filter((e: any) => !linkedRefs.has("cal-" + e.id));
+      const ordered = [...deduped].sort((a: any, b: any) => a.allDay === b.allDay ? String(a.start || "").localeCompare(String(b.start || "")) : (a.allDay ? 1 : -1)).slice(0, 40);
       if (ordered.length) calendarSummary = ordered.map((e: any) => {
         const day = String(e.start || "").slice(0, 10);
         const label = day === todayKey ? "היום" : day === tomorrowKey ? "מחר" : day;
