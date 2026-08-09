@@ -22,6 +22,8 @@ export function ArchivePanel({ items, client, now, onClose, onOpen, onRestore, o
   });
   const totalTime = filtered.reduce((a, c) => a + cardSeconds(c, now), 0);
   return (
+    <>
+    <div className="adk-arch-scrim" onClick={onClose} />
     <div className="adk-arch">
       <div className="adk-arch-head">
         <Badge client={client} size={26} />
@@ -71,5 +73,6 @@ export function ArchivePanel({ items, client, now, onClose, onOpen, onRestore, o
         })}
       </div>
     </div>
+    </>
   );
 }

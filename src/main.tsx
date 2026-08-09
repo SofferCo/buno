@@ -12,6 +12,7 @@ import { ReportPreview } from "./components/screens/ReportPreview";
 import { SettingsPreview } from "./components/screens/SettingsPreview";
 import { CalPreview } from "./components/screens/CalPreview";
 import { PeekPreview } from "./components/screens/PeekPreview";
+import { ArchivePreview } from "./components/screens/ArchivePreview";
 import "./styles/index.css";
 
 // Gate: local mode (no env) → straight to the app, Stage-A behavior.
@@ -35,6 +36,8 @@ function Root() {
   if (new URLSearchParams(location.search).get("cal") === "1") return <CalPreview />;
   // DESIGN PREVIEW: the projects "peek" flyout, open, no auth (?peek=1)
   if (new URLSearchParams(location.search).get("peek") === "1") return <PeekPreview />;
+  // DESIGN PREVIEW: the archive drawer over mock chrome, no auth (?archive=1)
+  if (new URLSearchParams(location.search).get("archive") === "1") return <ArchivePreview />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
   // ANY invite link → the one contextual entry, whether logged out or in. It

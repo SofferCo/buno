@@ -1,5 +1,9 @@
 /* archive */
-.adk-arch{position:fixed;top:0;bottom:0;right:0;width:560px;max-width:96vw;background:var(--surface);z-index:51;box-shadow:-24px 0 60px rgba(0,0,0,.22);display:flex;flex-direction:column;animation:adk-slideR .22s ease;}
+/* scrim dims the board behind, and the drawer sits ABOVE the fixed rail/float buttons
+   + brand watermark (z56–57) so nothing bleeds over the archive. */
+.adk-arch-scrim{position:fixed;inset:0;background:rgba(23,40,47,.32);z-index:60;animation:adk-fade .18s ease;}
+@keyframes adk-fade{from{opacity:0;}to{opacity:1;}}
+.adk-arch{position:fixed;top:0;bottom:0;right:0;width:560px;max-width:96vw;background:var(--surface);z-index:61;box-shadow:-24px 0 60px rgba(0,0,0,.22);display:flex;flex-direction:column;animation:adk-slideR .22s ease;}
 .adk-arch-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border);}
 .adk-arch-head h2{margin:0;font-size:18px;font-weight:800;flex:1;letter-spacing:-.01em;}
 .adk-arch-filters{padding:13px 18px;border-bottom:1px solid var(--border);background:var(--surface-2);display:flex;flex-direction:column;gap:10px;}
