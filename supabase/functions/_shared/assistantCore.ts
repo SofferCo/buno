@@ -11,29 +11,11 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
 import { summarizeBoard } from "./boardContext.ts";
+import { CORE_TOOLS } from "./tools.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
 
-const CREATE_CARD_TOOL = {
-  name: "create_card",
-  description: "Create a task card on the user's board. Use only when the user clearly asks to add/open/create a task. Cards are created as pending drafts the user approves unless their permission level is 'act'.",
-  input_schema: { type: "object", properties: {
-    title: { type: "string", description: "Short task title, ≤10 words, verb-first, in Hebrew." },
-    description: { type: "string", description: "Optional one-sentence Hebrew context." },
-    project: { type: "string", description: "Optional project name to place the card under." },
-    deadline: { type: "string", description: "Optional due date YYYY-MM-DD, only if the user stated one." },
-    priority: { type: "string", enum: ["regular", "important", "critical"] },
-    brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work with אילן'), put their NAME here — buno records them as the brief-giver and creates a contact. You are a tool: NEVER put buno here. Empty if no real person is the source." },
-  }, required: ["title"] },
-};
-const MOVE_CARD_TOOL = { name: "move_card", description: "Move an existing card to another column on its board. Only on explicit request. Reversible.", input_schema: { type: "object", properties: { card: { type: "string" }, column: { type: "string" } }, required: ["card", "column"] } };
-const COMPLETE_CARD_TOOL = { name: "complete_card", description: "Mark a card done (move to the Done column). Only when the user says a task is finished.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
-const ARCHIVE_CARD_TOOL = { name: "archive_card", description: "Archive a card (remove from the active board, reversible). Only on explicit request.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
-const CREATE_PROJECT_TOOL = { name: "create_project", description: "Open a NEW board on explicit request. Reused by name if it exists.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } };
-const CREATE_CARDS_TOOL = { name: "create_cards", description: "Create MANY task cards at once. ALWAYS use this (one call, array) when the user asks for more than one task — never call create_card repeatedly.", input_schema: { type: "object", properties: { project: { type: "string" }, cards: { type: "array", items: { type: "object", properties: { title: { type: "string" }, description: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] } }, required: ["title"] } } }, required: ["cards"] } };
-const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, move to another board, or set the two-time model (work vs waiting), a time estimate, or a follow-up window. Supports BULK — pass filter_project to edit every open card of a project (e.g. 'all codata cards → Tuesday'). Only the fields you pass change. Identify a single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title of a single card to edit (omit if using filter_project)." }, filter_project: { type: "string", description: "Bulk: edit every open card in this project." }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string", description: "Move the card(s) to this board." }, card_type: { type: "string", enum: ["work", "waiting"], description: "WORK = something the user does; WAITING = delegated / awaiting a reply." }, waiting_on: { type: "string", description: "Who/what a waiting card waits on, e.g. 'העירייה'. Empty string clears." }, follow_up_days: { type: "number", description: "For a waiting card: silent days before a follow-up nudge (supplier 7, authority 30, other 14)." }, estimate_hours: { type: "number", description: "Time estimate in hours for a work card (drives daily capacity). 0 clears." } } } };
-const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון של Air Doctor, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Use ONLY for genuine progress updates, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title (or part) of the card the update is about." }, note: { type: "string", description: "The progress note, first-person from the user, ≤15 words Hebrew." } }, required: ["card", "note"] } };
-const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
+// Tool DEFINITIONS come from _shared/tools.ts (CORE_TOOLS) — one contract with the web chat.
 
 // board perception now comes from the shared summarizeBoard (_shared/boardContext.ts)
 // — same brain as the web /chat. Comments/attachments are fetched below for parity.
@@ -299,7 +281,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       const res: any = await anthropic.messages.create({
         model: "claude-sonnet-5", max_tokens: 1500, output_config: { effort: "low" },
         // cache the tools+system prefix (reused across tool-loop hops + stable turns).
-        system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }], tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL], messages,
+        system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }], tools: CORE_TOOLS, messages,
       });
       if (res.stop_reason === "refusal") { reply = "מצטער, לא אוכל לעזור בזה."; break; }
       const textNow = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();

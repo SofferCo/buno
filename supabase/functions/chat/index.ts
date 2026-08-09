@@ -19,6 +19,7 @@ import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarE
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 import { summarizeBoard } from "../_shared/boardContext.ts";
+import { WEB_TOOLS } from "../_shared/tools.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,96 +32,8 @@ const json = (body: unknown, status = 200) =>
 // summarizeBoard now lives in _shared/boardContext.ts — one brain, one perception
 // (shared with the WhatsApp/sweep core). Imported above.
 
-const CREATE_CARD_TOOL = {
-  name: "create_card",
-  description:
-    "Create a task card on the user's board. Use this only when the user clearly asks to add/open/create a task, or explicitly agrees to a card you offered. Cards are created as pending drafts the user approves — you never bypass that. Prefer the project the user names; if none, it goes to their current project.",
-  input_schema: {
-    type: "object",
-    properties: {
-      title: { type: "string", description: "Short task title, ≤10 words, starting with a verb. In Hebrew." },
-      description: { type: "string", description: "Optional one-sentence context, in Hebrew." },
-      project: { type: "string", description: "Optional project name to place the card under (match one of the user's projects)." },
-      deadline: { type: "string", description: "Optional due date as YYYY-MM-DD, only if the user stated a real one." },
-      priority: { type: "string", enum: ["regular", "important", "critical"], description: "Optional priority; default regular." },
-      brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work summarized with אילן', 'a task from דנה'), put that person's NAME here. buno records them as the brief-giver and creates a contact. You are a tool — NEVER put yourself/buno here. Leave empty if no real person is the source." },
-    },
-    required: ["title"],
-  },
-};
-
-const MOVE_CARD_TOOL = {
-  name: "move_card",
-  description: "Move an existing card to another column on its board (e.g. to 'בעבודה' / 'לבדיקה'). Use ONLY when the user explicitly asks to move or advance a specific task. Reversible.",
-  input_schema: {
-    type: "object",
-    properties: {
-      card: { type: "string", description: "The card's title (or closest match) to move." },
-      column: { type: "string", description: "Target column name, e.g. 'בעבודה', 'לבדיקה / אישור', 'הושלם'." },
-    },
-    required: ["card", "column"],
-  },
-};
-
-const COMPLETE_CARD_TOOL = {
-  name: "complete_card",
-  description: "Mark a card as done — moves it to the board's Done column. Use ONLY when the user explicitly says a specific task is finished. Reversible.",
-  input_schema: {
-    type: "object",
-    properties: { card: { type: "string", description: "The card's title to mark done." } },
-    required: ["card"],
-  },
-};
-
-const ARCHIVE_CARD_TOOL = {
-  name: "archive_card",
-  description: "Archive a card (remove it from the active board — it can be restored). Use ONLY when the user explicitly asks to remove/archive a specific task.",
-  input_schema: {
-    type: "object",
-    properties: { card: { type: "string", description: "The card's title to archive." } },
-    required: ["card"],
-  },
-};
-
-const CREATE_PROJECT_TOOL = {
-  name: "create_project",
-  description: "Open a NEW project/board on the user's request (e.g. 'תפתח בורד לקודאטה'). Use ONLY on an explicit request for a new project/board. If a board with that name already exists it is reused.",
-  input_schema: {
-    type: "object",
-    properties: { name: { type: "string", description: "The board/project name, in the user's words." } },
-    required: ["name"],
-  },
-};
-
-const CREATE_CARDS_TOOL = {
-  name: "create_cards",
-  description: "Create MULTIPLE task cards at once. ALWAYS use this (not many create_card calls) when the user asks to add more than one task. Cards are drafts unless the permission level is 'act'.",
-  input_schema: {
-    type: "object",
-    properties: {
-      project: { type: "string", description: "Optional project name for all cards (match one of the user's projects, or a board you just created)." },
-      cards: {
-        type: "array",
-        description: "The tasks to create.",
-        items: {
-          type: "object",
-          properties: {
-            title: { type: "string", description: "Short Hebrew title, verb-first." },
-            description: { type: "string" },
-            deadline: { type: "string", description: "YYYY-MM-DD, only if the user stated one." },
-            priority: { type: "string", enum: ["regular", "important", "critical"] },
-          },
-          required: ["title"],
-        },
-      },
-    },
-    required: ["cards"],
-  },
-};
-const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card(s) on explicit request: deadline, priority, title, description, move to another board, or set the two-time model (work vs waiting), a time estimate, or a follow-up window. Supports BULK — filter_project edits every open card of a project ('all codata → Tuesday'). Only fields you pass change. Single card by title. deadline is YYYY-MM-DD, or 'clear' to remove.", input_schema: { type: "object", properties: { card: { type: "string" }, filter_project: { type: "string" }, deadline: { type: "string" }, priority: { type: "string", enum: ["regular", "important", "critical"] }, title: { type: "string" }, description: { type: "string" }, project: { type: "string" }, card_type: { type: "string", enum: ["work", "waiting"], description: "WORK = something the user does; WAITING = delegated / awaiting a reply." }, waiting_on: { type: "string", description: "Who/what a waiting card waits on, e.g. 'העירייה'. Empty string clears." }, follow_up_days: { type: "number", description: "For a waiting card: silent days before a follow-up nudge (supplier 7, authority 30, other 14)." }, estimate_hours: { type: "number", description: "Time estimate in hours for a work card (drives daily capacity). 0 clears." } } } };
-const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Only for genuine progress, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string" }, note: { type: "string" } }, required: ["card", "note"] } };
-const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
-const MANAGE_EVENT_TOOL = { name: "manage_event", description: "Manage a Google Calendar MEETING the user asks to change ('דחה את הפגישה עם X', 'בטל את הפגישה מחר', 'תזמן מחדש ל-15:00'). Identify the meeting by title or attendee (name/email) from the calendar context. Actions: postpone (shift by `minutes`, default 30), move (to an explicit `start_iso`, ISO 8601 in the user's timezone), cancel (delete + notify). Attendees are notified automatically. If the request is vague about which meeting or (for a reschedule) to when, ASK first — don't guess. After it runs, tell the user plainly what changed.", input_schema: { type: "object", properties: { match: { type: "string", description: "Title or attendee name/email identifying the meeting." }, action: { type: "string", enum: ["postpone", "move", "cancel"] }, minutes: { type: "number", description: "For postpone: minutes to shift (default 30)." }, start_iso: { type: "string", description: "For move: the new start, ISO 8601." } }, required: ["match", "action"] } };
+// Tool DEFINITIONS now live in _shared/tools.ts (WEB_TOOLS) — one contract for web + WhatsApp.
+// The implementations (doCreateCard, …) stay below, under the caller's JWT/RLS.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -482,7 +395,7 @@ After any tool call, tell the user plainly in one line what actually happened. I
         // cache the tools+system prefix: reused across the 2–6 tool-loop hops of a
         // single turn, and across turns while the board is unchanged (~0.1× reads).
         system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
-        tools: [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL, MANAGE_EVENT_TOOL],
+        tools: WEB_TOOLS,
         messages,
       });
       if (res.stop_reason === "refusal") return json({ reply: "מצטער, לא אוכל לעזור בזה.", refused: true });
