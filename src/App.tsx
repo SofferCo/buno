@@ -854,6 +854,7 @@ export default function App() {
 
       {calOpen && (
         <CalendarPanel clients={clients} cards={cards} now={now} events={calEvents}
+          linkedEventIds={new Set(Object.values(cards).filter((c: any) => !c.archived && c.origin?.type === "calendar").map((c: any) => String(c.origin.ref).replace(/^cal-/, "")))}
           onClose={() => setCalOpen(false)}
           onOpen={(id) => setEditing(id)} onOpenEvent={openEvent} />
       )}

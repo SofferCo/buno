@@ -4,7 +4,7 @@ import { Icon } from "../ui/Icon";
 import { HE_MONTHS, HE_WD } from "../../lib/constants";
 import { flexDay, todayStr } from "../../lib/date";
 
-export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEvent, events }: any) {
+export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEvent, events, linkedEventIds }: any) {
   const base = new Date();
   const [view, setView] = useState("month");
   const [vy, setVy] = useState(base.getFullYear());
@@ -34,7 +34,12 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   const realEvents = events && Object.keys(events).length > 0;
   const eventsAreDemo = !realEvents;
   const demoEventsAll: Record<string, { t: string; time?: string }[]> = { [off(1)]: [{ t: "פגישת צוות · Google", time: "10:00" }], [off(2)]: [{ t: "בדיקת רופא · מייל", time: "16:30" }], [off(5)]: [{ t: "דדליין ספק · מייל" }] };
-  const demoEvents = realEvents ? events : (showDemo ? demoEventsAll : {});
+  const demoEventsRaw = realEvents ? events : (showDemo ? demoEventsAll : {});
+  // an event the user already opened became a real card ("cal-<id>"); it now shows as a
+  // task on the board, so drop the raw calendar copy to avoid a duplicate on the day.
+  const linked: Set<string> = linkedEventIds || new Set();
+  const demoEvents: Record<string, any[]> = {};
+  for (const [d, arr] of Object.entries(demoEventsRaw as Record<string, any[]>)) demoEvents[d] = (arr || []).filter((e: any) => !(realEvents && e.ev && linked.has(e.ev.id)));
 
   function prevM() { if (vm === 0) { setVm(11); setVy(vy - 1); } else setVm(vm - 1); }
   function nextM() { if (vm === 11) { setVm(0); setVy(vy + 1); } else setVm(vm + 1); }

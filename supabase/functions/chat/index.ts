@@ -252,7 +252,12 @@ Deno.serve(async (req) => {
     const access = await freshAccessToken(admin, user.id, "gcal");
     if (access) {
       const raw = await listCalendarEvents(access, new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).toISOString(), new Date(nowD.getTime() + 7 * 864e5).toISOString());
-      const inScope = scope === "week" ? raw : raw.filter((e: any) => dateOf(e) === scopeDay);
+      // an event the user already opened became a real card ("cal-<id>") that carries
+      // its own done-state. Drop the raw event so buno reads the CARD (via the board
+      // summary) instead of double-listing it — or worse, calling a DONE task "not done".
+      const linkedRefs = new Set((cards.data || []).filter((c: any) => !c.archived && typeof c.origin?.ref === "string" && c.origin.ref.startsWith("cal-")).map((c: any) => c.origin.ref));
+      const deduped = raw.filter((e: any) => !linkedRefs.has("cal-" + e.id));
+      const inScope = scope === "week" ? deduped : deduped.filter((e: any) => dateOf(e) === scopeDay);
       scoped = orderEvents(inScope);
       if (scoped.length) {
         calendarSummary = scoped.slice(0, 30).map((e: any) => {
