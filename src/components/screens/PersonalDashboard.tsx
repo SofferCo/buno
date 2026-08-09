@@ -159,7 +159,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           </div>
         </div>
       </div>
-      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", direction: "ltr", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
+      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "var(--canvas)", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", direction: "ltr", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
     </div>
   );
 }

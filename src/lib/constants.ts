@@ -9,7 +9,7 @@ export const DEFAULT_COLUMNS = [
   { id: "col-done", title: "הושלם" },
 ];
 
-export const SWATCHES = ["#0E8F8C", "#3B6FE0", "#8E54C4", "#D9503A", "#C9821A", "#2E9E5B", "#455A64"];
+export const SWATCHES = ["#0E8F8C", "#0FA3A0", "#2E9E5B", "#5B8C5A", "#3B6FE0", "#6C5CE7", "#8E54C4", "#C0399B", "#D9503A", "#E07A6B", "#C9821A", "#D4A72C", "#7A6C5D", "#455A64"];
 
 export const PRIORITY = {
   regular:   { label: "רגיל",  color: "#647079", soft: "#EEF1F2" },

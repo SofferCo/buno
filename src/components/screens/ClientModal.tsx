@@ -115,7 +115,14 @@ export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any)
             {f.logo ? <div className="adk-img-prev"><img src={f.logo} alt="" /><button onClick={() => setF({ ...f, logo: null })}>הסר</button></div> : <div className="adk-img-drop" onClick={() => fileRef.current.click()}>📎 העלה לוגו</div>}
           </div>
           <div className="adk-field"><label>צבע (כשאין לוגו)</label>
-            <div style={{ display: "flex", gap: 8 }}>{SWATCHES.map((s) => <div key={s} onClick={() => setF({ ...f, color: s })} style={{ width: 28, height: 28, borderRadius: 8, background: s, cursor: "pointer", boxShadow: f.color === s ? "0 0 0 3px #fff, 0 0 0 5px " + s : "none" }} />)}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {SWATCHES.map((s) => <button type="button" key={s} onClick={() => setF({ ...f, color: s })} style={{ width: 28, height: 28, borderRadius: 8, background: s, cursor: "pointer", border: "none", padding: 0, boxShadow: f.color === s ? "0 0 0 3px var(--surface), 0 0 0 5px " + s : "none" }} />)}
+              {/* custom color — native picker behind a "+" swatch; shows the picked color when off-palette */}
+              <label title="צבע אישי" style={{ position: "relative", width: 28, height: 28, borderRadius: 8, cursor: "pointer", display: "grid", placeItems: "center", background: !SWATCHES.includes(f.color) ? f.color : "var(--surface-2)", border: "1px solid var(--border)", boxShadow: !SWATCHES.includes(f.color) ? "0 0 0 3px var(--surface), 0 0 0 5px " + f.color : "none" }}>
+                <input type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+                <span style={{ fontSize: 15, fontWeight: 800, lineHeight: 1, color: !SWATCHES.includes(f.color) ? "#fff" : "var(--muted)", pointerEvents: "none" }}>+</span>
+              </label>
+            </div>
           </div>
           <div className="adk-grid2">
             <div className="adk-field"><label>איש קשר</label><input className="adk-input" value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} placeholder="שם" /></div>
