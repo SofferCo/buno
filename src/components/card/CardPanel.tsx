@@ -93,7 +93,7 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
         {isMeeting && (() => {
           const guests = (ev?.attendees || []).filter((a: any) => !a.self);
           return (
-          <div style={{ margin: "0 0 16px", padding: "13px 15px", background: "var(--surface)", borderRadius: 12, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 18, alignItems: "flex-end" }}>
+          <div style={{ margin: "0 0 16px", padding: "13px 15px", background: "var(--surface)", borderRadius: 12, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 18, alignItems: "flex-start" }}>
             {/* name + open-in-calendar (right) · RSVP (left), then the time line */}
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7.6, width: "100%" }}>
@@ -109,9 +109,9 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
             </div>
             {/* participants */}
             {guests.length > 0 && (
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start" }}>
                 <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 700 }}>משתתפים</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-start" }}>
                   {guests.slice(0, 8).map((a: any, i: number) => (
                     <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "4px 8px 4px 6px" }}>
                       <Avatar name={a.name || a.email} size={18} />{a.name || String(a.email || "").split("@")[0]}
