@@ -19,7 +19,7 @@ import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarE
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 import { summarizeBoard } from "../_shared/boardContext.ts";
-import { WEB_TOOLS } from "../_shared/tools.ts";
+import { WEB_TOOLS, matchCard } from "../_shared/tools.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -212,15 +212,7 @@ Deno.serve(async (req) => {
   // ---- board organization (agency): reversible ops on explicit request -------
   const changed: string[] = [];
   const activeCards = () => (cards.data || []).filter((c: any) => !c.archived);
-  function findCard(q: string): any | null {
-    const s = String(q || "").toLowerCase().trim();
-    if (!s) return null;
-    const list = activeCards();
-    return list.find((c: any) => (c.title || "").toLowerCase() === s)
-      || list.find((c: any) => (c.title || "").toLowerCase().includes(s))
-      || list.find((c: any) => c.title && s.includes((c.title || "").toLowerCase()))
-      || null;
-  }
+  const findCard = (q: string): any | null => matchCard(activeCards(), q);
   async function moveTo(card: any, col: any, verb: string): Promise<string> {
     const { error } = await supabase.from("card").update({ column_id: col.id, active_column_key: col.key }).eq("id", card.id);
     if (error) return `לא הצלחתי ${verb} (שגיאה): ${error.message}`;

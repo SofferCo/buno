@@ -80,6 +80,18 @@ export const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return 
 
 export const MANAGE_EVENT_TOOL = { name: "manage_event", description: "Manage a Google Calendar MEETING the user asks to change ('דחה את הפגישה עם X', 'בטל את הפגישה מחר', 'תזמן מחדש ל-15:00'). Identify the meeting by title or attendee (name/email) from the calendar context. Actions: postpone (shift by `minutes`, default 30), move (to an explicit `start_iso`, ISO 8601 in the user's timezone), cancel (delete + notify). Attendees are notified automatically. If the request is vague about which meeting or (for a reschedule) to when, ASK first — don't guess. After it runs, tell the user plainly what changed.", input_schema: { type: "object", properties: { match: { type: "string", description: "Title or attendee name/email identifying the meeting." }, action: { type: "string", enum: ["postpone", "move", "cancel"] }, minutes: { type: "number", description: "For postpone: minutes to shift (default 30)." }, start_iso: { type: "string", description: "For move: the new start, ISO 8601." } }, required: ["match", "action"] } };
 
+// The fuzzy card matcher both surfaces use to resolve a tool's `card` argument to a
+// real card — exact title, then contains, then the reverse. Pure (takes the list the
+// caller already filtered), so it's identical on web + WhatsApp and can't drift.
+export function matchCard(list: any[], q: string): any | null {
+  const s = String(q || "").toLowerCase().trim();
+  if (!s) return null;
+  return list.find((c: any) => (c.title || "").toLowerCase() === s)
+    || list.find((c: any) => (c.title || "").toLowerCase().includes(s))
+    || list.find((c: any) => c.title && s.includes((c.title || "").toLowerCase()))
+    || null;
+}
+
 // the canonical WhatsApp/core tool set (everything except calendar management)
 export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL];
 // the web /chat set adds calendar management

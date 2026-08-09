@@ -11,7 +11,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
 import { summarizeBoard } from "./boardContext.ts";
-import { CORE_TOOLS } from "./tools.ts";
+import { CORE_TOOLS, matchCard } from "./tools.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
 
@@ -68,13 +68,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const created: any[] = [];
   const changed: string[] = [];
   const doneColIds = new Set(cols.filter((c: any) => c.is_done).map((c: any) => c.id));
-  const findCard = (q: string) => {
-    const s = String(q || "").toLowerCase().trim(); if (!s) return null;
-    const list = cards.filter((c: any) => !c.archived && !doneColIds.has(c.column_id));
-    return list.find((c: any) => (c.title || "").toLowerCase() === s)
-      || list.find((c: any) => (c.title || "").toLowerCase().includes(s))
-      || list.find((c: any) => c.title && s.includes((c.title || "").toLowerCase())) || null;
-  };
+  const findCard = (q: string) => matchCard(cards.filter((c: any) => !c.archived && !doneColIds.has(c.column_id)), q);
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim(); if (!title) return "לא נוצר: חסרה כותרת.";
     const project = projects.find((p: any) => input?.project && p.name && p.name.toLowerCase().includes(String(input.project).toLowerCase())) || projects[0];
