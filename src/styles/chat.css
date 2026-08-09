@@ -141,7 +141,7 @@
 .adk-pcard.cal{flex:1;min-width:0;background:transparent;border:none;border-radius:0;box-shadow:none;overflow-y:auto;height:100%;}
 .adk-cal-main{min-width:0;}
 .adk-cal-side.out{width:236px;flex:none;background:var(--surface-2);border:none;border-right:1px solid var(--border);border-radius:0;display:flex;flex-direction:column;gap:14px;padding:16px 14px;}
-.adk-cal-side.out .adk-cal-filter{border:none;background:transparent;padding:4px 6px;}
+.adk-cal-side.out .adk-cal-filter{border:none;background:transparent;padding:7px 6px 4px;position:relative;}
 .adk-cal-side.out .adk-cal-today{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;flex:none;}
 .adk-cal-split{display:grid;grid-template-columns:1fr 264px;gap:0;}
 .adk-cal{padding:14px 20px 14px;min-width:0;}
@@ -156,7 +156,8 @@
 .adk-cal-filt-trig:hover{border-color:var(--accent);}
 .adk-cal-filt-chev{display:inline-flex;color:var(--muted);transition:transform .18s ease;}
 .adk-cal-filt-chev.on{transform:rotate(180deg);}
-.adk-cal-filt-menu{margin-top:6px;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:6px 12px;max-height:230px;overflow-y:auto;animation:calFiltIn .16s ease;}
+/* the open menu FLOATS over the agenda below — a rare, momentary expand shouldn't shove the day's list down */
+.adk-cal-filt-menu{position:absolute;top:calc(100% + 6px);inset-inline:0;z-index:25;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 14px 34px rgba(23,40,47,.16);padding:6px 12px;max-height:60vh;overflow-y:auto;animation:calFiltIn .16s ease;}
 @keyframes calFiltIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
 
 /* mini task cards inside a chat message — click opens the card panel for a

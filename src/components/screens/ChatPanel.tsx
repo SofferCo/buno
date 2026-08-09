@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "../ui/Icon";
+import { initials } from "../../lib/people";
 import { loadAssistantThread, sendReviewAction, subscribeAssistant } from "../../data/assistant";
 
 // buno writes plain Hebrew, but the model still occasionally emits Markdown
@@ -290,7 +291,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
                       return (
                         <div key={c.id} className="adk-chat-cardwrap">
                           <button className="adk-chat-card" onClick={() => onOpenCard?.(c.id)} style={col ? ({ ["--pc"]: col } as any) : undefined}>
-                            <span className="ic" style={col ? { background: col } : undefined}><Icon name="sun" size={12} /></span>
+                            <span className="ic" style={{ ...(col ? { background: col } : {}), fontSize: 10, fontWeight: 800, letterSpacing: ".02em" }}>{c.project ? initials(c.project) : <Icon name="sun" size={12} />}</span>
                             <span className="tx"><b>{c.title}</b>{c.project && <em><span className="bdot" style={col ? { background: col } : undefined} />{c.project}</em>}</span>
                             <span className="go">›</span>
                           </button>
