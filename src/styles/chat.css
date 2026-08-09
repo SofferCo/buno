@@ -83,7 +83,7 @@
 .adk-fab img{width:26px;height:26px;display:block;}
 /* buno brand mark — white logo tucked in the top-right, bleeding 21px off the top
    and 18.8px off the right (per design). Click-through, above content. */
-.adk-brand-wm{position:fixed;top:-21px;right:-18.8px;width:152px;height:156px;pointer-events:none;z-index:57;}
+.adk-brand-wm{position:fixed;top:-21px;inset-inline-start:-18.8px;width:152px;height:156px;pointer-events:none;z-index:32;}
 /* one integrated pill: + (right) · field · ↑ send · mic (left). Ghost icons, no
    inner borders or separate circles — the whole bar is a single rounded container. */
 /* frosted-glass composer pill floating over the messages */

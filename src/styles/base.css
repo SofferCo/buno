@@ -9,30 +9,26 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
 html[dir="ltr"] .adk{direction:ltr;}
 /* Dark theme — set on <html data-theme="dark"> (picker: light/dark/system). Marker, the
    completion green and the late red get restrained dark values, not an auto-invert. */
-:root[data-theme="dark"] .adk{--canvas:#1A1917;--surface:#262523;--surface-2:#302F2C;--ink:#ECEAE4;--muted:#A8A39A;--faint:#6F6B62;--border:#38352F;--accent:#ECEAE4;--accent-d:#FFFFFF;--accent-soft:#33322F;--rec:#E8785C;--rec-soft:#3A241E;}
+:root[data-theme="dark"] .adk{--canvas:#1A1917;--surface:#262523;--surface-2:#302F2C;--ink:#ECEAE4;--muted:#A8A39A;--faint:#6F6B62;--border:#38352F;--accent:#2AA9A5;--accent-d:#57C9C3;--accent-soft:#22302E;--rec:#E8785C;--rec-soft:#3A241E;}
 :root[data-theme="dark"]{--done:#4CBF7A;--done-bg:#1E2A20;--marker:#BBC456;}
-/* Dark readability pass — two hardcoded patterns break on dark and need fixing:
-   (1) fixed #1A1A1A "solid" brand elements go invisible on a dark canvas → recolor to the
-       accent so they still read as the emphasized element. (2) var(--ink)+#fff pills/labels
-       become light-on-white (--ink flips light) → flip their text to the dark canvas. */
-:root[data-theme="dark"] .adk-fab,
-:root[data-theme="dark"] .adk-mtoggle,
+/* Dark = warm-neutral CHROME; brand teal (--accent) stays only for CTAs / links / data.
+   The hardcoded patterns that broke (fixed #1A1A1A solids going invisible, var(--ink)+#fff
+   pills going light-on-light) all resolve to a neutral ELEVATED surface — never white, never
+   teal — so user bubbles, selection pills and avatars read Claude-style. */
 :root[data-theme="dark"] .adk-msg.me .adk-bubble,
 :root[data-theme="dark"] .adk-chat-card-acts .ok,
 :root[data-theme="dark"] .adk-rv-btn.chosen,
 :root[data-theme="dark"] .adk-rv-btn.chosen:hover,
-:root[data-theme="dark"] .adk-chat-av,
-:root[data-theme="dark"] .adk-brief2-av,
-:root[data-theme="dark"] .adk-day-ask-av{background:var(--accent);color:var(--canvas);}
-/* white-toned accents in dark: active pills, dots, primary buttons read as white/off-white
-   with DARK text on the solid ones — Claude-style, no color. */
+:root[data-theme="dark"] .adk-set-tab.on,
+:root[data-theme="dark"] .adk-fchip.on,
+:root[data-theme="dark"] .adk-asst-seg .lvl.act.on{background:var(--surface-2);color:var(--ink);border-color:var(--border);}
 :root[data-theme="dark"] .lvl.on .dot,
 :root[data-theme="dark"] .lvl.act.on .dot{background:var(--ink);}
-:root[data-theme="dark"] .adk-btn.primary,
-:root[data-theme="dark"] .adk-asst-seg .lvl.act.on{background:var(--ink);color:var(--canvas);border-color:var(--ink);}
-:root[data-theme="dark"] .adk-asst-seg .lvl.act.on .dot{background:var(--canvas);}
-:root[data-theme="dark"] .adk-set-tab.on,
-:root[data-theme="dark"] .adk-fchip.on{color:var(--canvas);}
+:root[data-theme="dark"] .adk-fab,
+:root[data-theme="dark"] .adk-mtoggle,
+:root[data-theme="dark"] .adk-chat-av,
+:root[data-theme="dark"] .adk-brief2-av,
+:root[data-theme="dark"] .adk-day-ask-av{background:var(--surface-2);color:var(--ink);}
 :root[data-theme="dark"] .adk-rail-btn::after,
 :root[data-theme="dark"] .adk-icon-btn::after,
 :root[data-theme="dark"] .adk-att-item .del{color:var(--canvas);}
@@ -41,7 +37,7 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] .adk-cal-nav button:hover,
 :root[data-theme="dark"] .adk-cal-seg button.on{background:var(--surface-2);}
 /* root page bg (outside .adk) + frosted-glass chat chrome + amber/blue demo chips */
-:root[data-theme="dark"] html,:root[data-theme="dark"] body{background:#10171A;}
+:root[data-theme="dark"] html,:root[data-theme="dark"] body{background:#1A1917;}
 :root[data-theme="dark"] .adk-chat-head,
 :root[data-theme="dark"] .adk-chat-input,
 :root[data-theme="dark"] .adk-chat-pending{background:rgba(30,29,27,.75);border-color:rgba(56,53,47,.7);}
@@ -59,6 +55,15 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] .adk-flag.on.amber,
 :root[data-theme="dark"] .adk-asst-seg .lvl.draft.on{background:#332810;border-color:#5A4520;color:#E3B85E;}
 :root[data-theme="dark"] .adk-asst-seg .lvl.suggest.on{background:#152242;border-color:#3B6FE0;color:#8FB4FF;}
+/* My Day timeline + brief highlight used light-gray literals → dark equivalents; the coral
+   headline highlight goes white-toned like the other accents. */
+:root[data-theme="dark"] .adk-brief2-hl .clay{color:var(--ink);}
+:root[data-theme="dark"] .adk-tl-spine{background-color:var(--border);}
+:root[data-theme="dark"] .adk-tl-node{border-color:var(--border);}
+:root[data-theme="dark"] .adk-tl-node.now,
+:root[data-theme="dark"] .adk-tl-nowline{background:var(--faint);}
+:root[data-theme="dark"] .adk-tl-nowrow:hover .adk-tl-node.now,
+:root[data-theme="dark"] .adk-tl-nowrow:hover .adk-tl-nowline{background:var(--muted);}
 /* Apple-style overlay scroll — a slim floating pill, not the chunky OS bar. Global to every scroll area in the app. */
 .adk,.adk *{scrollbar-width:thin;scrollbar-color:rgba(23,40,47,.24) transparent;}
 .adk *::-webkit-scrollbar,.adk::-webkit-scrollbar{width:10px;height:10px;}
