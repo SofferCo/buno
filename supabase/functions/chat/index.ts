@@ -450,7 +450,7 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
   // model didn't propose them. Computed from the real board, so nothing important falls.
   {
     const all = (cards.data || []) as any[];
-    const floor: { label: string; value: "high" }[] = [];
+    const floor: { label: string; value: "high" | "low" }[] = [];
     const drafts = all.filter((c) => c.draft && !c.archived).length;
     if (drafts >= 5) floor.push({ label: `נעבור על ${drafts} הטיוטות?`, value: "high" });
     // a waiting card whose silent window (follow_up_days) has passed → nudge to remind
@@ -462,6 +462,15 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
     const doneCols = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
     const overdue = all.filter((c) => !c.archived && !doneCols.has(c.column_id) && /^\d{4}-\d{2}-\d{2}$/.test(c.deadline || "") && c.deadline < todayStr2).length;
     if (overdue > 0 && nowD.getHours() >= 18) floor.push({ label: `לגלגל את ${overdue} המאחרות למחר?`, value: "high" });
+    // step 5 — a project silent for 2+ weeks but still holding open cards → still live?
+    for (const p of (proj.data || []) as any[]) {
+      const openInP = all.filter((c) => c.project_id === p.id && !c.archived && !doneCols.has(c.column_id));
+      if (openInP.length && openInP.every((c) => (nowMs - new Date(c.updated_at || c.created_at).getTime()) / 864e5 >= 14)) {
+        floor.push({ label: `${p.name} שקט שבועיים — עדיין רלוונטי?`, value: "high" }); break;
+      }
+    }
+    // step 5 — body before tasks (Rambam 4): a gentle morning check-in, trailing.
+    if (nowD.getHours() >= 6 && nowD.getHours() < 11) floor.push({ label: "איך הבוקר?", value: "low" });
     // merge floor + model, dedupe by label, order high-first, ≤1 low, ≤3 total.
     const merged: { label: string; value: "high" | "low" }[] = [];
     const seen = new Set<string>();
