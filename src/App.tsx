@@ -126,6 +126,15 @@ export default function App() {
     return { roles, rosters };
   }
   const [profile, setProfile] = useState<any>({ name: "", photo: null, assistant: { cards: "draft", calendar: "draft", outbound: "suggest" } });
+  // theme: light / dark / system (default). Sets <html data-theme>, follows the OS live
+  // while on "system", and is saved in profile.settings so it survives sessions + devices.
+  const themePref = (profile?.settings?.theme as string) || "system";
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => { const dark = themePref === "dark" || (themePref === "system" && mq.matches); document.documentElement.dataset.theme = dark ? "dark" : "light"; };
+    apply();
+    if (themePref === "system") { mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply); }
+  }, [themePref]);
   const engineRef = useRef<SyncEngine | null>(null);
   const [importPending, setImportPending] = useState<any>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);

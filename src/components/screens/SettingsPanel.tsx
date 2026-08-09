@@ -7,6 +7,7 @@ import { listIntegrations, connectGoogle, disconnectGoogle, scanGmail, hasGmailS
 export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut, cloud, onScanned }: any) {
   const photoRef = useRef<any>();
   const [cat, setCat] = useState<"profile" | "assistant" | "connections" | "prefs">("profile");
+  const theme = (profile.settings && profile.settings.theme) || "system";
   const timeRound = (profile.settings && profile.settings.timeRound) || "ceil_hour";
   const capacity = Number(profile.settings && profile.settings.dailyCapacity) || 6;
   const [integ, setInteg] = useState<any[]>([]);
@@ -63,6 +64,14 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
                 <button className="adk-btn danger" style={{ margin: 0 }} onClick={onSignOut}>התנתק</button>
               </div>
             )}
+          </div>
+          <div className="adk-asst-row" style={{ borderBottom: "none", marginTop: 4 }}>
+            <div className="adk-asst-info"><b>מצב תצוגה</b><span>בהיר, כהה, או לפי מערכת ההפעלה</span></div>
+            <div className="adk-asst-seg">
+              {[["light", "בהיר"], ["dark", "כהה"], ["system", "מערכת"]].map(([v, l]) => (
+                <button key={v} className={"lvl act" + (theme === v ? " on" : "")} onClick={() => onSetPref("theme", v)}><span className="dot" />{l}</button>
+              ))}
+            </div>
           </div>
         </div>
         )}
