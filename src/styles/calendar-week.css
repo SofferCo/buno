@@ -50,7 +50,7 @@
 .adk-cal-num{font-size:12px;font-weight:800;color:var(--ink);flex:none;}
 .adk-cal-cell.today .adk-cal-num{color:var(--accent-d);}
 .adk-cal-items{display:flex;flex-direction:column;gap:3px;overflow:hidden;}
-.adk-cal-task{display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.adk-cal-task{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .adk-cal-task:hover{border-color:var(--accent);}
 .adk-cal-task .dot{width:6px;height:6px;border-radius:50%;flex:none;}
 .adk-cal-task b{color:var(--accent-d);}
@@ -73,7 +73,7 @@
 .adk-cal-agenda{display:flex;flex-direction:column;gap:2px;overflow-y:auto;}
 .adk-agenda-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
 .adk-agenda-row:last-child{border-bottom:none;}
-.adk-agenda-row:hover{background:#fff;border-radius:8px;}
+.adk-agenda-row:hover{background:var(--surface);border-radius:8px;}
 .adk-agenda-row .tm{font-size:12px;font-weight:800;color:var(--muted);width:42px;flex:none;font-variant-numeric:tabular-nums;}
 .adk-agenda-row .bar{width:3px;align-self:stretch;border-radius:2px;flex:none;min-height:18px;}
 .adk-agenda-row .ttl{font-size:13px;font-weight:700;color:var(--ink);display:flex;flex-direction:column;gap:1px;}

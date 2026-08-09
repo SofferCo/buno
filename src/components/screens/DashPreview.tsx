@@ -37,11 +37,13 @@ export function DashPreview() {
   const cardColumn: any = {}; list.forEach((c) => (cardColumn[c.id] = "col-brief"));
 
   return (
+    <div className="adk" style={{ minHeight: "100vh" }}>
     <PersonalDashboard
       clients={clients} cards={cards} cardColumn={cardColumn} now={now}
       profile={{ name: "טל", photo: null }}
       onClose={() => { location.search = ""; }} onSetPhoto={() => {}} onSetName={() => {}} onSetAssistant={() => {}}
       onOpenClient={() => {}} onShareClient={(cl: any) => alert("שיתוף: " + cl.name)}
     />
+    </div>
   );
 }

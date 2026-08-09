@@ -50,12 +50,12 @@
 .adk-stepper.sm button{width:36px;height:38px;font-size:17px;}
 .adk-stepper.sm .val{min-width:40px;height:38px;font-size:15px;}
 .adk-combo{position:relative;}
-.adk-combo-list{position:absolute;top:calc(100% + 4px);right:0;left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(23,40,47,.14);z-index:6;overflow:hidden;}
+.adk-combo-list{position:absolute;top:calc(100% + 4px);right:0;left:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(23,40,47,.14);z-index:6;overflow:hidden;}
 .adk-combo-item{padding:9px 12px;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--ink);}
 .adk-combo-item:hover{background:var(--accent-soft);color:var(--accent-d);}
 .adk-combo-item{display:flex;align-items:center;gap:8px;}
 .adk-tagbox{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);padding:6px 8px;}
-.adk-tagbox:focus-within{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft);}
+.adk-tagbox:focus-within{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft);}
 .adk-tagbox .adk-combo{flex:1;min-width:110px;}
 .adk-bare-input{border:none !important;background:transparent !important;box-shadow:none !important;padding:6px 4px !important;}
 .adk-mention{color:var(--accent-d);font-weight:800;}
@@ -78,7 +78,7 @@
 .adk-req-act button{border:none;border-radius:9px;padding:7px 15px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
 .adk-req-act .ok{background:var(--accent);color:#fff;}
 .adk-req-act .ok:hover{background:var(--accent-d);}
-.adk-req-act .no{background:#fff;border:1px solid var(--border);color:var(--muted);}
+.adk-req-act .no{background:var(--surface);border:1px solid var(--border);color:var(--muted);}
 .adk-req-act .no:hover{color:var(--rec);border-color:var(--rec);}
 .adk-st.ghost .chk{opacity:.4;cursor:default;}
 .adk-st.ghost .txt::placeholder{color:var(--faint);}

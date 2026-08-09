@@ -19,6 +19,8 @@ import "./styles/index.css";
 // Configured → session required; the quiet loader avoids a login flash.
 function Root() {
   const { loading, session, localMode } = useAuth();
+  // preview harnesses: ?theme=dark lets us verify dark mode without the app shell
+  { const th = new URLSearchParams(location.search).get("theme"); if (th) document.documentElement.dataset.theme = th; }
   if (new URLSearchParams(location.search).has("login-preview")) return <LoginScreen />;
   // DESIGN PREVIEW: first-run onboarding prototype, no auth needed (?onboarding=1)
   if (new URLSearchParams(location.search).get("onboarding") === "1") return <Onboarding onDone={() => { location.search = ""; }} />;
