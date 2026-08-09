@@ -62,6 +62,18 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const projects = (projRows || []).filter((p: any) => writeIds.includes(p.id) || !writeIds.length);
   const cards = cardRows || [];
   const cols = colRows || [];
+  // comments + attachments → same depth of board perception as the web chat (one brain).
+  const cardIds = cards.map((c: any) => c.id);
+  const [{ data: commRows }, { data: attRows }] = cardIds.length
+    ? await Promise.all([
+        admin.from("comment").select("card_id,by_name,text,created_at").in("card_id", cardIds).order("created_at"),
+        admin.from("attachment").select("card_id,type,name").in("card_id", cardIds),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const commentsByCard = new Map<string, any[]>();
+  for (const r of (commRows || [])) { const a = commentsByCard.get(r.card_id) || []; a.push(r); commentsByCard.set(r.card_id, a); }
+  const attachByCard = new Map<string, any[]>();
+  for (const r of (attRows || [])) { const a = attachByCard.get(r.card_id) || []; a.push(r); attachByCard.set(r.card_id, a); }
   const cardLevel = (asst?.cards || "draft") as "suggest" | "draft" | "act";
   // item 11 — persisted gender; auto-switch (silently) to feminine if the user
   // addresses buno in feminine, and remember it across sessions/channels.
@@ -269,7 +281,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   try { const { data: cts } = await admin.from("contacts").select("name,email").eq("user_id", userId).limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
-    boardSummary: summarizeBoard(projects, cards, cols, new Map(), new Map(), today, Date.now()) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
+    boardSummary: summarizeBoard(projects, cards, cols, commentsByCard, attachByCard, today, Date.now()) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
