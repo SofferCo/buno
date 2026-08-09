@@ -13,6 +13,7 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
   const [dayAnchor, setDayAnchor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }); // the day shown in the side agenda card (B5)
   const [hidden, setHidden] = useState(() => new Set());
   const [showDemo, setShowDemo] = useState(true);
+  const [filtOpen, setFiltOpen] = useState(false); // projects filter collapses into a dropdown so the day's agenda has room
   const pad = (n) => String(n).padStart(2, "0");
   const mk = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
   const dstr = (dt) => mk(dt.getFullYear(), dt.getMonth(), dt.getDate());
@@ -154,24 +155,28 @@ export function CalendarPanel({ clients, cards, now, onClose, onOpen, onOpenEven
 
         <div className="adk-cal-side out">
           <div className="adk-cal-filter">
-            <div className="adk-cal-side-t">לקוחות</div>
-            {clients.map((c) => (
-              <label key={c.id} className="adk-cal-chk">
-                <input type="checkbox" checked={!hidden.has(c.id)} onChange={() => toggleClient(c.id)} style={{ accentColor: c.color }} />
-                <span className="sw" style={{ background: c.color }} />{c.name}
-              </label>
-            ))}
-            {eventsAreDemo && (<>
-              <div className="adk-cal-side-t" style={{ marginTop: 14 }}>מקורות</div>
-              <label className="adk-cal-chk">
-                <input type="checkbox" checked={showDemo} onChange={() => setShowDemo((v) => !v)} style={{ accentColor: "#C9821A" }} />
-                <span className="sw" style={{ background: "#C9821A" }} />יומן/מייל <DemoTag />
-              </label>
-            </>)}
-            {!eventsAreDemo && (<>
-              <div className="adk-cal-side-t" style={{ marginTop: 14 }}>מקורות</div>
-              <div className="adk-cal-chk" style={{ cursor: "default" }}><span className="sw" style={{ background: "#0E8F8C" }} />Google — יומן</div>
-            </>)}
+            {/* projects collapse into a styled dropdown so the day's agenda has room.
+                sources ("Google") are shown next to the calendar name, so no section here. */}
+            <button className="adk-cal-filt-trig" onClick={() => setFiltOpen((o) => !o)} aria-expanded={filtOpen}>
+              <span>פרוייקטים{hidden.size ? ` · ${clients.length - hidden.size}/${clients.length}` : ""}</span>
+              <span className={"adk-cal-filt-chev" + (filtOpen ? " on" : "")}><Icon name="chevD" size={15} /></span>
+            </button>
+            {filtOpen && (
+              <div className="adk-cal-filt-menu">
+                {clients.map((c) => (
+                  <label key={c.id} className="adk-cal-chk">
+                    <input type="checkbox" checked={!hidden.has(c.id)} onChange={() => toggleClient(c.id)} style={{ accentColor: c.color }} />
+                    <span className="sw" style={{ background: c.color }} />{c.name}
+                  </label>
+                ))}
+                {eventsAreDemo && (
+                  <label className="adk-cal-chk" style={{ marginTop: 4, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    <input type="checkbox" checked={showDemo} onChange={() => setShowDemo((v) => !v)} style={{ accentColor: "#C9821A" }} />
+                    <span className="sw" style={{ background: "#C9821A" }} />יומן/מייל <DemoTag />
+                  </label>
+                )}
+              </div>
+            )}
           </div>
 
           {view === "month" && (

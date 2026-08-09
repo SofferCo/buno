@@ -151,6 +151,13 @@
 .adk-cal-chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink);padding:5px 0;cursor:pointer;}
 .adk-cal-chk input{width:15px;height:15px;cursor:pointer;}
 .adk-cal-chk .sw{width:10px;height:10px;border-radius:3px;flex:none;}
+/* projects filter dropdown — one compact row that expands, keeping the agenda's room */
+.adk-cal-filt-trig{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:12.5px;font-weight:800;color:var(--ink);cursor:pointer;transition:border-color .12s,background .12s;}
+.adk-cal-filt-trig:hover{border-color:var(--accent);}
+.adk-cal-filt-chev{display:inline-flex;color:var(--muted);transition:transform .18s ease;}
+.adk-cal-filt-chev.on{transform:rotate(180deg);}
+.adk-cal-filt-menu{margin-top:6px;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:6px 12px;max-height:230px;overflow-y:auto;animation:calFiltIn .16s ease;}
+@keyframes calFiltIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
 
 /* mini task cards inside a chat message — click opens the card panel for a
    quick review, keeping the chat open */
