@@ -8,7 +8,7 @@
 /* 50 / 50 — half the screen for buno's brief, half for the task timeline. No
    panel divider: the rail IS the only vertical line (avoids the "two lines" look). */
 .adk-day2{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;flex:1;min-height:0;}
-.adk-day2-tasks{padding:22px 26px 40px;min-width:0;overflow-y:auto;}
+.adk-day2-tasks{padding:22px 26px 0;min-width:0;overflow-y:auto;}
 .adk-day2-brief{display:flex;flex-direction:column;background:transparent;padding:0;}
 .adk-brief2-scroll{flex:1;overflow-y:auto;padding:40px 44px;}
 .adk-brief2-tag{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:18px;}
@@ -54,10 +54,11 @@ button.adk-tl-node.done:hover{filter:brightness(.92);}
 /* the "now" mark — a quiet filled dot ON the rail, in the timeline's own colour,
    plus a horizontal line that crosses the whole (left) column to the edge.
    Hovering the row reveals the time label. No loud marker, no fixed text. */
-.adk-tl-nowrow{position:relative;display:flex;align-items:center;gap:8px;min-height:20px;margin:2px 0;cursor:default;}
-.adk-tl-nowrow .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;}
+.adk-tl-nowrow{position:relative;display:flex;align-items:center;min-height:20px;margin:2px 0;cursor:default;}
+.adk-tl-nowrow .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;position:relative;z-index:2;}
 .adk-tl-nowrow .adk-tl-node.now{margin-top:0;width:11px;height:11px;border:none;background:#aeb8bb;box-shadow:none;}
-.adk-tl-nowline{flex:1;height:2px;background:#ccd5d7;border-radius:2px;}
+/* the line starts AT the rail (inset-inline-end 20px = the spine) and runs to the edge — connected */
+.adk-tl-nowline{position:absolute;inset-inline-start:20px;inset-inline-end:0;top:50%;transform:translateY(-50%);height:2px;background:#ccd5d7;border-radius:2px;z-index:1;}
 .adk-tl-nowlbl{display:none;position:absolute;inset-inline-end:44px;top:50%;transform:translateY(-50%);background:var(--surface);padding:0 6px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;z-index:3;}
 .adk-tl-nowrow:hover .adk-tl-nowlbl{display:inline-block;}
 .adk-tl-nowrow:hover .adk-tl-node.now{background:var(--muted);}
