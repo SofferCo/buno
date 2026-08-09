@@ -438,16 +438,37 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
         try {
           const arr = JSON.parse(jm[0]);
           if (Array.isArray(arr)) {
-            const clean = arr
+            suggestions = arr
               .filter((s: any) => s && typeof s.label === "string" && s.label.trim())
               .map((s: any) => ({ label: String(s.label).trim().slice(0, 40), value: s.value === "high" ? "high" as const : "low" as const }));
-            const highs = clean.filter((s) => s.value === "high");
-            const lows = clean.filter((s) => s.value === "low").slice(0, 1);
-            suggestions = [...highs, ...lows].slice(0, 3);
           }
         } catch { /* malformed tail → no chips, reply already cleaned */ }
       }
     }
+  }
+  // Suggestion chips step 2 — FLOOR rules: guarantee urgent items surface even when the
+  // model didn't propose them. Computed from the real board, so nothing important falls.
+  {
+    const all = (cards.data || []) as any[];
+    const floor: { label: string; value: "high" }[] = [];
+    const drafts = all.filter((c) => c.draft && !c.archived).length;
+    if (drafts >= 5) floor.push({ label: `נעבור על ${drafts} הטיוטות?`, value: "high" });
+    // a waiting card whose silent window (follow_up_days) has passed → nudge to remind
+    const nowMs = nowD.getTime();
+    const waitingDue = all.find((c) => !c.archived && c.card_type === "waiting" && Number(c.follow_up_days) > 0 && String(c.waiting_on || "").trim()
+      && (nowMs - new Date(c.updated_at || c.created_at).getTime()) / 864e5 >= Number(c.follow_up_days));
+    if (waitingDue) floor.push({ label: `להזכיר ל${String(waitingDue.waiting_on).trim()}?`, value: "high" });
+    // overdue open tasks, and it's evening (≥18:00) → offer to roll them to tomorrow
+    const doneCols = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
+    const overdue = all.filter((c) => !c.archived && !doneCols.has(c.column_id) && /^\d{4}-\d{2}-\d{2}$/.test(c.deadline || "") && c.deadline < todayStr2).length;
+    if (overdue > 0 && nowD.getHours() >= 18) floor.push({ label: `לגלגל את ${overdue} המאחרות למחר?`, value: "high" });
+    // merge floor + model, dedupe by label, order high-first, ≤1 low, ≤3 total.
+    const merged: { label: string; value: "high" | "low" }[] = [];
+    const seen = new Set<string>();
+    for (const s of [...floor, ...suggestions]) { const k = s.label.toLowerCase(); if (seen.has(k)) continue; seen.add(k); merged.push(s); }
+    const highs = merged.filter((s) => s.value === "high");
+    const lows = merged.filter((s) => s.value === "low").slice(0, 1);
+    suggestions = [...highs, ...lows].slice(0, 3);
   }
   // guard: if the loop ended with tools but no closing text, still say something real
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים את הבקשה — נסה שוב.";
