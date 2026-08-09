@@ -339,7 +339,13 @@ create_card — one task. The card-permission level is "${cardLevel}" ("act" = l
 create_cards — MANY tasks at once. ALWAYS use this (a single call with the array) when the user asks to add more than one task — do NOT call create_card many times.
 create_project — open a NEW board, ONLY on an explicit request ("תפתח בורד ל…"). After opening, you can add its cards with create_cards (project = the new board's name).
 move_card / complete_card / archive_card — organize the board on the user's EXPLICIT request only (e.g. "העבר ל'בעבודה'", "סמן שסיימתי", "תארכב"). Act directly (reversible), identify by title.
-After any tool call, tell the user plainly in one line what actually happened. If a tool reported it couldn't find the card/column, say so honestly — don't pretend it worked.`;
+After any tool call, tell the user plainly in one line what actually happened. If a tool reported it couldn't find the card/column, say so honestly — don't pretend it worked.
+
+=== שבבי המשך (SUGGESTIONS) ===
+בסוף התשובה — ורק אם יש ערך אמיתי — פלוט בשורה נפרדת אחרונה עד 3 הצעות המשך שסביר שהמשתמש ירצה *עכשיו*, לפי השעה, מה נסגר היום, מה נאמר בשיחה, ומה שאתה יודע עליו. זה הניחוש הכי טוב שלך למה הכי שימושי כרגע — לא תפריט של מה שאתה יודע לענות. כללים: העדף פעולות/מידע על שאלות גנריות; אל תציע דבר שכבר על המסך או שנענה בתשובה הזו; קצר (עד ~5 מילים); ואם שום דבר לא מוסיף ערך — פלוט מערך ריק []. אחרי סיכום־יום, שיחה שאינה על משימות, או אחרי חצות — לרוב [] היא התשובה הנכונה.
+הפורמט (השרת מסיר אותו לפני שהמשתמש רואה — לעולם אל תזכיר אותו):
+<<SUGGEST>>[{"label":"טקסט קצר","value":"high"}]<<SUGGEST>>
+value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) · value=low = חוסך הקלדה בלבד (אחרון, אחד לכל היותר).`;
 
   // calendar WRITE from chat (B6ג) — resolve the meeting by title/attendee within
   // the next 14 days, then postpone / move / cancel. Ambiguity → ask, never guess.
@@ -418,6 +424,31 @@ After any tool call, tell the user plainly in one line what actually happened. I
     console.error("chat: loop error", String((e as any)?.message || e));
     reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך מהמקום שעצרתי?` : "נתקלתי בתקלה זמנית — נסה שוב בעוד רגע.");
   }
+  // Dynamic suggestion chips (step 1): the model appends a <<SUGGEST>>[…] tail block.
+  // Strip EVERYTHING from the first marker so it can never leak into the visible reply,
+  // then parse the first JSON array defensively. high first, ≤1 low, ≤3 total.
+  let suggestions: { label: string; value: "high" | "low" }[] = [];
+  {
+    const idx = reply.indexOf("<<SUGGEST>>");
+    if (idx !== -1) {
+      const tail = reply.slice(idx);
+      reply = reply.slice(0, idx).trim();
+      const jm = tail.match(/\[[\s\S]*\]/);
+      if (jm) {
+        try {
+          const arr = JSON.parse(jm[0]);
+          if (Array.isArray(arr)) {
+            const clean = arr
+              .filter((s: any) => s && typeof s.label === "string" && s.label.trim())
+              .map((s: any) => ({ label: String(s.label).trim().slice(0, 40), value: s.value === "high" ? "high" as const : "low" as const }));
+            const highs = clean.filter((s) => s.value === "high");
+            const lows = clean.filter((s) => s.value === "low").slice(0, 1);
+            suggestions = [...highs, ...lows].slice(0, 3);
+          }
+        } catch { /* malformed tail → no chips, reply already cleaned */ }
+      }
+    }
+  }
   // guard: if the loop ended with tools but no closing text, still say something real
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים את הבקשה — נסה שוב.";
 
@@ -458,8 +489,8 @@ After any tool call, tell the user plainly in one line what actually happened. I
         { thread_id: threadId, role: "assistant", door: "web", content: reply, meta },
       ]);
     }
-    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, pending: reviewActions ? created.length : undefined, started: reviewActions ? true : undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, events: eventsOut, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, threadId, created: showCards, actions: reviewActions || undefined, review: reviewProject ? { project: reviewProject } : undefined, pending: reviewActions ? created.length : undefined, started: reviewActions ? true : undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, events: eventsOut, suggestions, voiceOk: lint.ok, voiceHits: lint.hits });
   } catch {
-    return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, voiceOk: lint.ok, voiceHits: lint.hits });
+    return json({ reply, created: showCards, actions: reviewActions || undefined, changed: changed.length + (boardChanged ? 1 : 0), calendarChanged, suggestions, voiceOk: lint.ok, voiceHits: lint.hits });
   }
 });

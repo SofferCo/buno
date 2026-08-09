@@ -62,7 +62,9 @@
 .adk-toggle.on .sw::after{transform:translateX(-16px);}
 .adk-toggle .lb{font-weight:700;font-size:13.5px;}
 .adk-toggle .lb small{display:block;font-weight:600;color:var(--muted);font-size:11.5px;}
-.adk-overlay{position:fixed;inset:0;background:rgba(23,40,47,.42);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:38px 16px;overflow-y:auto;}
+/* modals (share, client) sit ABOVE the fixed rail/float buttons + brand watermark
+   (z56–57) and the chat (z40), so the scrim dims everything and nothing bleeds over. */
+.adk-overlay{position:fixed;inset:0;background:rgba(23,40,47,.42);z-index:62;display:flex;justify-content:center;align-items:flex-start;padding:38px 16px;overflow-y:auto;}
 .adk-modal{background:var(--surface);width:100%;max-width:460px;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.28);overflow:hidden;}
 .adk-modal-head{display:flex;align-items:center;padding:15px 18px;border-bottom:1px solid var(--border);gap:10px;}
 .adk-modal-body{padding:18px;display:flex;flex-direction:column;gap:15px;max-height:70vh;overflow-y:auto;}
