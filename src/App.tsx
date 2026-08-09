@@ -60,6 +60,9 @@ export default function App() {
   const [dashOpen, setDashOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
+  // hover-intent "peek" over the projects rail: opens a flyout to switch project in-place
+  const [projPeek, setProjPeek] = useState(false);
+  const projPeekT = useRef<any>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifSeen, setNotifSeen] = useState(() => Date.now() - 6 * 3600e3);
   // A1 first-run onboarding (real): shown once for a brand-new cloud account
@@ -75,6 +78,11 @@ export default function App() {
     setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
     setMobileView("board"); // on mobile, navigating brings the main surface in front of buno
   }
+  // hover-intent for the projects flyout: a ~0.55s dwell opens it; a short grace on
+  // leave lets the cursor travel from the rail button into the panel without it closing.
+  const peekOpen = () => { clearTimeout(projPeekT.current); projPeekT.current = setTimeout(() => setProjPeek(true), 550); };
+  const peekHold = () => { clearTimeout(projPeekT.current); setProjPeek(true); };
+  const peekClose = () => { clearTimeout(projPeekT.current); projPeekT.current = setTimeout(() => setProjPeek(false), 160); };
   const notifs = useMemo(() => {
     const out = [];
     Object.values(cards).forEach((c) => {
@@ -744,7 +752,27 @@ export default function App() {
         </>)}
         <div className="adk-rail bare">
           <button className="adk-rail-btn" data-label="היום שלי" onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
-          <button className="adk-rail-btn" data-label="פרויקטים" onClick={() => { if (clients[0]) setCurrentId(clients[0].id); openPage(null); }}><Icon name="grid" /></button>
+          <div className="adk-peek-zone" onMouseEnter={peekOpen} onMouseLeave={peekClose}>
+            <button className="adk-rail-btn" data-label="פרויקטים" onClick={() => { if (clients[0]) setCurrentId(clients[0].id); openPage(null); }}><Icon name="grid" /></button>
+            {projPeek && (
+              <div className="adk-peek" onMouseEnter={peekHold} onMouseLeave={peekClose}>
+                <button className="adk-peek-row special" onClick={() => { openPage("day"); setProjPeek(false); }}>
+                  <span className="adk-day-sun sm"><Icon name="sun" size={15} /></span>
+                  <span className="nm">היום שלי</span>
+                  {planTasks.length > 0 && <span className="cnt">{planTasks.length}</span>}
+                </button>
+                <div className="adk-peek-sep" />
+                {clients.map((c) => (
+                  <button key={c.id} className={"adk-peek-row" + (c.id === currentId ? " active" : "")} onClick={() => { setCurrentId(c.id); openPage(null); setProjPeek(false); }}>
+                    <Badge client={c} size={24} />
+                    <span className="nm">{c.name}</span>
+                    <span className="cnt">{clientCards(c.id).length}</span>
+                  </button>
+                ))}
+                <button className="adk-peek-add" onClick={() => { setClientEdit("new"); setProjPeek(false); }}>+ הוסף פרוייקט</button>
+              </div>
+            )}
+          </div>
           <button className="adk-rail-btn" data-label="יומן" onClick={() => openPage("cal")}><Icon name="calendar" /></button>
           <button className="adk-rail-btn" data-label="דשבורד" onClick={() => openPage("dash")}><Icon name="chart" /></button>
         </div>

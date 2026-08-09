@@ -99,6 +99,18 @@ button.adk-tl-rail:hover .adk-tl-node.done{filter:brightness(.92);}
 .adk-rail-btn::after{content:attr(data-label);position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--ink);color:#fff;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;}
 .adk-rail-btn:hover::after{opacity:1;}
 .adk-rail-btn .ic-badge{top:-1px;inset-inline-start:-1px;border-color:var(--canvas);}
+/* projects "peek" flyout — hover the rail's projects button to switch project in place */
+.adk-peek-zone{position:relative;}
+.adk-peek{position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);width:214px;max-height:82vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:15px;box-shadow:0 14px 38px rgba(23,40,47,.17);padding:7px;z-index:57;animation:peekIn .16s ease;}
+@keyframes peekIn{from{opacity:0;transform:translateY(-50%) translateX(8px);}to{opacity:1;transform:translateY(-50%) translateX(0);}}
+.adk-peek-row{display:flex;align-items:center;gap:10px;width:100%;border:none;background:transparent;border-radius:11px;padding:7px 9px;cursor:pointer;font-family:inherit;}
+.adk-peek-row:hover{background:var(--surface-2);}
+.adk-peek-row.active{background:var(--accent-soft);}
+.adk-peek-row .nm{flex:1;font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:start;}
+.adk-peek-row .cnt{font-size:11px;font-weight:800;color:var(--faint);background:var(--surface-2);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center;flex:none;}
+.adk-peek-sep{height:1px;background:var(--border);margin:5px 6px;}
+.adk-peek-add{display:block;width:100%;border:none;background:transparent;color:var(--accent-d);font-weight:800;font-size:12.5px;font-family:inherit;padding:9px;margin-top:2px;cursor:pointer;border-radius:11px;text-align:start;}
+.adk-peek-add:hover{background:var(--accent-soft);}
 .adk-float-gear.bare{position:fixed;bottom:20px;right:16px;z-index:56;width:40px;height:40px;border-radius:12px;border:none;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:none;}
 .adk-float-gear.bare:hover{background:#fff;color:var(--accent-d);box-shadow:0 2px 10px rgba(23,40,47,.1);}
 .adk-float-bell{position:fixed;top:15px;left:70px;z-index:56;width:36px;height:36px;border-radius:50%;border:none;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0;}

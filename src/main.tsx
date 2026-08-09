@@ -11,6 +11,7 @@ import { DashPreview } from "./components/screens/DashPreview";
 import { ReportPreview } from "./components/screens/ReportPreview";
 import { SettingsPreview } from "./components/screens/SettingsPreview";
 import { CalPreview } from "./components/screens/CalPreview";
+import { PeekPreview } from "./components/screens/PeekPreview";
 import "./styles/index.css";
 
 // Gate: local mode (no env) → straight to the app, Stage-A behavior.
@@ -32,6 +33,8 @@ function Root() {
   if (new URLSearchParams(location.search).get("settings") === "1") return <SettingsPreview />;
   // DESIGN PREVIEW: the calendar with a long project list, no auth (?cal=1)
   if (new URLSearchParams(location.search).get("cal") === "1") return <CalPreview />;
+  // DESIGN PREVIEW: the projects "peek" flyout, open, no auth (?peek=1)
+  if (new URLSearchParams(location.search).get("peek") === "1") return <PeekPreview />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
   // ANY invite link → the one contextual entry, whether logged out or in. It
