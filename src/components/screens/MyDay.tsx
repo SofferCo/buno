@@ -73,8 +73,16 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   Object.entries(byProj).forEach(([id, n]) => { if (n > domN) { domN = n; domId = id; } });
   const domName = domId ? clientOf(domId)?.name : null;
   const top = planTasks[0]?.card;
+  // buno reads the CLOCK and the day so far, not just the counts. The same board at
+  // 08:00 and at 23:00 deserves a different word: morning plans, evening winds down.
+  const nowH = new Date(now).getHours();
+  const morning = nowH < 12;
+  const late = nowH >= 21;               // wind-down hours — celebrate, never pressure
+  const productive = doneCount >= 4;     // a day that already went well
   let headline: any;
   if (openCount === 0) headline = doneCount ? "סגרת את כל מה שתכננת." : "שום דבר לא מחכה לך היום.";
+  else if (late && productive) headline = "יום פורה. כל הכבוד.";
+  else if (late) headline = "ערב — מחר יום חדש.";
   else if (openCount >= 5) headline = `יום עמוס: ${openCount} משימות.`;
   else if (domName && domN >= Math.ceil(openCount / 2) && openCount >= 2) headline = <>היום נשען על <span className="clay">"{domName}"</span>.</>;
   else if (top) headline = <>היום נשען על <span className="clay">"{top.title || "משימה"}"</span>.</>;
@@ -82,14 +90,19 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
 
   const briefLines: any[] = [];
   if (doneCount) briefLines.push(`✓ סגרת היום ${doneCount === 1 ? "משימה אחת" : `${doneCount} משימות`}.`);
-  if (firstUp) {
+  // "next up" and draft-nudges belong to a day that's still ahead — not to the wind-down.
+  if (!late && firstUp) {
     if (firstUp.kind === "event") briefLines.push(`הראשון בתור: ${firstUp.title} ב־${firstUp.time} (יומן).`);
     else { const cn = clientOf(firstUp.t.card.clientId)?.name; briefLines.push(`הראשון בתור: "${firstUp.t.card.title || "משימה"}" ב־${firstUp.time}${cn ? ` · ${cn}` : ""}.`); }
   }
-  if (pending?.requests) briefLines.push(`${pending.requests === 1 ? "בקשת תזמון אחת" : `${pending.requests} בקשות תזמון`} בתיבה.`);
-  if (pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מבונו ממתינות למבט.`);
+  if (!late && pending?.requests) briefLines.push(`${pending.requests === 1 ? "בקשת תזמון אחת" : `${pending.requests} בקשות תזמון`} בתיבה.`);
+  if (!late && pending?.drafts) briefLines.push(`${pending.drafts === 1 ? "טיוטה אחת" : `${pending.drafts} טיוטות`} מבונו ממתינות למבט.`);
   const planHours = sumHours(planTasks.map((t: any) => t.card), now, roundMode);
-  if (capacity && planHours > 0.8 * capacity) briefLines.push(`היום מתוכנן ל־${fmtModeHours(planHours, roundMode)} שעות מתוך ${capacity} — צפוף. יש משהו שיכול לחכות למחר?`);
+  // the "crowded — what can wait?" nudge is only actionable in the MORNING. It must
+  // never fire in the evening, when the day is already behind you.
+  if (morning && capacity && planHours > 0.8 * capacity) briefLines.push(`היום מתוכנן ל־${fmtModeHours(planHours, roundMode)} שעות מתוך ${capacity} — צפוף. יש משהו שיכול לחכות למחר?`);
+  else if (late && openCount > 0 && productive) briefLines.push(`נשארו ${openCount === 1 ? "עוד דבר קטן אחד" : `${openCount} דברים קטנים`} — אם יש כוח; אחרת, ערב טוב.`);
+  else if (late && openCount > 0) briefLines.push(`${openCount} עדיין פתוחות — בלי לחץ, מחר יום חדש.`);
 
   // ---- rows (each carries a rail node; the spine is a per-row ::before) --------
   const EventRow = ({ e }: any) => {

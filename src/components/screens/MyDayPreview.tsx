@@ -4,7 +4,9 @@ import { useState } from "react";
 import { MyDay } from "./MyDay";
 
 export function MyDayPreview() {
-  const now = Date.now();
+  // ?myday=1&h=23 overrides the hour so the time-aware brief (morning vs evening) can be previewed.
+  const hp = new URLSearchParams(location.search).get("h");
+  const now = (() => { const b = new Date(); if (hp !== null) b.setHours(Number(hp), 5, 0, 0); return b.getTime(); })();
   const [doneIds, setDoneIds] = useState<Record<string, number>>({}); // id → completion ms (live toggle to verify mark-done)
   const d = new Date(now);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -21,6 +23,7 @@ export function MyDayPreview() {
     { at: atToday(9, 55), card: { id: "d0", title: "בדיקת דם אלי ומסירת שתן", clientId: "home" } },
     { at: atToday(10, 25), card: { id: "d1", title: "לבצע תיקונים במצגת לפי הערות יאיר", clientId: "c1" } },
     { at: atToday(10, 40), card: { id: "d2", title: "פגישה ועבודה – תיקוני מצגת", clientId: "c2" } },
+    { at: atToday(14, 44), card: { id: "d3", title: "Design status", clientId: "c1" } },
   ];
   const basePlan = [
     { card: { id: "o1", title: "לשלם קנס אכיפה עירונית", clientId: "home", deadline: dayStr(-1), time: "", priority: "regular" } }, // flexible + past → NOT tagged, sinks to bottom
