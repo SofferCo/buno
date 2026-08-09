@@ -98,7 +98,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                       {arcs.map((a) => (
                         <circle key={a.p.cl.id} cx="70" cy="70" r={R} fill="none" stroke={a.p.cl.color} strokeWidth="16"
                           strokeDasharray={`${a.frac * C} ${C}`} strokeDashoffset={`${-a.off * C}`} style={{ cursor: "pointer" }}
-                          onMouseMove={(e) => showTip(e, `${a.p.cl.name} · ${Math.round(a.frac * 100)}% · ${fmtHours(a.p.sec)}ש`)} onMouseLeave={() => setTip(null)} />
+                          onMouseMove={(e) => showTip(e, `${a.p.cl.name} · ${Math.round(a.frac * 100)}% · ${fmtHours(a.p.sec)} שע׳`)} onMouseLeave={() => setTip(null)} />
                       ))}
                     </g>
                   </svg>
@@ -130,7 +130,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                       <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
                         {m.segs.map((s: any) => (
                           <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%`, cursor: "pointer" }}
-                            onMouseMove={(e) => showTip(e, `${s.cl.name} · ${fmtHours(s.sec)}ש`)} onMouseLeave={() => setTip(null)} />
+                            onMouseMove={(e) => showTip(e, `${s.cl.name} · ${fmtHours(s.sec)} שע׳`)} onMouseLeave={() => setTip(null)} />
                         ))}
                       </div>
                     </div>

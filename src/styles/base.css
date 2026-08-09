@@ -5,6 +5,13 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
 #root{height:100%;overflow:hidden;}
 .adk,.adk *{box-sizing:border-box;font-family:'Google Sans','Assistant',system-ui,sans-serif;}
 .adk{--canvas:#EEF1F2;--surface:#FFFFFF;--surface-2:#F7F9F9;--ink:#17282F;--muted:#647079;--faint:#93A0A6;--border:#E1E7E9;--accent:#0E8F8C;--accent-d:#0A6F6D;--accent-soft:#E1F1F0;--rec:#E8664A;--rec-soft:#FBE7E1;direction:rtl;background:var(--canvas);color:var(--ink);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;}
+/* Apple-style overlay scroll — a slim floating pill, not the chunky OS bar. Global to every scroll area in the app. */
+.adk,.adk *{scrollbar-width:thin;scrollbar-color:rgba(23,40,47,.24) transparent;}
+.adk *::-webkit-scrollbar,.adk::-webkit-scrollbar{width:10px;height:10px;}
+.adk *::-webkit-scrollbar-track,.adk::-webkit-scrollbar-track{background:transparent;}
+.adk *::-webkit-scrollbar-thumb,.adk::-webkit-scrollbar-thumb{background:rgba(23,40,47,.20);border-radius:999px;border:3px solid transparent;background-clip:padding-box;min-height:36px;transition:background .15s;}
+.adk *::-webkit-scrollbar-thumb:hover,.adk::-webkit-scrollbar-thumb:hover{background:rgba(23,40,47,.38);background-clip:padding-box;}
+.adk *::-webkit-scrollbar-corner,.adk::-webkit-scrollbar-corner{background:transparent;}
 .adk-top{display:flex;align-items:center;gap:14px;padding:13px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30;flex-wrap:wrap;}
 .adk-stats{display:flex;gap:8px;flex-wrap:wrap;}
 .adk-stat{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0 13px;height:40px;display:flex;flex-direction:column;justify-content:center;min-width:74px;}
