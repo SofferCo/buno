@@ -110,7 +110,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
     return (
       <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
-        <span className="adk-tl-rail"><button className={"adk-tl-node" + (over ? " over" : "")} title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }} /></span>
+        <button className="adk-tl-rail" title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }}><span className={"adk-tl-node" + (over ? " over" : "")} /></button>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
         <div className="adk-tl-body">
           <div className="ttl">{routineKind(c) !== "none" && "↻ "}{c.title || "ללא כותרת"}</div>
@@ -134,7 +134,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = d.card, cl = clientOf(c.clientId);
     return (
       <div className="adk-tl-row done" onClick={() => onOpenCard(c.id)}>
-        <span className="adk-tl-rail"><button className="adk-tl-node done" title="החזר לפתוח" onClick={(e) => { e.stopPropagation(); onReopen?.(c.id); }}>✓</button></span>
+        <button className="adk-tl-rail" title="החזר לפתוח" onClick={(e) => { e.stopPropagation(); onReopen?.(c.id); }}><span className="adk-tl-node done">✓</span></button>
         <div className="adk-tl-time">{fmtHM(d.at)}</div>
         <div className="adk-tl-body">
           <div className="ttl">{c.title || "ללא כותרת"}</div>

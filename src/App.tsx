@@ -141,7 +141,7 @@ export default function App() {
       setCards((p: any) => ({ ...p, [id]: card }));
       setOrder((p: any) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
     }
-    setCurrentId(card.clientId);
+    // float the card over wherever the user is — do NOT switch the board behind it
     setMeetingEvent(ev);
     setEditing(card.id);
   }
@@ -697,7 +697,7 @@ export default function App() {
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
           <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
-          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setShareFor(current)}><Icon name="users" /></button>}
+          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setShareFor(current)}><Icon name="share" /></button>}
         </div>
       </div>
 
@@ -717,7 +717,7 @@ export default function App() {
             <div className="adk-notif-list">
               {notifs.length === 0 && <div className="adk-notif-empty">אין תנועות חדשות ✦</div>}
               {notifs.map((n) => (
-                <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); openPage(null); setEditing(n.cardId); }}>
+                <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); setEditing(n.cardId); }}>
                   <span className={"adk-notif-dot " + n.type} style={n.color ? { background: n.color } : undefined} />
                   <span className="adk-notif-body">
                     <span className="t">{n.type === "draft" ? "טיוטת buno" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : n.type === "untitled" ? "להשלמה" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
@@ -819,7 +819,7 @@ export default function App() {
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
           onAsk={(question) => { setChatSeed(question); setMobileView("chat"); }}
           onClose={() => setDayOpen(false)}
-          onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); openPage(null); setEditing(id); } }}
+          onOpenCard={(id) => setEditing(id)}
           onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")}
           onReopen={(id) => moveCard(id, cards[id]?.activeColumn)}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
@@ -829,13 +829,13 @@ export default function App() {
         <div className="adk-scrim" onClick={() => setArchiveOpen(false)} />
         <ArchivePanel items={archiveList} client={current} now={now}
           onClose={() => setArchiveOpen(false)}
-          onOpen={(id) => { setArchiveOpen(false); setEditing(id); }}
+          onOpen={(id) => setEditing(id)}
           onRestore={restoreCard}
           onHardDelete={hardDelete} />
       </>)}
 
       {reportOpen && (
-        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} onClose={() => setReportOpen(false)} onOpen={(id) => { setReportOpen(false); setEditing(id); }} />
+        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} onClose={() => setReportOpen(false)} onOpen={(id) => setEditing(id)} />
       )}
 
 
@@ -871,7 +871,7 @@ export default function App() {
         onSweepNow={async () => { const r = await sweepNow(); if (r?.ok && (r?.created?.length || r?.review)) await refreshBoardFromCloud(currentId); return r; }}
         onReviewAction={async (id: string) => { const r = await sendReviewAction(id); await refreshBoardFromCloud(currentId); return r; }}
         onUploadFile={(file: any, intent?: string) => { const id = assistantAction("create_card", { title: (intent || file.name || "").slice(0, 80), description: intent ? `מהקובץ ${file.name}` : "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
-        onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); setEditing(id); } }}
+        onOpenCard={(id) => setEditing(id)}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}
         // an event's board: the inferred client, else the personal board — so every

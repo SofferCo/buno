@@ -36,16 +36,17 @@
    side, never between a control and its row. */
 .adk-tl-row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-radius:11px;cursor:pointer;}
 .adk-tl-row:hover{background:var(--surface-2);}
-/* rail cell — holds the node, centred; the spine passes through behind it */
-.adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;}
-.adk-tl-node{position:relative;z-index:2;margin-top:2px;width:18px;height:18px;padding:0;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;line-height:1;flex:none;font-family:inherit;}
+/* rail cell — holds the node, centred; the spine passes through behind it. The
+   WHOLE column is the click target (big + forgiving): click an open one to
+   complete it, a done one to reopen — no need to open the card first. */
+.adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;align-self:stretch;}
+button.adk-tl-rail{border:none;background:transparent;padding:0;margin:0;font:inherit;cursor:pointer;-webkit-appearance:none;appearance:none;align-items:flex-start;}
+.adk-tl-node{position:relative;z-index:2;margin-top:2px;width:18px;height:18px;padding:0;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;line-height:1;flex:none;font-family:inherit;transition:border-color .12s,color .12s,filter .12s;}
 .adk-tl-node.over{border-color:var(--rec);}
 .adk-tl-node.done{background:var(--done);border-color:var(--done);}
-/* the circle is a control: click an open one to complete it, a done one to reopen */
-button.adk-tl-node{cursor:pointer;transition:border-color .12s,color .12s,filter .12s;}
-button.adk-tl-node:not(.done):hover{border-color:var(--done);color:var(--done);}
-button.adk-tl-node:not(.done):hover::after{content:"✓";}
-button.adk-tl-node.done:hover{filter:brightness(.92);}
+button.adk-tl-rail:hover .adk-tl-node:not(.done):not(.now){border-color:var(--done);color:var(--done);}
+button.adk-tl-rail:hover .adk-tl-node:not(.done):not(.now)::after{content:"✓";}
+button.adk-tl-rail:hover .adk-tl-node.done{filter:brightness(.92);}
 .adk-tl-time{flex:none;width:64px;text-align:start;font-size:13.5px;font-weight:800;color:var(--ink);padding-top:2px;font-variant-numeric:tabular-nums;}
 .adk-tl-time.flex{color:var(--faint);font-weight:700;font-size:12px;}
 /* completed today — one greenish surface; the spine + green nodes read on top */

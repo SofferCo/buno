@@ -11,6 +11,7 @@ export function Icon({ name, size = 18 }) {
     plus: <><path d="M12 5v14M5 12h14" /></>,
     comment: <><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19l1-4.2A7.5 7.5 0 1 1 20 11.5Z" /></>,
     users: <><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-3-4.9" /></>,
+    share: <><circle cx="17.5" cy="5.5" r="2.7" /><circle cx="6.5" cy="12" r="2.7" /><circle cx="17.5" cy="18.5" r="2.7" /><path d="M9 10.7l6-3.9M9 13.3l6 3.9" /></>,
     calendar: <><rect x="3.5" y="4.5" width="17" height="16" rx="2.5" /><path d="M3.5 9h17M8 3v3M16 3v3" /></>,
     arrowL: <><path d="M19 12H5M11 6l-6 6 6 6" /></>,
     arrowR: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
