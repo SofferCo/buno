@@ -157,7 +157,9 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   let nowPlaced = false;
   for (const x of ahead) {
     const p = parseMin(x.time);
-    if (!nowPlaced && p !== null && p >= nowMin) { nowPlaced = true; aheadRows.push(<NowRow key="now" />); }
+    // the now-mark sits above everything still ahead — a future-timed item OR a
+    // flexible (no-time) one; only a timed item whose hour already passed stays above it.
+    if (!nowPlaced && (p === null || p >= nowMin)) { nowPlaced = true; aheadRows.push(<NowRow key="now" />); }
     aheadRows.push(x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />);
   }
   if (!nowPlaced) aheadRows.push(<NowRow key="now" />);

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Icon } from "../ui/Icon";
+import { PeriodPicker } from "../ui/PeriodPicker";
 import { last12Months, ymLabel, ymOf } from "../../lib/date";
 import { fmtHours, fmtMoney } from "../../lib/format";
 import { resizeImage } from "../../lib/image";
@@ -43,8 +44,13 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   let cum = 0;
   const arcs = byHours.filter((p) => p.sec > 0).map((p) => { const frac = p.sec / denom; const seg = { p, frac, off: cum }; cum += frac; return seg; });
 
-  // stacked bar chart: buckets are DAYS for a single month, else the months in scope
-  const buckets: (number | string)[] = single ? Array.from({ length: daysInMonth(months[0]) }, (_, i) => i + 1) : months;
+  // stacked bar chart: buckets are DAYS for a single month, else the months in scope.
+  // A single CURRENT month shows only the elapsed days + 2 (e.g. on the 9th → 1..11);
+  // a past month shows all its days. Rendered left→right (1 on the left).
+  const dayLimit = months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0]);
+  const buckets: (number | string)[] = single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : months;
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const showTip = (e: any, text: string) => setTip({ x: e.clientX, y: e.clientY, text });
   const bucketData = buckets.map((bk) => {
     const inB = single ? scoped.filter((c) => billDay(c) === bk) : scoped.filter((c) => billYm(c) === bk);
     const segs = clients.map((cl: any) => ({ cl, sec: inB.filter((c: any) => c.clientId === cl.id).reduce((a: number, c: any) => a + cardSeconds(c, now), 0) })).filter((s: any) => s.sec > 0);
@@ -69,13 +75,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
             <div><h2>הדשבורד שלי</h2><span>{rangeLabel}</span></div>
           </div>
           <div className="sp" />
-          <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-            <option value="month">החודש</option>
-            <option value="quarter">רבעון (3 חודשים)</option>
-            <option value="12m">שנה (12 חודשים)</option>
-            <option disabled>──────────</option>
-            {[...seq].reverse().map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}
-          </select>
+          <PeriodPicker value={period} onChange={setPeriod} seq={seq} />
           <button className="btn" onClick={() => window.print()}><Icon name="printer" /> הדפסה</button>
         </div>
 
@@ -86,7 +86,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           <div className="adk-kcell"><b style={{ fontSize: 20 }}>{mostBusy?.cl.name || "—"}</b><span>הכי הרבה עבודה</span></div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div className="adk-pcard-body">
             <div className="adk-panel-block">
               <p className="adk-block-title">חלוקת הזמן בין הלקוחות</p>
@@ -97,9 +97,8 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                     <g transform="rotate(-90 70 70)">
                       {arcs.map((a) => (
                         <circle key={a.p.cl.id} cx="70" cy="70" r={R} fill="none" stroke={a.p.cl.color} strokeWidth="16"
-                          strokeDasharray={`${a.frac * C} ${C}`} strokeDashoffset={`${-a.off * C}`}>
-                          <title>{a.p.cl.name} · {Math.round(a.frac * 100)}% · {fmtHours(a.p.sec)}ש</title>
-                        </circle>
+                          strokeDasharray={`${a.frac * C} ${C}`} strokeDashoffset={`${-a.off * C}`} style={{ cursor: "pointer" }}
+                          onMouseMove={(e) => showTip(e, `${a.p.cl.name} · ${Math.round(a.frac * 100)}% · ${fmtHours(a.p.sec)}ש`)} onMouseLeave={() => setTip(null)} />
                       ))}
                     </g>
                   </svg>
@@ -124,13 +123,14 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
             </div>
             <div className="adk-panel-block">
               <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"} · צבע לפי לקוח</p>
-              <div className="adk-barchart">
+              <div className="adk-barchart" style={{ direction: "ltr" }}>
                 {bucketData.map((m) => (
                   <div className="adk-bc-col" key={String(m.bk)}>
-                    <div className="adk-bc-track" title={single ? `${m.bk} · ${fmtHours(m.total)}ש` : undefined}>
+                    <div className="adk-bc-track">
                       <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
                         {m.segs.map((s: any) => (
-                          <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%` }} title={`${s.cl.name} · ${fmtHours(s.sec)}ש`} />
+                          <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%`, cursor: "pointer" }}
+                            onMouseMove={(e) => showTip(e, `${s.cl.name} · ${fmtHours(s.sec)}ש`)} onMouseLeave={() => setTip(null)} />
                         ))}
                       </div>
                     </div>
@@ -141,22 +141,25 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
             </div>
           </div>
 
-          <div className="adk-pcard-foot">
+          <div className="adk-pcard-foot" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <p className="adk-block-title">לפי לקוח</p>
-            <table className="adk-reptable">
-              <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
-              <tbody>
-                {byHours.map((p) => (
-                  <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id)}>
-                    <td>{p.cl.name}</td><td>{p.count}</td><td>{fmtHours(p.sec)}</td><td>{Math.round((p.sec / denom) * 100)}%</td><td>{p.rate > 0 ? fmtMoney(p.revenue) : "—"}</td>
-                  </tr>
-                ))}
-                {byHours.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין נתונים {scopeLabel}</td></tr>}
-              </tbody>
-            </table>
+            <div style={{ overflowY: "auto", minHeight: 0 }}>
+              <table className="adk-reptable">
+                <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
+                <tbody>
+                  {byHours.map((p) => (
+                    <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id)}>
+                      <td>{p.cl.name}</td><td>{p.count}</td><td>{fmtHours(p.sec)}</td><td>{Math.round((p.sec / denom) * 100)}%</td><td>{p.rate > 0 ? fmtMoney(p.revenue) : "—"}</td>
+                    </tr>
+                  ))}
+                  {byHours.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין נתונים {scopeLabel}</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
+      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
     </div>
   );
 }
