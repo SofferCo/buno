@@ -93,38 +93,45 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
         {isMeeting && (() => {
           const guests = (ev?.attendees || []).filter((a: any) => !a.self);
           return (
-          <div style={{ margin: "0 0 16px", padding: "14px 16px", background: "var(--surface-2, #f4f5f6)", borderRadius: 14, border: "1px solid var(--border)" }}>
-            {/* meeting name + open-in-calendar (right) · your RSVP (left) */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 22, flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14, color: "var(--ink)" }}><Icon name="calendar" size={15} />{card.title || ev?.title || "פגישה"}</span>
-              {ev?.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noreferrer" style={{ fontWeight: 700, fontSize: 12.5, color: "var(--accent-d)" }}>פתח ביומן ↗</a>}
-              {ev?.myStatus && <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>{MY_STATUS[ev.myStatus] || ""}</span>}
-            </div>
-            {/* time range */}
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8, fontWeight: 800, fontSize: 16, color: "var(--ink)", direction: "ltr", justifyContent: "flex-end" }}>
-              <span>{meetWhen}</span><Icon name="clock" size={15} />
+          <div style={{ margin: "0 0 16px", padding: "13px 15px", background: "var(--surface)", borderRadius: 12, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 18, alignItems: "flex-end" }}>
+            {/* name + open-in-calendar (right) · RSVP (left), then the time line */}
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7.6, width: "100%" }}>
+                <span style={{ color: "#0a6f6d", display: "inline-flex" }}><Icon name="calendar" size={14} /></span>
+                <span style={{ color: "#0a6f6d", fontSize: 14, fontWeight: 700 }}>{card.title || ev?.title || "פגישה"}</span>
+                {ev?.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noreferrer" style={{ color: "var(--muted)", fontSize: 11.5, fontWeight: 600, textDecoration: "none" }}>פתח ביומן ↗</a>}
+                {ev?.myStatus && <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{MY_STATUS[ev.myStatus] || ""}</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+                <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 700, direction: "ltr" }}>{meetWhen}</span>
+                <span style={{ color: "var(--muted)", display: "inline-flex" }}><Icon name="clock" size={12} /></span>
+              </div>
             </div>
             {/* participants */}
-            {guests.length > 0 && (<>
-              <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--muted)", margin: "14px 0 7px" }}>משתתפים · {guests.length}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {guests.slice(0, 8).map((a: any, i: number) => (
-                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--ink)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px 3px 4px" }}>
-                    <Avatar name={a.name || a.email} size={18} />{a.name || String(a.email || "").split("@")[0]}
-                  </span>
-                ))}
-              </div>
-            </>)}
-            {/* actions — join is the primary; manage + cancel follow */}
-            {onEventAction && !viewer && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, alignItems: "center" }}>
-                {ev?.meetLink && <a className="adk-btn primary" href={ev.meetLink} target="_blank" rel="noreferrer" style={{ height: 34, padding: "0 16px", fontSize: 13, display: "inline-flex", alignItems: "center" }}>הצטרף לפגישה</a>}
-                <button className="adk-btn" disabled={!!meetBusy} onClick={() => meetManage("postpone", "נדחתה בחצי שעה ✓")} style={{ height: 34, padding: "0 12px", fontSize: 12.5 }}>{meetBusy === "postpone" ? "דוחה…" : "דחה 30 דק׳"}</button>
-                <button className="adk-btn" disabled={!!meetBusy} onClick={() => onProposeTime?.(ev)} style={{ height: 34, padding: "0 12px", fontSize: 12.5 }}>הצע זמן חדש</button>
-                <button disabled={!!meetBusy} onClick={() => meetManage("cancel", "הפגישה בוטלה ✓")} style={{ marginInlineStart: "auto", border: "none", background: "transparent", color: "var(--rec)", fontFamily: "inherit", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>{meetBusy === "cancel" ? "מבטל…" : "בטל פגישה"}</button>
+            {guests.length > 0 && (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+                <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 700 }}>משתתפים</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
+                  {guests.slice(0, 8).map((a: any, i: number) => (
+                    <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "4px 8px 4px 6px" }}>
+                      <Avatar name={a.name || a.email} size={18} />{a.name || String(a.email || "").split("@")[0]}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-            {meetMsg && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: meetMsg.includes("✓") ? "var(--accent-d)" : "var(--rec)" }}>{meetMsg}</div>}
+            {/* actions — JOIN is the hero (teal, pinned to the start/right); the rest quieter, to the left */}
+            {onEventAction && !viewer && (
+              <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", paddingTop: 2 }}>
+                {ev?.meetLink && <a href={ev.meetLink} target="_blank" rel="noreferrer" style={{ background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 700, borderRadius: 9, padding: "9px 16px", textDecoration: "none" }}>הצטרף לפגישה</a>}
+                <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button disabled={!!meetBusy} onClick={() => meetManage("cancel", "הפגישה בוטלה ✓")} style={{ height: 32, padding: "0 12px", borderRadius: 9, border: "none", background: "transparent", color: "#e8664a", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{meetBusy === "cancel" ? "מבטל…" : "בטל פגישה"}</button>
+                  <button disabled={!!meetBusy} onClick={() => onProposeTime?.(ev)} style={{ height: 32, padding: "0 12px", borderRadius: 9, border: "none", background: "#efefef", color: "#000", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>הצע זמן חדש</button>
+                  <button disabled={!!meetBusy} onClick={() => meetManage("postpone", "נדחתה בחצי שעה ✓")} style={{ height: 32, padding: "0 12px", borderRadius: 9, border: "none", background: "#efefef", color: "#000", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{meetBusy === "postpone" ? "דוחה…" : "דחה 30 דק׳"}</button>
+                </div>
+              </div>
+            )}
+            {meetMsg && <div style={{ width: "100%", fontSize: 12.5, fontWeight: 700, color: meetMsg.includes("✓") ? "var(--accent-d)" : "var(--rec)" }}>{meetMsg}</div>}
           </div>
           );
         })()}
