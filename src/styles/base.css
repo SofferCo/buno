@@ -9,7 +9,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
 html[dir="ltr"] .adk{direction:ltr;}
 /* Dark theme — set on <html data-theme="dark"> (picker: light/dark/system). Marker, the
    completion green and the late red get restrained dark values, not an auto-invert. */
-:root[data-theme="dark"] .adk{--canvas:#1A1917;--surface:#262523;--surface-2:#302F2C;--ink:#ECEAE4;--muted:#A8A39A;--faint:#6F6B62;--border:#38352F;--accent:#2AA9A5;--accent-d:#57C9C3;--accent-soft:#22302E;--rec:#E8785C;--rec-soft:#3A241E;}
+:root[data-theme="dark"] .adk{--canvas:#1A1917;--surface:#262523;--surface-2:#302F2C;--ink:#ECEAE4;--muted:#A8A39A;--faint:#6F6B62;--border:#38352F;--accent:#ECEAE4;--accent-d:#FFFFFF;--accent-soft:#33322F;--rec:#E8785C;--rec-soft:#3A241E;}
 :root[data-theme="dark"]{--done:#4CBF7A;--done-bg:#1E2A20;--marker:#BBC456;}
 /* Dark readability pass — two hardcoded patterns break on dark and need fixing:
    (1) fixed #1A1A1A "solid" brand elements go invisible on a dark canvas → recolor to the
@@ -23,7 +23,14 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] .adk-rv-btn.chosen:hover,
 :root[data-theme="dark"] .adk-chat-av,
 :root[data-theme="dark"] .adk-brief2-av,
-:root[data-theme="dark"] .adk-day-ask-av{background:var(--accent);color:#fff;}
+:root[data-theme="dark"] .adk-day-ask-av{background:var(--accent);color:var(--canvas);}
+/* white-toned accents in dark: active pills, dots, primary buttons read as white/off-white
+   with DARK text on the solid ones — Claude-style, no color. */
+:root[data-theme="dark"] .lvl.on .dot,
+:root[data-theme="dark"] .lvl.act.on .dot{background:var(--ink);}
+:root[data-theme="dark"] .adk-btn.primary,
+:root[data-theme="dark"] .adk-asst-seg .lvl.act.on{background:var(--ink);color:var(--canvas);border-color:var(--ink);}
+:root[data-theme="dark"] .adk-asst-seg .lvl.act.on .dot{background:var(--canvas);}
 :root[data-theme="dark"] .adk-set-tab.on,
 :root[data-theme="dark"] .adk-fchip.on{color:var(--canvas);}
 :root[data-theme="dark"] .adk-rail-btn::after,
