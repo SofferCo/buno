@@ -33,9 +33,21 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const gDenom = givers.reduce((a, g) => a + g.sec, 0) || 1;
   let gacc = 0;
   const gStops = givers.map((g, i) => { const from = (gacc / gDenom) * 360; gacc += g.sec; const to = (gacc / gDenom) * 360; return `${DONUT_COLORS[i % DONUT_COLORS.length]} ${from}deg ${to}deg`; }).join(", ");
-  // month trend is billed by deadline too, so a task re-dated to next month moves buckets.
-  const monthly = seq.map((k) => { const mc = cards.filter((c) => billYm(c) === k && !c.archived); return { k, sec: mc.reduce((a, c) => a + cardSeconds(c, now), 0), hours: sumHours(mc, now, roundMode) }; });
-  const maxM = Math.max(1, ...monthly.map((m) => m.sec));
+  // chart buckets mirror the dashboard: a single month → DAYS (a current month shows
+  // the elapsed days + 2, e.g. on the 9th → 1..11); else the months in scope. Billed
+  // by deadline, so a task re-dated to another day/month moves buckets. Rendered LTR.
+  const single = months.length === 1;
+  const billDay = (c: any) => { const d = c.deadline ? new Date(String(c.deadline) + "T00:00:00") : new Date(c.createdAt); return d.getDate(); };
+  const daysInMonth = (ym: string) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
+  const dayLimit = months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0]);
+  const monthBuckets = period === "quarter" ? months : seq;
+  const buckets: (number | string)[] = single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : monthBuckets;
+  const live = cards.filter((c: any) => !c.archived);
+  const bucketData = buckets.map((bk) => {
+    const inB = single ? live.filter((c: any) => billYm(c) === months[0] && billDay(c) === bk) : live.filter((c: any) => billYm(c) === bk);
+    return { bk, sec: inB.reduce((a: number, c: any) => a + cardSeconds(c, now), 0), hours: sumHours(inB, now, roundMode) };
+  });
+  const maxM = Math.max(1, ...bucketData.map((m) => m.sec));
   const listed = [...inScope].sort((a, b) => cardSeconds(b, now) - cardSeconds(a, now));
   const statusOf = (c) => c.archived ? (c.removedBy === "client" ? "הוסר ע״י הלקוח" : "נמחק") : (cardColumn[c.id] === "col-done" ? "הושלם" : "פעיל");
   const rangeLabel = period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
@@ -82,12 +94,12 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
             )}
           </div>
           <div className="adk-panel-block">
-            <p className="adk-block-title">שעות עבודה לפי חודש</p>
-            <div className="adk-barchart">
-              {monthly.map((m) => (
-                <div className="adk-bc-col" key={m.k} title={`${fmtModeHours(m.hours, roundMode)} שעות`}>
-                  <div className="adk-bc-track"><div className={"adk-bc-bar" + (scopeSet.has(m.k) ? " hl" : "")} style={{ height: `${(m.sec / maxM) * 100}%` }} /></div>
-                  <div className="adk-bc-x">{m.k.slice(5)}/{m.k.slice(2, 4)}</div>
+            <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"}</p>
+            <div className="adk-barchart" style={{ direction: "ltr" }}>
+              {bucketData.map((m) => (
+                <div className="adk-bc-col" key={String(m.bk)} title={`${fmtModeHours(m.hours, roundMode)} שעות`}>
+                  <div className="adk-bc-track"><div className={"adk-bc-bar" + (single || scopeSet.has(String(m.bk)) ? " hl" : "")} style={{ height: `${(m.sec / maxM) * 100}%` }} /></div>
+                  <div className="adk-bc-x">{single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
                 </div>
               ))}
             </div>

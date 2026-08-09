@@ -81,7 +81,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
 
         <div className="adk-kpistrip">
           <div className="adk-kcell"><b>{fmtHours(totalSec)}<small>שע׳</small></b><span>שעות סה״כ</span></div>
-          <div className="adk-kcell"><b>{per.length}</b><span>לקוחות פעילים</span></div>
+          <div className="adk-kcell"><b>{per.length}</b><span>פרוייקטים פעילים</span></div>
           {totalRev > 0 && <div className="adk-kcell"><b>{fmtMoney(totalRev)}</b><span>הכנסה משוערת</span></div>}
           <div className="adk-kcell"><b style={{ fontSize: 20 }}>{mostBusy?.cl.name || "—"}</b><span>הכי הרבה עבודה</span></div>
         </div>
@@ -89,7 +89,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div className="adk-pcard-body">
             <div className="adk-panel-block">
-              <p className="adk-block-title">חלוקת הזמן בין הלקוחות</p>
+              <p className="adk-block-title">חלוקת הזמן בין הפרוייקטים</p>
               {per.length === 0 ? <div className="adk-arch-empty">עדיין אין נתונים {scopeLabel}</div> : (
                 <div style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" }}>
                   <svg width="150" height="150" viewBox="0 0 140 140" style={{ flex: "none" }}>
@@ -106,7 +106,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                     {byHours.map((p) => (
                       <div className="adk-leg" key={p.cl.id}>
                         <span className="sw" style={{ background: p.cl.color }} />
-                        {p.cl.name}
+                        <button onClick={() => onOpenClient(p.cl.id, period)} title="פתיחת דוח הפרוייקט לתקופה זו" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", font: "inherit", padding: 0, textAlign: "start" }}>{p.cl.name}</button>
                         <span className="pct">{Math.round((p.sec / denom) * 100)}%</span>
                         {onShareClient && <button title="שיתוף" onClick={() => onShareClient(p.cl)} style={{ marginInlineStart: 6, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0, display: "inline-flex" }}><Icon name="share" size={14} /></button>}
                       </div>
@@ -116,13 +116,13 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
               )}
               {mostProfit && (
                 <div style={{ background: "var(--accent-soft)", border: "1px solid #bfe2e0", borderRadius: 12, padding: "12px 15px", marginTop: 20 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--accent-d)", textTransform: "uppercase", letterSpacing: ".05em" }}>הלקוח הכי רווחי {scopeLabel}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--accent-d)", textTransform: "uppercase", letterSpacing: ".05em" }}>הפרוייקט הכי רווחי {scopeLabel}</div>
                   <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{mostProfit.cl.name} · {fmtMoney(mostProfit.revenue)} <span style={{ color: "var(--muted)", fontWeight: 700, fontSize: 13 }}>({fmtHours(mostProfit.sec)}ש × ₪{mostProfit.rate})</span></div>
                 </div>
               )}
             </div>
             <div className="adk-panel-block">
-              <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"} · צבע לפי לקוח</p>
+              <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"} · צבע לפי פרוייקט</p>
               <div className="adk-barchart" style={{ direction: "ltr" }}>
                 {bucketData.map((m) => (
                   <div className="adk-bc-col" key={String(m.bk)}>
@@ -142,10 +142,10 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           </div>
 
           <div className="adk-pcard-foot" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <p className="adk-block-title">לפי לקוח</p>
+            <p className="adk-block-title">לפי פרוייקט</p>
             <div style={{ overflowY: "auto", minHeight: 0 }}>
               <table className="adk-reptable">
-                <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
+                <thead><tr><th>פרוייקט</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
                 <tbody>
                   {byHours.map((p) => (
                     <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id, period)} title="פתיחת דוח הלקוח לתקופה זו">
@@ -159,7 +159,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           </div>
         </div>
       </div>
-      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
+      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", direction: "ltr", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
     </div>
   );
 }
