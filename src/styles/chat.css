@@ -49,15 +49,17 @@
 /* two-level rhythm: a new user message opens a "topic" (big gap); everything that
    follows it — buno's reply, its cards — is "item" spacing (tight). */
 .adk-msg{display:flex;gap:8px;align-items:flex-end;max-width:92%;margin-top:var(--chat-gap-item);}
-.adk-msg.me{align-self:flex-start;flex-direction:row-reverse;margin-top:var(--chat-gap-topic);}
-.adk-msg.twin{align-self:flex-end;}
+.adk-msg.me{align-self:flex-start;flex-direction:row-reverse;margin-top:var(--chat-gap-topic);max-width:75%;}
+.adk-msg.twin{align-self:flex-end;max-width:100%;width:100%;}
 .adk-chat-body > .adk-msg:first-child{margin-top:0;}
-.adk-bubble{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-bubble);padding:9px 13px;font-size:13.5px;line-height:1.5;font-weight:500;}
-/* asymmetric tail (RTL): buno (left) notches its top-left; user (right) its bottom-right */
-.adk-msg.twin .adk-bubble{border-top-left-radius:4px;}
-.adk-msg.me .adk-bubble{background:#1A1A1A;color:#fff;border-color:transparent;border-bottom-right-radius:4px;}
+.adk-bubble{border-radius:var(--radius-bubble);padding:9px 13px;font-size:13.5px;line-height:1.5;font-weight:500;color:var(--ink);}
+/* ASYMMETRY, not contrast: the USER gets a bubble; BUNO gets nothing — plain text on the
+   surface, full reading width. Same rule light + dark, so it never leans on a black↔white
+   inversion. buno speaks INSIDE the space; the user drops items into it. */
+.adk-msg.me .adk-bubble{background:var(--surface-2);border:1px solid transparent;border-bottom-right-radius:4px;}
+.adk-msg.twin .adk-bubble{background:transparent;border:none;padding-inline:0;}
 .adk-msg-time{font-size:10.5px;font-weight:600;color:var(--faint);margin-top:5px;opacity:.85;}
-.adk-msg.me .adk-msg-time{color:rgba(255,255,255,.7);text-align:start;}
+.adk-msg.me .adk-msg-time{color:var(--muted);text-align:start;}
 .adk-bubble.typing{display:flex;gap:4px;padding:12px 14px;}
 .adk-bubble.typing span{width:6px;height:6px;border-radius:50%;background:var(--faint);animation:adk-blink 1s infinite;}
 .adk-bubble.typing span:nth-child(2){animation-delay:.2s;}
@@ -76,28 +78,39 @@
 .adk-chat-pending .thumb .x:hover{background:var(--rec);color:#fff;}
 /* contextual chips inside the stream, on the user's side (start=right, RTL) —
    light outline suggestion-bubbles under buno's last message */
-.adk-chat-streamchips{display:flex;flex-direction:column;gap:6px;align-items:flex-start;align-self:flex-start;max-width:92%;margin-top:var(--chat-gap-item);}
-.adk-chat-streamchips button{width:fit-content;max-width:100%;border:1px solid var(--border);background:transparent;border-radius:var(--radius-btn);padding:6px 12px;font-size:12px;font-weight:700;color:var(--ink);cursor:pointer;font-family:inherit;transition:border-color .12s,background .12s;text-align:start;}
-.adk-chat-streamchips button:hover{border-color:var(--ink);background:var(--surface-2);}
+/* suggestion chips are NOT messages — outline only, one wrapping row, secondary text, so the
+   user never confuses "what I sent" with "what's offered". Sits under buno's last message. */
+.adk-chat-streamchips{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;align-items:flex-start;align-self:flex-start;max-width:100%;margin-top:var(--chat-gap-item);}
+.adk-chat-streamchips button{width:fit-content;max-width:100%;border:1px solid var(--border);background:transparent;border-radius:var(--radius-btn);padding:6px 12px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;transition:border-color .12s,background .12s,color .12s;text-align:start;}
+.adk-chat-streamchips button:hover{border-color:var(--ink);color:var(--ink);background:var(--surface-2);}
 /* buno FAB (chat launcher) shows the logo mark */
 .adk-fab img{width:26px;height:26px;display:block;}
 /* buno brand mark — white logo tucked in the top-right, bleeding 21px off the top
    and 18.8px off the right (per design). Click-through, above content. */
-.adk-brand-wm{position:fixed;top:-21px;inset-inline-start:-18.8px;width:152px;height:156px;pointer-events:none;z-index:32;}
+.adk-brand-wm{position:fixed;top:-21px;inset-inline-start:-18.8px;width:152px;height:156px;pointer-events:none;z-index:57;}
+/* the corner flourish shows on the board but must not poke over a full-page overlay
+   (settings / report / dashboard / archive) */
+.adk:has(.adk-page) .adk-brand-wm{display:none;}
 /* one integrated pill: + (right) · field · ↑ send · mic (left). Ghost icons, no
    inner borders or separate circles — the whole bar is a single rounded container. */
 /* frosted-glass composer pill floating over the messages */
-.adk-chat-input{position:absolute;bottom:0;inset-inline:0;z-index:3;display:flex;align-items:center;gap:2px;min-height:64px;margin:12px 14px;padding:0 12px;border:1px solid rgba(225,231,233,.7);border-radius:32px;background:rgba(255,255,255,.68);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 6px 24px rgba(23,40,47,.08);}
-.adk-chat-input:focus-within{border-color:var(--ink);}
+/* composer = a RAISED container, lighter than the surface below it, solid (no frost) */
+.adk-chat-input{position:absolute;bottom:0;inset-inline:0;z-index:3;display:flex;align-items:center;gap:2px;min-height:52px;margin:12px 14px;padding:0 8px 0 12px;border:1px solid var(--border);border-radius:28px;background:var(--surface-2);box-shadow:0 6px 24px rgba(0,0,0,.10);}
+.adk-chat-input:focus-within{border-color:rgba(217,242,82,.4);}
 .adk-chat-input input{flex:1;min-width:0;border:none;background:transparent;padding:8px 8px;font-size:14px;font-family:inherit;color:var(--ink);}
+.adk-chat-input input::placeholder{color:var(--faint);}
 .adk-chat-input input:focus{outline:none;}
 .adk-chat-input .adk-plus{flex:none;}
+/* secondary icons: mic + attach — quiet, equal, never competing with send */
 .adk-chat-input .adk-attach{width:34px;height:34px;border:none;background:transparent;color:var(--muted);}
-.adk-chat-input .adk-attach:hover{background:var(--surface-2);color:var(--ink);border:none;}
-.adk-chat-input .adk-cmt-send{width:34px;height:34px;flex:none;border:none;background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;border-radius:50%;}
-.adk-chat-input .adk-cmt-send:hover{background:var(--surface-2);}
+.adk-chat-input .adk-attach:hover{background:var(--overlay);color:var(--ink);border:none;}
+/* send = the primary action. Empty: overlay circle, muted arrow (present but idle).
+   Ready: filled --ink circle, --canvas arrow — the value inversion, like the user bubble. */
+.adk-chat-input .adk-cmt-send{width:40px;height:40px;flex:none;border:none;background:var(--overlay);color:var(--faint);display:grid;place-items:center;cursor:pointer;border-radius:50%;transition:background .12s,color .12s;}
+.adk-chat-input .adk-cmt-send.ready{background:var(--ink);color:var(--canvas);}
+.adk-chat-input .adk-cmt-send:hover{filter:brightness(1.08);}
 .adk-mic{width:34px;height:34px;flex:none;border:none;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;border-radius:50%;font-family:inherit;}
-.adk-mic:hover{background:var(--surface-2);color:var(--ink);}
+.adk-mic:hover{background:var(--overlay);color:var(--ink);}
 .adk-conn{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);}
 .adk-conn-lbl{font-size:11.5px;font-weight:700;color:var(--muted);}
 .adk-conn-chip{display:inline-flex;align-items:center;gap:5px;background:#FBF0DC;border:1px solid #EAD3A0;color:#8a5a12;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;}

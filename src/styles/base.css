@@ -84,7 +84,6 @@ html[dir="ltr"] .adk{direction:ltr;}
 /* root page bg (outside .adk) + frosted-glass chat chrome + amber/blue demo chips */
 :root[data-theme="dark"] html,:root[data-theme="dark"] body{background:#1A1917;}
 :root[data-theme="dark"] .adk-chat-head,
-:root[data-theme="dark"] .adk-chat-input,
 :root[data-theme="dark"] .adk-chat-pending{background:rgba(30,29,27,.75);border-color:rgba(56,53,47,.7);}
 :root[data-theme="dark"] .adk-demo,
 :root[data-theme="dark"] .adk-conn-chip,

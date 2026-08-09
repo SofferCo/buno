@@ -345,7 +345,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
           </div>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? "כתוב מה לעשות עם הקובץ…" : "שאל את בונו…"} />
-          <button className="adk-cmt-send" onClick={() => send()} title="שלח"><Icon name="arrowUp" size={18} /></button>
+          <button className={"adk-cmt-send" + (input.trim() ? " ready" : "")} onClick={() => send()} title="שלח"><Icon name="arrowUp" size={18} /></button>
           <button className="adk-mic" title="הקלטה קולית — בקרוב" onClick={() => {}}><Icon name="mic" size={18} /></button>
         </div>
       </div>
