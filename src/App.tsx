@@ -55,6 +55,7 @@ export default function App() {
   const [dayOpen, setDayOpen] = useState(true); // default landing = "היום שלי" (board is one click away)
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportPeriod, setReportPeriod] = useState<string | null>(null); // when opened from the dashboard, carry its period
   const [dashOpen, setDashOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function App() {
   const onbSetup = useRef<Record<string, string>>({});    // setup-card key → card id
   const onbResumeStep = useRef<string | null>(null);      // resume point for a paused onboarding run
   function openPage(name) {
+    if (name === "report") setReportPeriod(null); // board-nav report = current client, default month
     setDayOpen(name === "day"); setArchiveOpen(name === "archive"); setReportOpen(name === "report");
     setDashOpen(name === "dash"); setSettingsOpen(name === "settings"); setCalOpen(name === "cal");
     setMobileView("board"); // on mobile, navigating brings the main surface in front of buno
@@ -136,8 +138,15 @@ export default function App() {
       const colId = (columns.find((c) => c.id === "col-brief") || columns[0])?.id;
       if (!cid || !colId) { setEventOpen({ ev, projectId: item.projectId }); setMeetingEvent(ev); return; } // no board yet → legacy panel
       const id = uid("card");
-      const people = (ev.attendees || []).filter((a: any) => !a.self).map((a: any) => a.name || String(a.email || "").split("@")[0]).filter(Boolean);
-      card = { id, clientId: cid, title: ev.title || "פגישה", creator: ev.organizerName || "buno", cc: people, comments: [], attachments: [], subtasks: [], description: ev.description || "", deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), priority: "regular", routine: "none", dayFlex: false, time: ev.allDay ? "" : String(ev.start || "").slice(11, 16), activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: { type: "calendar", ref } };
+      const atts = (ev.attendees || []) as any[];
+      const nm = (a: any) => a?.name || (a?.email ? String(a.email).split("@")[0] : "");
+      const people = atts.filter((a) => !a.self).map(nm).filter(Boolean);
+      // whoever OPENED the meeting is the brief-giver (Tal: "מי שפתח את הפגישה").
+      // resolve the organizer to a name — from the flag or the organizer email — and
+      // if I organized it myself, the brief comes from the first other participant.
+      const orgAtt = atts.find((a) => a.organizer) || (ev.organizer ? atts.find((a) => a.email === ev.organizer) : null);
+      const briefGiver = (orgAtt && !orgAtt.self && nm(orgAtt)) || (!orgAtt?.self && ev.organizerName) || nm(atts.find((a) => !a.self)) || "buno";
+      card = { id, clientId: cid, title: ev.title || "פגישה", creator: briefGiver, cc: people, comments: [], attachments: [], subtasks: [], description: ev.description || "", deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), priority: "regular", routine: "none", dayFlex: false, time: ev.allDay ? "" : String(ev.start || "").slice(11, 16), activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: { type: "calendar", ref } };
       setCards((p: any) => ({ ...p, [id]: card }));
       setOrder((p: any) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
     }
@@ -835,7 +844,7 @@ export default function App() {
       </>)}
 
       {reportOpen && (
-        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} onClose={() => setReportOpen(false)} onOpen={(id) => setEditing(id)} />
+        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} initialPeriod={reportPeriod} onClose={() => setReportOpen(false)} onOpen={(id) => setEditing(id)} />
       )}
 
 
@@ -908,7 +917,7 @@ export default function App() {
           onSetPhoto={(photo) => setProfile((p) => ({ ...p, photo }))}
           onSetName={(name) => setProfile((p) => ({ ...p, name }))}
           onSetAssistant={(k, v) => setProfile((p) => ({ ...p, assistant: { ...(p.assistant || {}), [k]: v } }))}
-          onOpenClient={(id) => { setCurrentId(id); setDashOpen(false); }}
+          onOpenClient={(id, period) => { setCurrentId(id); setReportPeriod(period || null); setDashOpen(false); setReportOpen(true); }}
           onShareClient={cloud ? ((cl: any) => { setShareFor(cl); setDashOpen(false); }) : undefined} />
       )}
     </div>

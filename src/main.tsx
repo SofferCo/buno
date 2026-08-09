@@ -8,6 +8,8 @@ import { InvitedEntry } from "./components/screens/InvitedEntry";
 import { MyDayPreview } from "./components/screens/MyDayPreview";
 import { MeetCardPreview } from "./components/card/MeetCardPreview";
 import { DashPreview } from "./components/screens/DashPreview";
+import { ReportPreview } from "./components/screens/ReportPreview";
+import { SettingsPreview } from "./components/screens/SettingsPreview";
 import "./styles/index.css";
 
 // Gate: local mode (no env) → straight to the app, Stage-A behavior.
@@ -23,6 +25,10 @@ function Root() {
   if (new URLSearchParams(location.search).get("meet") === "1") return <MeetCardPreview />;
   // DESIGN PREVIEW: the personal dashboard with mock data, no auth (?dash=1)
   if (new URLSearchParams(location.search).get("dash") === "1") return <DashPreview />;
+  // DESIGN PREVIEW: a client report with mock data, no auth (?report=1)
+  if (new URLSearchParams(location.search).get("report") === "1") return <ReportPreview />;
+  // DESIGN PREVIEW: the settings panel with mock data, no auth (?settings=1)
+  if (new URLSearchParams(location.search).get("settings") === "1") return <SettingsPreview />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
   // ANY invite link → the one contextual entry, whether logged out or in. It

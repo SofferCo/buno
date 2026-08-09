@@ -148,7 +148,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                 <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
                 <tbody>
                   {byHours.map((p) => (
-                    <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id)}>
+                    <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id, period)} title="פתיחת דוח הלקוח לתקופה זו">
                       <td>{p.cl.name}</td><td>{p.count}</td><td>{fmtHours(p.sec)}</td><td>{Math.round((p.sec / denom) * 100)}%</td><td>{p.rate > 0 ? fmtMoney(p.revenue) : "—"}</td>
                     </tr>
                   ))}
