@@ -786,6 +786,7 @@ export default function App() {
           onClose={() => setDayOpen(false)}
           onOpenCard={(id) => { const c = cards[id]; if (c) { setCurrentId(c.clientId); openPage(null); setEditing(id); } }}
           onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")}
+          onReopen={(id) => moveCard(id, cards[id]?.activeColumn)}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 

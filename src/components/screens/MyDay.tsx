@@ -25,7 +25,7 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
@@ -106,7 +106,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
     return (
       <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
-        <span className="adk-tl-rail"><span className={"adk-tl-node" + (over ? " over" : "")} /></span>
+        <span className="adk-tl-rail"><button className={"adk-tl-node" + (over ? " over" : "")} title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }} /></span>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
         <div className="adk-tl-body">
           <div className="ttl">{routineKind(c) !== "none" && "↻ "}{c.title || "ללא כותרת"}</div>
@@ -130,7 +130,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = d.card, cl = clientOf(c.clientId);
     return (
       <div className="adk-tl-row done" onClick={() => onOpenCard(c.id)}>
-        <span className="adk-tl-rail"><span className="adk-tl-node done">✓</span></span>
+        <span className="adk-tl-rail"><button className="adk-tl-node done" title="החזר לפתוח" onClick={(e) => { e.stopPropagation(); onReopen?.(c.id); }}>✓</button></span>
         <div className="adk-tl-time">{fmtHM(d.at)}</div>
         <div className="adk-tl-body">
           <div className="ttl">{c.title || "ללא כותרת"}</div>
@@ -141,9 +141,10 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   };
 
   const NowRow = () => (
-    <div className="adk-tl-nowrow" ref={nowRef}>
+    <div className="adk-tl-nowrow" ref={nowRef} title={`עכשיו · ${timeLabel}`}>
       <span className="adk-tl-rail"><span className="adk-tl-node now" /></span>
-      <span className="adk-tl-nowunit"><span className="ln" /><span className="lbl">עכשיו · {timeLabel}</span></span>
+      <span className="adk-tl-nowline" />
+      <span className="adk-tl-nowlbl">עכשיו · {timeLabel}</span>
     </div>
   );
   // the ahead list carries the now-mark at its chronological spot (before the first

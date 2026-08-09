@@ -23,8 +23,9 @@
    grid (RTL, right→left): rail(40) · time(64) · content · action(48). The rail
    is the RIGHTMOST column, so node + time + title read as one unit. The spine is
    a single continuous line down the rail column. */
-.adk-tl{position:relative;max-width:880px;}
-.adk-tl-spine{position:absolute;inset-inline-start:19px;top:34px;bottom:12px;width:2px;background-color:#d7dee0;border-radius:2px;z-index:1;}
+/* fill the column height so the axis can run all the way down, past the last item */
+.adk-tl{position:relative;max-width:880px;min-height:100%;}
+.adk-tl-spine{position:absolute;inset-inline-start:19px;top:34px;bottom:0;width:2px;background-color:#d7dee0;border-radius:2px;z-index:1;}
 .adk-tl-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:22px 0 8px;padding-inline-start:52px;}
 .adk-tl-head:first-of-type{margin-top:0;}
 /* a thin separator before the look-ahead — content-side only, doesn't cross the rail */
@@ -37,21 +38,30 @@
 .adk-tl-row:hover{background:var(--surface-2);}
 /* rail cell — holds the node, centred; the spine passes through behind it */
 .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;}
-.adk-tl-node{position:relative;z-index:2;margin-top:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;line-height:1;flex:none;}
+.adk-tl-node{position:relative;z-index:2;margin-top:2px;width:18px;height:18px;padding:0;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;line-height:1;flex:none;font-family:inherit;}
 .adk-tl-node.over{border-color:var(--rec);}
 .adk-tl-node.done{background:var(--done);border-color:var(--done);}
+/* the circle is a control: click an open one to complete it, a done one to reopen */
+button.adk-tl-node{cursor:pointer;transition:border-color .12s,color .12s,filter .12s;}
+button.adk-tl-node:not(.done):hover{border-color:var(--done);color:var(--done);}
+button.adk-tl-node:not(.done):hover::after{content:"✓";}
+button.adk-tl-node.done:hover{filter:brightness(.92);}
 .adk-tl-time{flex:none;width:64px;text-align:start;font-size:13.5px;font-weight:800;color:var(--ink);padding-top:2px;font-variant-numeric:tabular-nums;}
 .adk-tl-time.flex{color:var(--faint);font-weight:700;font-size:12px;}
 /* completed today — one greenish surface; the spine + green nodes read on top */
 .adk-tl-donegroup{position:relative;background:var(--done-bg);border-radius:14px;margin:0 0 2px;}
 .adk-tl-donegroup .adk-tl-row:hover{background:rgba(0,175,87,.06);}
-/* the "now" mark — node on the spine + a short line + label, as ONE Marker unit */
-.adk-tl-nowrow{display:flex;align-items:center;gap:12px;min-height:24px;margin:3px 0;}
+/* the "now" mark — a quiet filled dot ON the rail, in the timeline's own colour,
+   plus a horizontal line that crosses the whole (left) column to the edge.
+   Hovering the row reveals the time label. No loud marker, no fixed text. */
+.adk-tl-nowrow{position:relative;display:flex;align-items:center;gap:8px;min-height:20px;margin:2px 0;cursor:default;}
 .adk-tl-nowrow .adk-tl-rail{flex:none;width:40px;display:flex;justify-content:center;}
-.adk-tl-nowrow .adk-tl-node.now{margin-top:0;width:12px;height:12px;border:none;background:var(--marker);box-shadow:0 0 0 3px rgba(217,242,82,.30);}
-.adk-tl-nowunit{display:flex;align-items:center;gap:8px;}
-.adk-tl-nowunit .ln{width:56px;height:2px;background:var(--marker);border-radius:2px;flex:none;}
-.adk-tl-nowunit .lbl{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;}
+.adk-tl-nowrow .adk-tl-node.now{margin-top:0;width:11px;height:11px;border:none;background:#aeb8bb;box-shadow:none;}
+.adk-tl-nowline{flex:1;height:2px;background:#ccd5d7;border-radius:2px;}
+.adk-tl-nowlbl{display:none;position:absolute;inset-inline-end:44px;top:50%;transform:translateY(-50%);background:var(--surface);padding:0 6px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;z-index:3;}
+.adk-tl-nowrow:hover .adk-tl-nowlbl{display:inline-block;}
+.adk-tl-nowrow:hover .adk-tl-node.now{background:var(--muted);}
+.adk-tl-nowrow:hover .adk-tl-nowline{background:#b6c0c3;}
 
 .adk-tl-actions{flex:none;display:flex;align-items:center;gap:6px;justify-content:flex-start;margin-top:1px;}
 /* hover actions take NO space at rest (display:none, not opacity:0) so they never
