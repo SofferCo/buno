@@ -9,8 +9,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
 html[dir="ltr"] .adk{direction:ltr;}
 /* Dark theme — set on <html data-theme="dark"> (picker: light/dark/system). Marker, the
    completion green and the late red get restrained dark values, not an auto-invert. */
-:root[data-theme="dark"] .adk{--canvas:#10171A;--surface:#182025;--surface-2:#202A2F;--ink:#E8EEF0;--muted:#9BA9AF;--faint:#6B7B82;--border:#2C373C;--accent:#22A39F;--accent-d:#54C9C4;--accent-soft:#153230;--rec:#F0795E;--rec-soft:#3B221C;}
-:root[data-theme="dark"]{--done:#2FBF6E;--done-bg:#132720;--marker:#AEBE4F;}
+:root[data-theme="dark"] .adk{--canvas:#1A1917;--surface:#262523;--surface-2:#302F2C;--ink:#ECEAE4;--muted:#A8A39A;--faint:#6F6B62;--border:#38352F;--accent:#2AA9A5;--accent-d:#57C9C3;--accent-soft:#22302E;--rec:#E8785C;--rec-soft:#3A241E;}
+:root[data-theme="dark"]{--done:#4CBF7A;--done-bg:#1E2A20;--marker:#BBC456;}
 /* Dark readability pass — two hardcoded patterns break on dark and need fixing:
    (1) fixed #1A1A1A "solid" brand elements go invisible on a dark canvas → recolor to the
        accent so they still read as the emphasized element. (2) var(--ink)+#fff pills/labels
@@ -37,7 +37,7 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] html,:root[data-theme="dark"] body{background:#10171A;}
 :root[data-theme="dark"] .adk-chat-head,
 :root[data-theme="dark"] .adk-chat-input,
-:root[data-theme="dark"] .adk-chat-pending{background:rgba(22,30,34,.72);border-color:rgba(44,53,58,.7);}
+:root[data-theme="dark"] .adk-chat-pending{background:rgba(30,29,27,.75);border-color:rgba(56,53,47,.7);}
 :root[data-theme="dark"] .adk-demo,
 :root[data-theme="dark"] .adk-conn-chip,
 :root[data-theme="dark"] .adk-draft-banner,
