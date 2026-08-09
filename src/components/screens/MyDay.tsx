@@ -180,16 +180,20 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
             {!nothing && (
               <div className="adk-tl">
                 <span className="adk-tl-spine" />
-                {/* 1 — what crossed the time (equal top-level section) */}
+                {/* 1 — DONE at the very top: everything above the now-line is handled */}
+                {doneSorted.length > 0 && (<>
+                  <div className="adk-tl-head">נסגרו היום · {doneSorted.length}</div>
+                  <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>
+                </>)}
+                {/* 2 — overdue: first among the actionable, but BELOW done */}
                 {overdueTasks.length > 0 && (<>
                   <div className="adk-tl-head">חצו את הזמן</div>
                   {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
                 </>)}
-                {/* 2 — today: the green closed-block, then the now-mark in place, then the rest */}
-                {hasToday && (doneSorted.length > 0 || ahead.length > 0) && <div className="adk-tl-head">סדר היום</div>}
-                {doneSorted.length > 0 && <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>}
-                {(doneSorted.length > 0 || ahead.length > 0) && aheadRows}
-                {/* 3 — the look ahead */}
+                {/* 3 — the now-line, then the rest of today: timed first, flexible last */}
+                {ahead.length > 0 && <div className="adk-tl-head">סדר היום</div>}
+                {aheadRows}
+                {/* 4 — the look ahead */}
                 {upcoming.length > 0 && (<>
                   {hasToday && <div className="adk-tl-div" />}
                   <div className="adk-tl-head">בקרוב · 7 ימים</div>
