@@ -6,6 +6,7 @@ import { LoginScreen } from "./auth/LoginScreen";
 import { Onboarding } from "./components/screens/Onboarding";
 import { InvitedEntry } from "./components/screens/InvitedEntry";
 import { MyDayPreview } from "./components/screens/MyDayPreview";
+import { MeetCardPreview } from "./components/card/MeetCardPreview";
 import "./styles/index.css";
 
 // Gate: local mode (no env) → straight to the app, Stage-A behavior.
@@ -17,6 +18,8 @@ function Root() {
   if (new URLSearchParams(location.search).get("onboarding") === "1") return <Onboarding onDone={() => { location.search = ""; }} />;
   // DESIGN PREVIEW: the "My Day" timeline with mock data, no auth (?myday=1)
   if (new URLSearchParams(location.search).get("myday") === "1") return <MyDayPreview />;
+  // DESIGN PREVIEW: a calendar event opened as a task card, no auth (?meet=1)
+  if (new URLSearchParams(location.search).get("meet") === "1") return <MeetCardPreview />;
   if (localMode) return <App />;
   if (loading) return <div className="adk-login-load" />;
   // ANY invite link → the one contextual entry, whether logged out or in. It

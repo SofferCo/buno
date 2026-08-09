@@ -25,7 +25,7 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
@@ -37,7 +37,11 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   const fmtHM = (ms: number) => { try { return new Date(ms).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 
   // today's calendar events → timeline items
-  const eventItems = ((events && events[todayKey]) || []).map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
+  // an event that's already been materialised into a linked card shows as that
+  // card (a task), not twice — skip its raw calendar entry here.
+  const eventItems = ((events && events[todayKey]) || [])
+    .filter((e: any) => !(linkedEventIds && e.ev?.id && linkedEventIds.has(e.ev.id)))
+    .map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
   // "crossed the time" is only meaningful for items that HAVE a time — a flexible
   // task (no clock) can't be late, so it's never overdue and never tagged; it just
   // sinks to the bottom of the day (below).

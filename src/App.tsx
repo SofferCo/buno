@@ -121,9 +121,30 @@ export default function App() {
   const [calEvents, setCalEvents] = useState<Record<string, any[]>>({});
   const [contactAffinity, setContactAffinity] = useState<any[]>([]); // A2: contact→board memory
   const [connectToast, setConnectToast] = useState<string | null>(null);
-  const [eventOpen, setEventOpen] = useState<any>(null); // {ev, projectId}
+  const [eventOpen, setEventOpen] = useState<any>(null); // {ev, projectId} — legacy fallback panel
+  const [meetingEvent, setMeetingEvent] = useState<any>(null); // the live calendar event backing the open card
   const [gcalInteg, setGcalInteg] = useState<any>(null);
-  function openEvent(item: any) { setEventOpen({ ev: item.ev || item, projectId: item.projectId }); }
+  // a calendar event IS a task: opening one MATERIALISES a real linked card
+  // (origin cal-<id>) and opens it in the full card — the meeting details + calendar
+  // actions ride on top, the normal task fields (notes, subtasks, timer) live below.
+  function openEvent(item: any) {
+    const ev = item.ev || item;
+    const ref = "cal-" + (ev.id || "");
+    let card: any = Object.values(cards).find((c: any) => !c.archived && c.origin?.ref === ref);
+    if (!card) {
+      const cid = item.projectId || inferEventProjectId(ev.attendees || [], clients, ev.organizer) || clients.find((c) => c.home)?.id || clients[0]?.id;
+      const colId = (columns.find((c) => c.id === "col-brief") || columns[0])?.id;
+      if (!cid || !colId) { setEventOpen({ ev, projectId: item.projectId }); setMeetingEvent(ev); return; } // no board yet → legacy panel
+      const id = uid("card");
+      const people = (ev.attendees || []).filter((a: any) => !a.self).map((a: any) => a.name || String(a.email || "").split("@")[0]).filter(Boolean);
+      card = { id, clientId: cid, title: ev.title || "פגישה", creator: ev.organizerName || "buno", cc: people, comments: [], attachments: [], subtasks: [], description: ev.description || "", deadline: ev.start ? String(ev.start).slice(0, 10) : todayStr(), priority: "regular", routine: "none", dayFlex: false, time: ev.allDay ? "" : String(ev.start || "").slice(11, 16), activeColumn: colId, timeSpent: 0, timerStart: null, createdAt: Date.now(), origin: { type: "calendar", ref } };
+      setCards((p: any) => ({ ...p, [id]: card }));
+      setOrder((p: any) => ({ ...p, [colId]: [...(p[colId] || []), id] }));
+    }
+    setCurrentId(card.clientId);
+    setMeetingEvent(ev);
+    setEditing(card.id);
+  }
   function prepTaskFromEvent(ev: any, project: any) {
     const when = ev.start ? new Date(ev.start) : null;
     const dl = when ? `${when.getFullYear()}-${String(when.getMonth()+1).padStart(2,"0")}-${String(when.getDate()).padStart(2,"0")}` : todayStr();
@@ -724,9 +745,22 @@ export default function App() {
       </div>
 
       {editing && cards[editing] && (<>
-        <div className="adk-scrim" onClick={() => setEditing(null)} />
+        <div className="adk-scrim" onClick={() => { setEditing(null); setMeetingEvent(null); }} />
         <CardPanel card={cards[editing]} now={now} assets={assets} client={clients.find((c) => c.id === cards[editing].clientId)}
           projects={clients}
+          meeting={(() => { const c = cards[editing]; if (c?.origin?.type !== "calendar") return null; const live = Object.values(calEvents).flat().find((w: any) => ("cal-" + (w.ev?.id)) === c.origin.ref)?.ev; return live || (meetingEvent && ("cal-" + meetingEvent.id) === c.origin.ref ? meetingEvent : null); })()}
+          onEventAction={async (action: any, opts: any) => {
+            const c = cards[editing]; const evId = String(c?.origin?.ref || "").replace(/^cal-/, "");
+            if (!evId) return { ok: false, error: "לא פגישת יומן" };
+            const r = await calendarAction(action, evId, opts);
+            if (r.ok) {
+              await refreshCalendar();
+              if (action === "cancel") { deleteCard(editing, "owner"); setEditing(null); setMeetingEvent(null); }
+              else if (r.start) { const d = new Date(r.start); updateCard(editing, { deadline: r.start.slice(0, 10), time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` }); }
+            }
+            return r;
+          }}
+          onProposeTime={(ev: any) => { const t = ev?.title || cards[editing]?.title; setEditing(null); setMeetingEvent(null); setChatSeed(`הצע זמן חלופי לפגישה "${t}" ובצע את הדחייה`); setMobileView("chat"); }}
           onMoveProject={roleViewer ? undefined : (pid) => updateCard(editing, { clientId: pid })}
           onCreateProject={roleViewer ? undefined : (name) => {
             const color = SWATCHES.find((s) => !clients.some((c) => c.color === s)) || SWATCHES[clients.length % SWATCHES.length];
@@ -739,8 +773,8 @@ export default function App() {
           ].map((s) => (s || "").trim()).filter(Boolean)))}
           profileName={roleViewer ? (current?.contact || (current?.members && current.members[0]) || "לקוח") : (profile.name || identity?.name || "אני")}
           viewer={roleViewer}
-          onClose={() => setEditing(null)} onChange={roleViewer ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, roleViewer ? "client" : "owner")}
-          onComplete={() => { moveCard(editing, "col-done"); setEditing(null); }}
+          onClose={() => { setEditing(null); setMeetingEvent(null); }} onChange={roleViewer ? ((p) => editWithTrail(editing, p, current?.contact || (current?.members && current.members[0]) || "לקוח")) : ((p) => updateCard(editing, p))} onDelete={() => deleteCard(editing, roleViewer ? "client" : "owner")}
+          onComplete={() => { moveCard(editing, "col-done"); setEditing(null); setMeetingEvent(null); }}
           onToggleTimer={() => toggleTimer(editing)} onAddFiles={(fl) => addFiles(editing, fl)} onAddLink={() => addLink(editing)}
           onUpdateAtt={(aid, p) => updateAtt(editing, aid, p)} onRemoveAtt={(aid) => removeAtt(editing, aid)} />
       </>)}
@@ -780,6 +814,7 @@ export default function App() {
 
       {dayOpen && (
         <MyDay planTasks={planTasks} upcoming={upcoming} completedToday={completedToday} addedToday={addedToday} clients={clients} now={now} runningCard={runningCard} events={calEvents} onOpenEvent={openEvent}
+          linkedEventIds={new Set(Object.values(cards).filter((c: any) => !c.archived && c.origin?.type === "calendar").map((c: any) => String(c.origin.ref).replace(/^cal-/, "")))}
           profileName={profile.name} roundMode={roundMode} capacity={(profile.settings && profile.settings.dailyCapacity) || 6}
           pending={{ drafts: notifs.filter((n) => n.type === "draft").length, requests: notifs.filter((n) => n.type === "request").length }}
           onAsk={(question) => { setChatSeed(question); setMobileView("chat"); }}
