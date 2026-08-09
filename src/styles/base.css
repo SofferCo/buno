@@ -5,6 +5,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#EEF1F2;}
 #root{height:100%;overflow:hidden;}
 .adk,.adk *{box-sizing:border-box;font-family:'Google Sans','Assistant',system-ui,sans-serif;}
 .adk{--canvas:#EEF1F2;--surface:#FFFFFF;--surface-2:#F7F9F9;--ink:#17282F;--muted:#647079;--faint:#93A0A6;--border:#E1E7E9;--accent:#0E8F8C;--accent-d:#0A6F6D;--accent-soft:#E1F1F0;--rec:#E8664A;--rec-soft:#FBE7E1;direction:rtl;background:var(--canvas);color:var(--ink);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;}
+/* page direction follows the UI language (set on <html dir>); logical start/end do the rest */
+html[dir="ltr"] .adk{direction:ltr;}
 /* Dark theme — set on <html data-theme="dark"> (picker: light/dark/system). Marker, the
    completion green and the late red get restrained dark values, not an auto-invert. */
 :root[data-theme="dark"] .adk{--canvas:#10171A;--surface:#182025;--surface-2:#202A2F;--ink:#E8EEF0;--muted:#9BA9AF;--faint:#6B7B82;--border:#2C373C;--accent:#22A39F;--accent-d:#54C9C4;--accent-soft:#153230;--rec:#F0795E;--rec-soft:#3B221C;}

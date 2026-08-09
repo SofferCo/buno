@@ -21,6 +21,7 @@ import { addPeriod, daysUntil, flexDay, relTime, routineKind, todayStr, ymOf } f
 import { fmtMoney, fmtShort, fmtModeHours } from "./lib/format";
 import { setUidMode, uid } from "./lib/id";
 import { supabase } from "./lib/supabase";
+import { I18nProvider, dirFor } from "./lib/i18n";
 import { loadRemote, SyncEngine } from "./data/remote";
 import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
@@ -135,6 +136,10 @@ export default function App() {
     apply();
     if (themePref === "system") { mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply); }
   }, [themePref]);
+  // UI language: sets <html lang/dir> so the page direction follows the chosen language
+  // (start/end logical props do the rest). Default Hebrew. Saved in profile.settings.
+  const langPref = (profile?.settings?.lang as string) || "he";
+  useEffect(() => { document.documentElement.lang = langPref; document.documentElement.dir = dirFor(langPref); }, [langPref]);
   const engineRef = useRef<SyncEngine | null>(null);
   const [importPending, setImportPending] = useState<any>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
@@ -690,6 +695,7 @@ export default function App() {
   );
 
   return (
+    <I18nProvider lang={langPref}>
     <div className={"adk chat-open " + (mobileView === "chat" ? "mv-chat" : "mv-board")}>
       <img src="/bunologo.svg" className="adk-brand-wm" alt="" aria-hidden="true" />
       <div className="adk-shell">
@@ -964,5 +970,6 @@ export default function App() {
           onShareClient={cloud ? ((cl: any) => { setShareFor(cl); setDashOpen(false); }) : undefined} />
       )}
     </div>
+    </I18nProvider>
   );
 }

@@ -3,11 +3,14 @@ import { Icon } from "../ui/Icon";
 import { resizeImage } from "../../lib/image";
 import { initials, nameColor } from "../../lib/people";
 import { listIntegrations, connectGoogle, disconnectGoogle, scanGmail, hasGmailScope } from "../../data/integrations";
+import { useT, LANGS } from "../../lib/i18n";
 
 export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto, onSetAssistant, onSetPref, onSignOut, cloud, onScanned }: any) {
   const photoRef = useRef<any>();
   const [cat, setCat] = useState<"profile" | "assistant" | "connections" | "prefs">("profile");
+  const { t } = useT();
   const theme = (profile.settings && profile.settings.theme) || "system";
+  const lang = (profile.settings && profile.settings.lang) || "he";
   const timeRound = (profile.settings && profile.settings.timeRound) || "ceil_hour";
   const capacity = Number(profile.settings && profile.settings.dailyCapacity) || 6;
   const [integ, setInteg] = useState<any[]>([]);
@@ -35,41 +38,49 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
     <div className="adk-page">
       <div className="adk-pcard">
         <div className="adk-pcard-head">
-          <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={22} /></button>
-          <div className="titleblk"><div><h2>הגדרות</h2><span>שנו את ההגדרות שלכם בכל אחד מהתחומים — בקלות וביעילות.</span></div></div>
+          <button className="adk-back" onClick={onClose} title={t("common.back")}><Icon name="arrowR" size={22} /></button>
+          <div className="titleblk"><div><h2>{t("settings.title")}</h2><span>{t("settings.subtitle")}</span></div></div>
           <div className="sp" />
         </div>
 
         <div className="adk-set-tabs">
-          {([["profile", "פרופיל"], ["assistant", "העוזר"], ...(cloud ? [["connections", "חיבורים"]] : []), ["prefs", "העדפות"]] as any).map(([k, label]: any) => (
+          {([["profile", t("settings.tab.profile")], ["assistant", t("settings.tab.assistant")], ...(cloud ? [["connections", t("settings.tab.connections")]] : []), ["prefs", t("settings.tab.prefs")]] as any).map(([k, label]: any) => (
             <button key={k} className={"adk-set-tab" + (cat === k ? " on" : "")} onClick={() => setCat(k)}>{label}</button>
           ))}
         </div>
 
         {cat === "profile" && (
         <div className="adk-pcard-foot">
-          <p className="adk-block-title">פרופיל</p>
+          <p className="adk-block-title">{t("settings.profile")}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <input ref={photoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhoto} />
-            <button className="adk-self" style={{ width: 56, height: 56, border: "2px solid var(--border)", background: nameColor(profile.name || "אני") }} onClick={() => photoRef.current.click()} title="החלף תמונה">
+            <button className="adk-self" style={{ width: 56, height: 56, border: "2px solid var(--border)", background: nameColor(profile.name || "אני") }} onClick={() => photoRef.current.click()} title={t("settings.changePhoto")}>
               {profile.photo ? <img src={profile.photo} alt="" /> : <span style={{ fontSize: 17 }}>{profile.name ? initials(profile.name) : "אני"}</span>}
             </button>
             <div className="adk-field" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
-              <label>שם מלא</label>
-              <input className="adk-input" value={profile.name} onChange={(e) => onSetName(e.target.value)} placeholder="השם שלך" />
+              <label>{t("settings.fullName")}</label>
+              <input className="adk-input" dir="auto" value={profile.name} onChange={(e) => onSetName(e.target.value)} placeholder={t("settings.namePlaceholder")} />
             </div>
             {onSignOut && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginInlineStart: "auto" }}>
                 {account && <span style={{ fontSize: 12.5, color: "var(--faint)", fontWeight: 600, direction: "ltr" }}>{account}</span>}
-                <button className="adk-btn danger" style={{ margin: 0 }} onClick={onSignOut}>התנתק</button>
+                <button className="adk-btn danger" style={{ margin: 0 }} onClick={onSignOut}>{t("settings.signOut")}</button>
               </div>
             )}
           </div>
           <div className="adk-asst-row" style={{ borderBottom: "none", marginTop: 4 }}>
-            <div className="adk-asst-info"><b>מצב תצוגה</b><span>בהיר, כהה, או לפי מערכת ההפעלה</span></div>
+            <div className="adk-asst-info"><b>{t("settings.theme")}</b><span>{t("settings.themeDesc")}</span></div>
             <div className="adk-asst-seg">
-              {[["light", "בהיר"], ["dark", "כהה"], ["system", "מערכת"]].map(([v, l]) => (
+              {[["light", t("settings.theme.light")], ["dark", t("settings.theme.dark")], ["system", t("settings.theme.system")]].map(([v, l]) => (
                 <button key={v} className={"lvl act" + (theme === v ? " on" : "")} onClick={() => onSetPref("theme", v)}><span className="dot" />{l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="adk-asst-row" style={{ borderBottom: "none" }}>
+            <div className="adk-asst-info"><b>{t("settings.lang")}</b><span>{t("settings.langDesc")}</span></div>
+            <div className="adk-asst-seg">
+              {LANGS.map((L) => (
+                <button key={L.code} className={"lvl act" + (lang === L.code ? " on" : "")} onClick={() => onSetPref("lang", L.code)}><span className="dot" />{L.name}</button>
               ))}
             </div>
           </div>
@@ -131,21 +142,21 @@ export function SettingsPanel({ profile, account, onClose, onSetName, onSetPhoto
 
         {cat === "prefs" && (
         <div className="adk-pcard-foot">
-          <p className="adk-block-title">העדפות</p>
+          <p className="adk-block-title">{t("settings.prefs")}</p>
           <div className="adk-asst-row" style={{ borderBottom: "none" }}>
-            <div className="adk-asst-info"><b>חישוב זמן</b><span>איך מוצג הזמן שנצבר על משימות</span></div>
+            <div className="adk-asst-info"><b>{t("settings.timeRound")}</b><span>{t("settings.timeRoundDesc")}</span></div>
             <div className="adk-asst-seg">
-              {[["ceil_hour", "שעה שלמה"], ["decimal", "עשרוני"], ["exact", "מדויק"]].map(([v, l]) => (
-                <button key={v} className={"lvl act" + (timeRound === v ? " on" : "")} onClick={() => onSetPref("timeRound", v)}><span className="dot" />{l}</button>
+              {["ceil_hour", "decimal", "exact"].map((v) => (
+                <button key={v} className={"lvl act" + (timeRound === v ? " on" : "")} onClick={() => onSetPref("timeRound", v)}><span className="dot" />{t("settings.timeRound." + v)}</button>
               ))}
             </div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--faint)", fontWeight: 600 }}>עבודה נמדדת כערך, לא כדקות — לכן ברירת המחדל מעגלת כלפי מעלה לשעה שלמה.</div>
+          <div style={{ fontSize: 12, color: "var(--faint)", fontWeight: 600 }}>{t("settings.timeRoundNote")}</div>
           <div className="adk-asst-row" style={{ borderBottom: "none" }}>
-            <div className="adk-asst-info"><b>קיבולת יומית</b><span>מעל 80% מהיום — בונו יציין שהיום צפוף</span></div>
+            <div className="adk-asst-info"><b>{t("settings.capacity")}</b><span>{t("settings.capacityDesc")}</span></div>
             <div className="adk-asst-seg">
               <button className="lvl" onClick={() => onSetPref("dailyCapacity", Math.max(1, capacity - 1))}>−</button>
-              <b style={{ minWidth: 44, textAlign: "center" }}>{capacity} ש׳</b>
+              <b style={{ minWidth: 44, textAlign: "center" }}>{capacity} {t("settings.hoursShort")}</b>
               <button className="lvl" onClick={() => onSetPref("dailyCapacity", Math.min(16, capacity + 1))}>+</button>
             </div>
           </div>
