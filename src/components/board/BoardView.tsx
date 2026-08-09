@@ -12,7 +12,9 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
   return (
     <div className="adk-board">
       {columns.map((col) => {
-        const ids = (order[col.id] || []).filter((id) => cards[id] && cards[id].clientId === clientId && !cards[id].archived && (!filter || filter(cards[id])));
+        let ids = (order[col.id] || []).filter((id) => cards[id] && cards[id].clientId === clientId && !cards[id].archived && (!filter || filter(cards[id])));
+        // Done: newest-completed on top of the stack (by when it entered the column).
+        if (col.id === "col-done") ids = [...ids].sort((a, b) => (cards[b].columnChangedAt || 0) - (cards[a].columnChangedAt || 0));
         const colTime = ids.reduce((a, id) => a + cardSeconds(cards[id], now), 0);
         return (
           <div key={col.id} className={"adk-col" + (!viewer && d.dropCol === col.id ? " drop" : "")}

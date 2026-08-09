@@ -8,30 +8,57 @@ import { cardSeconds } from "../../lib/time";
 
 export function PersonalDashboard({ clients, cards, cardColumn, now, profile, onClose, onSetPhoto, onSetName, onSetAssistant, onOpenClient, onShareClient }: any) {
   const photoRef = useRef<any>();
-  const seq = last12Months();
-  const [period, setPeriod] = useState("12m");
-  const inScope = (c: any) => period === "12m" ? seq.includes(ymOf(c.createdAt)) : ymOf(c.createdAt) === period;
-  const per = clients.map((cl) => {
-    const cs: any[] = Object.values(cards).filter((c: any) => c.clientId === cl.id && inScope(c));
-    const sec = cs.reduce((a: number, c) => a + cardSeconds(c, now), 0);
+  const seq = last12Months();               // 12 "YYYY-MM" keys, oldest → newest
+  const curYm = ymOf(now);
+  const [period, setPeriod] = useState("month");   // default: the current month
+
+  // which months the current period spans
+  const months = period === "quarter" ? seq.slice(-3) : period === "12m" ? seq : period === "month" ? [curYm] : [period];
+  const scopeSet = new Set(months);
+  const single = months.length === 1;      // a single month → break the bar chart into DAYS
+  // billing month follows the DEADLINE (the date the user controls), else creation.
+  const billYm = (c: any) => (c.deadline ? String(c.deadline).slice(0, 7) : ymOf(c.createdAt));
+  const billDay = (c: any) => { const d = c.deadline ? new Date(String(c.deadline) + "T00:00:00") : new Date(c.createdAt); return d.getDate(); };
+  const daysInMonth = (ym: string) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
+  // deleted / archived tasks never count toward hours or billing.
+  const live = (Object.values(cards) as any[]).filter((c: any) => !c.archived);
+  const inScope = (c: any) => scopeSet.has(billYm(c));
+  const scoped = live.filter(inScope);
+
+  const per = clients.map((cl: any) => {
+    const cs = scoped.filter((c: any) => c.clientId === cl.id);
+    const sec = cs.reduce((a: number, c: any) => a + cardSeconds(c, now), 0);
     const rate = Number(cl.rate) || 0;
     return { cl, sec, count: cs.length, rate, revenue: (sec / 3600) * rate };
-  }).filter((p) => p.sec > 0 || p.count > 0);
-  const totalSec = per.reduce((a, p) => a + p.sec, 0);
-  const totalRev = per.reduce((a, p) => a + p.revenue, 0);
+  }).filter((p: any) => p.sec > 0 || p.count > 0);
+  const totalSec = per.reduce((a: number, p: any) => a + p.sec, 0);
+  const totalRev = per.reduce((a: number, p: any) => a + p.revenue, 0);
   const byHours = [...per].sort((a, b) => b.sec - a.sec);
   const mostBusy = byHours[0];
   const mostProfit = [...per].filter((p) => p.rate > 0).sort((a, b) => b.revenue - a.revenue)[0];
   const denom = totalSec || 1;
-  let acc = 0;
-  const stops = byHours.map((p) => { const from = (acc / denom) * 360; acc += p.sec; const to = (acc / denom) * 360; return `${p.cl.color} ${from}deg ${to}deg`; }).join(", ");
-  const monthly = seq.map((k) => ({ k, sec: (Object.values(cards) as any[]).filter((c: any) => ymOf(c.createdAt) === k).reduce((a: number, c) => a + cardSeconds(c, now), 0) }));
-  const maxM = Math.max(1, ...monthly.map((m) => m.sec));
-  const rangeLabel = period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
-  async function onPhoto(e) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch {} }
+
+  // donut as SVG arcs so each client segment carries its own hover label
+  const R = 54, C = 2 * Math.PI * R;
+  let cum = 0;
+  const arcs = byHours.filter((p) => p.sec > 0).map((p) => { const frac = p.sec / denom; const seg = { p, frac, off: cum }; cum += frac; return seg; });
+
+  // stacked bar chart: buckets are DAYS for a single month, else the months in scope
+  const buckets: (number | string)[] = single ? Array.from({ length: daysInMonth(months[0]) }, (_, i) => i + 1) : months;
+  const bucketData = buckets.map((bk) => {
+    const inB = single ? scoped.filter((c) => billDay(c) === bk) : scoped.filter((c) => billYm(c) === bk);
+    const segs = clients.map((cl: any) => ({ cl, sec: inB.filter((c: any) => c.clientId === cl.id).reduce((a: number, c: any) => a + cardSeconds(c, now), 0) })).filter((s: any) => s.sec > 0);
+    return { bk, segs, total: segs.reduce((a: number, s: any) => a + s.sec, 0) };
+  });
+  const maxB = Math.max(1, ...bucketData.map((b) => b.total));
+
+  const scopeLabel = period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
+  const rangeLabel = period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
+  async function onPhoto(e: any) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch { /* ignore */ } }
+
   return (
     <div className="adk-page">
-      <div className="adk-pcard">
+      <div className="adk-pcard" style={{ display: "flex", flexDirection: "column" }}>
         <div className="adk-pcard-head">
           <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={22} /></button>
           <div className="titleblk">
@@ -43,7 +70,10 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           </div>
           <div className="sp" />
           <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-            <option value="12m">12 חודשים אחרונים</option>
+            <option value="month">החודש</option>
+            <option value="quarter">רבעון (3 חודשים)</option>
+            <option value="12m">שנה (12 חודשים)</option>
+            <option disabled>──────────</option>
             {[...seq].reverse().map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}
           </select>
           <button className="btn" onClick={() => window.print()}><Icon name="printer" /> הדפסה</button>
@@ -56,57 +86,75 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           <div className="adk-kcell"><b style={{ fontSize: 20 }}>{mostBusy?.cl.name || "—"}</b><span>הכי הרבה עבודה</span></div>
         </div>
 
-        <div className="adk-pcard-body">
-          <div className="adk-panel-block">
-            <p className="adk-block-title">חלוקת הזמן בין הלקוחות</p>
-            {per.length === 0 ? <div className="adk-arch-empty">עדיין אין נתונים</div> : (
-              <div style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" }}>
-                <div className="adk-donut" style={{ backgroundImage: `conic-gradient(${stops})` }} />
-                <div className="adk-legend">
-                  {byHours.map((p) => (
-                    <div className="adk-leg" key={p.cl.id}>
-                      <span className="sw" style={{ background: p.cl.color }} />
-                      {p.cl.name}
-                      <span className="pct">{Math.round((p.sec / denom) * 100)}%</span>
-                      {onShareClient && <button title="שיתוף" onClick={() => onShareClient(p.cl)} style={{ marginInlineStart: 6, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0, display: "inline-flex" }}><Icon name="users" size={14} /></button>}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="adk-pcard-body">
+            <div className="adk-panel-block">
+              <p className="adk-block-title">חלוקת הזמן בין הלקוחות</p>
+              {per.length === 0 ? <div className="adk-arch-empty">עדיין אין נתונים {scopeLabel}</div> : (
+                <div style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" }}>
+                  <svg width="150" height="150" viewBox="0 0 140 140" style={{ flex: "none" }}>
+                    <circle cx="70" cy="70" r={R} fill="none" stroke="var(--surface-2)" strokeWidth="16" />
+                    <g transform="rotate(-90 70 70)">
+                      {arcs.map((a) => (
+                        <circle key={a.p.cl.id} cx="70" cy="70" r={R} fill="none" stroke={a.p.cl.color} strokeWidth="16"
+                          strokeDasharray={`${a.frac * C} ${C}`} strokeDashoffset={`${-a.off * C}`}>
+                          <title>{a.p.cl.name} · {Math.round(a.frac * 100)}% · {fmtHours(a.p.sec)}ש</title>
+                        </circle>
+                      ))}
+                    </g>
+                  </svg>
+                  <div className="adk-legend">
+                    {byHours.map((p) => (
+                      <div className="adk-leg" key={p.cl.id}>
+                        <span className="sw" style={{ background: p.cl.color }} />
+                        {p.cl.name}
+                        <span className="pct">{Math.round((p.sec / denom) * 100)}%</span>
+                        {onShareClient && <button title="שיתוף" onClick={() => onShareClient(p.cl)} style={{ marginInlineStart: 6, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0, display: "inline-flex" }}><Icon name="share" size={14} /></button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {mostProfit && (
+                <div style={{ background: "var(--accent-soft)", border: "1px solid #bfe2e0", borderRadius: 12, padding: "12px 15px", marginTop: 20 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--accent-d)", textTransform: "uppercase", letterSpacing: ".05em" }}>הלקוח הכי רווחי {scopeLabel}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{mostProfit.cl.name} · {fmtMoney(mostProfit.revenue)} <span style={{ color: "var(--muted)", fontWeight: 700, fontSize: 13 }}>({fmtHours(mostProfit.sec)}ש × ₪{mostProfit.rate})</span></div>
+                </div>
+              )}
+            </div>
+            <div className="adk-panel-block">
+              <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"} · צבע לפי לקוח</p>
+              <div className="adk-barchart">
+                {bucketData.map((m) => (
+                  <div className="adk-bc-col" key={String(m.bk)}>
+                    <div className="adk-bc-track" title={single ? `${m.bk} · ${fmtHours(m.total)}ש` : undefined}>
+                      <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
+                        {m.segs.map((s: any) => (
+                          <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%` }} title={`${s.cl.name} · ${fmtHours(s.sec)}ש`} />
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="adk-bc-x">{single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
+                  </div>
+                ))}
               </div>
-            )}
-            {mostProfit && (
-              <div style={{ background: "var(--accent-soft)", border: "1px solid #bfe2e0", borderRadius: 12, padding: "12px 15px", marginTop: 20 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--accent-d)", textTransform: "uppercase", letterSpacing: ".05em" }}>הלקוח הכי רווחי</div>
-                <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3 }}>{mostProfit.cl.name} · {fmtMoney(mostProfit.revenue)} <span style={{ color: "var(--muted)", fontWeight: 700, fontSize: 13 }}>({fmtHours(mostProfit.sec)}ש × ₪{mostProfit.rate})</span></div>
-              </div>
-            )}
-          </div>
-          <div className="adk-panel-block">
-            <p className="adk-block-title">שעות עבודה לפי חודש (כל הלקוחות)</p>
-            <div className="adk-barchart">
-              {monthly.map((m) => (
-                <div className="adk-bc-col" key={m.k} title={`${fmtHours(m.sec)} שעות`}>
-                  <div className="adk-bc-track"><div className={"adk-bc-bar" + (period === m.k ? " hl" : "")} style={{ height: `${(m.sec / maxM) * 100}%` }} /></div>
-                  <div className="adk-bc-x">{m.k.slice(5)}/{m.k.slice(2, 4)}</div>
-                </div>
-              ))}
             </div>
           </div>
-        </div>
 
-        <div className="adk-pcard-foot">
-          <p className="adk-block-title">לפי לקוח</p>
-          <table className="adk-reptable">
-            <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
-            <tbody>
-              {byHours.map((p) => (
-                <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id)}>
-                  <td>{p.cl.name}</td><td>{p.count}</td><td>{fmtHours(p.sec)}</td><td>{Math.round((p.sec / denom) * 100)}%</td><td>{p.rate > 0 ? fmtMoney(p.revenue) : "—"}</td>
-                </tr>
-              ))}
-              {byHours.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין נתונים בתקופה זו</td></tr>}
-            </tbody>
-          </table>
+          <div className="adk-pcard-foot">
+            <p className="adk-block-title">לפי לקוח</p>
+            <table className="adk-reptable">
+              <thead><tr><th>לקוח</th><th>משימות</th><th>שעות</th><th>נתח</th><th>הכנסה</th></tr></thead>
+              <tbody>
+                {byHours.map((p) => (
+                  <tr key={p.cl.id} onClick={() => onOpenClient(p.cl.id)}>
+                    <td>{p.cl.name}</td><td>{p.count}</td><td>{fmtHours(p.sec)}</td><td>{Math.round((p.sec / denom) * 100)}%</td><td>{p.rate > 0 ? fmtMoney(p.revenue) : "—"}</td>
+                  </tr>
+                ))}
+                {byHours.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין נתונים {scopeLabel}</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
