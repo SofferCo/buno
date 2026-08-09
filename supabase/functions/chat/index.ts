@@ -344,8 +344,9 @@ After any tool call, tell the user plainly in one line what actually happened. I
 === שבבי המשך (SUGGESTIONS) ===
 בסוף התשובה — ורק אם יש ערך אמיתי — פלוט בשורה נפרדת אחרונה עד 3 הצעות המשך שסביר שהמשתמש ירצה *עכשיו*, לפי השעה, מה נסגר היום, מה נאמר בשיחה, ומה שאתה יודע עליו. זה הניחוש הכי טוב שלך למה הכי שימושי כרגע — לא תפריט של מה שאתה יודע לענות. כללים: העדף פעולות/מידע על שאלות גנריות; אל תציע דבר שכבר על המסך או שנענה בתשובה הזו; קצר (עד ~5 מילים); ואם שום דבר לא מוסיף ערך — פלוט מערך ריק []. אחרי סיכום־יום, שיחה שאינה על משימות, או אחרי חצות — לרוב [] היא התשובה הנכונה.
 הפורמט (השרת מסיר אותו לפני שהמשתמש רואה — לעולם אל תזכיר אותו):
-<<SUGGEST>>[{"label":"טקסט קצר","value":"high"}]<<SUGGEST>>
-value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) · value=low = חוסך הקלדה בלבד (אחרון, אחד לכל היותר).`;
+<<SUGGEST>>[{"label":"טקסט קצר","value":"high","key":"complete_next"}]<<SUGGEST>>
+value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) · value=low = חוסך הקלדה בלבד (אחרון, אחד לכל היותר).
+key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים משימה) · summarize_day (סיכום יום) · followup_contact (מעקב אחרי אדם) · plan_tomorrow (תכנון מחר/קדימה) · other.`;
 
   // calendar WRITE from chat (B6ג) — resolve the meeting by title/attendee within
   // the next 14 days, then postpone / move / cancel. Ambiguity → ask, never guess.
@@ -427,7 +428,8 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
   // Dynamic suggestion chips (step 1): the model appends a <<SUGGEST>>[…] tail block.
   // Strip EVERYTHING from the first marker so it can never leak into the visible reply,
   // then parse the first JSON array defensively. high first, ≤1 low, ≤3 total.
-  let suggestions: { label: string; value: "high" | "low" }[] = [];
+  type Sug = { label: string; value: "high" | "low"; key: string };
+  let suggestions: Sug[] = [];
   {
     const idx = reply.indexOf("<<SUGGEST>>");
     if (idx !== -1) {
@@ -437,10 +439,11 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
       if (jm) {
         try {
           const arr = JSON.parse(jm[0]);
+          const KEYS = ["complete_next", "summarize_day", "followup_contact", "plan_tomorrow", "other"];
           if (Array.isArray(arr)) {
             suggestions = arr
               .filter((s: any) => s && typeof s.label === "string" && s.label.trim())
-              .map((s: any) => ({ label: String(s.label).trim().slice(0, 40), value: s.value === "high" ? "high" as const : "low" as const }));
+              .map((s: any) => ({ label: String(s.label).trim().slice(0, 40), value: s.value === "high" ? "high" as const : "low" as const, key: KEYS.includes(String(s.key)) ? String(s.key) : "other" }));
           }
         } catch { /* malformed tail → no chips, reply already cleaned */ }
       }
@@ -450,34 +453,51 @@ value=high = מביא מידע שהמשתמש לא ידע (מוצג ראשון) 
   // model didn't propose them. Computed from the real board, so nothing important falls.
   {
     const all = (cards.data || []) as any[];
-    const floor: { label: string; value: "high" | "low" }[] = [];
+    const floor: Sug[] = [];
     const drafts = all.filter((c) => c.draft && !c.archived).length;
-    if (drafts >= 5) floor.push({ label: `נעבור על ${drafts} הטיוטות?`, value: "high" });
+    if (drafts >= 5) floor.push({ label: `נעבור על ${drafts} הטיוטות?`, value: "high", key: "floor:drafts" });
     // a waiting card whose silent window (follow_up_days) has passed → nudge to remind
     const nowMs = nowD.getTime();
     const waitingDue = all.find((c) => !c.archived && c.card_type === "waiting" && Number(c.follow_up_days) > 0 && String(c.waiting_on || "").trim()
       && (nowMs - new Date(c.updated_at || c.created_at).getTime()) / 864e5 >= Number(c.follow_up_days));
-    if (waitingDue) floor.push({ label: `להזכיר ל${String(waitingDue.waiting_on).trim()}?`, value: "high" });
+    if (waitingDue) floor.push({ label: `להזכיר ל${String(waitingDue.waiting_on).trim()}?`, value: "high", key: "floor:waiting" });
     // overdue open tasks, and it's evening (≥18:00) → offer to roll them to tomorrow
     const doneCols = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
     const overdue = all.filter((c) => !c.archived && !doneCols.has(c.column_id) && /^\d{4}-\d{2}-\d{2}$/.test(c.deadline || "") && c.deadline < todayStr2).length;
-    if (overdue > 0 && nowD.getHours() >= 18) floor.push({ label: `לגלגל את ${overdue} המאחרות למחר?`, value: "high" });
+    if (overdue > 0 && nowD.getHours() >= 18) floor.push({ label: `לגלגל את ${overdue} המאחרות למחר?`, value: "high", key: "floor:overdue" });
     // step 5 — a project silent for 2+ weeks but still holding open cards → still live?
     for (const p of (proj.data || []) as any[]) {
       const openInP = all.filter((c) => c.project_id === p.id && !c.archived && !doneCols.has(c.column_id));
       if (openInP.length && openInP.every((c) => (nowMs - new Date(c.updated_at || c.created_at).getTime()) / 864e5 >= 14)) {
-        floor.push({ label: `${p.name} שקט שבועיים — עדיין רלוונטי?`, value: "high" }); break;
+        floor.push({ label: `${p.name} שקט שבועיים — עדיין רלוונטי?`, value: "high", key: "floor:silent" }); break;
       }
     }
     // step 5 — body before tasks (Rambam 4): a gentle morning check-in, trailing.
-    if (nowD.getHours() >= 6 && nowD.getHours() < 11) floor.push({ label: "איך הבוקר?", value: "low" });
-    // merge floor + model, dedupe by label, order high-first, ≤1 low, ≤3 total.
-    const merged: { label: string; value: "high" | "low" }[] = [];
+    if (nowD.getHours() >= 6 && nowD.getHours() < 11) floor.push({ label: "איך הבוקר?", value: "low", key: "floor:morning" });
+    // merge floor + model, dedupe by label.
+    const merged: Sug[] = [];
     const seen = new Set<string>();
     for (const s of [...floor, ...suggestions]) { const k = s.label.toLowerCase(); if (seen.has(k)) continue; seen.add(k); merged.push(s); }
-    const highs = merged.filter((s) => s.value === "high");
-    const lows = merged.filter((s) => s.value === "low").slice(0, 1);
+    // step 4 — LEARNING: mute categories the user keeps ignoring (floor rules are urgent,
+    // never muted); demote low-engagement to the tail; log what we actually show. Degrades
+    // gracefully if the suggestion_stats migration hasn't run yet.
+    let live = merged;
+    try {
+      const keys = [...new Set(merged.map((s) => s.key))];
+      if (keys.length) {
+        const { data: stats } = await supabase.from("suggestion_stats").select("suggestion_key,shown_count,clicked_count,last_shown_at").in("suggestion_key", keys);
+        const stat = new Map((stats || []).map((r: any) => [r.suggestion_key, r]));
+        const muted = (k: string) => { if (k.startsWith("floor:")) return false; const r: any = stat.get(k); if (!r || r.clicked_count > 0) return false; const days = r.last_shown_at ? (Date.now() - new Date(r.last_shown_at).getTime()) / 864e5 : 999; return r.shown_count >= 15 && days < 30; };
+        const demote = (k: string) => { if (k.startsWith("floor:")) return false; const r: any = stat.get(k); return !!(r && r.clicked_count === 0 && r.shown_count >= 8); };
+        live = merged.filter((s) => !muted(s.key));
+        live = [...live.filter((s) => !demote(s.key)), ...live.filter((s) => demote(s.key))]; // demoted sink, order stable
+      }
+    } catch { /* stats table not applied yet — chips still work */ }
+    const highs = live.filter((s) => s.value === "high");
+    const lows = live.filter((s) => s.value === "low").slice(0, 1);
     suggestions = [...highs, ...lows].slice(0, 3);
+    // log the shows (fire-and-forget; RPC missing = ignored)
+    for (const s of suggestions) supabase.rpc("bump_suggestion", { p_key: s.key, p_shown: 1, p_clicked: 0 }).then(() => {}, () => {});
   }
   // guard: if the loop ended with tools but no closing text, still say something real
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים את הבקשה — נסה שוב.";
