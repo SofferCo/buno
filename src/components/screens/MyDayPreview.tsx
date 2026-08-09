@@ -21,8 +21,8 @@ export function MyDayPreview() {
     { at: atToday(10, 40), card: { id: "d2", title: "פגישה ועבודה – תיקוני מצגת", clientId: "c2" } },
   ];
   const planTasks = [
-    { card: { id: "o1", title: "לשלם קנס אכיפה עירונית", clientId: "home", deadline: dayStr(-1), time: "", priority: "regular" } },
-    { card: { id: "o2", title: "לטפל בהתראת חשבון Shipito", clientId: "c1", deadline: dayStr(-3), time: "", priority: "important" } },
+    { card: { id: "o1", title: "לשלם קנס אכיפה עירונית", clientId: "home", deadline: dayStr(-1), time: "", priority: "regular" } }, // flexible + past → NOT tagged, sinks to bottom
+    { card: { id: "o2", title: "שיחת גבייה — ספק Shipito", clientId: "c1", deadline: dayStr(-3), time: "10:00", priority: "important" } }, // timed + past → overdue
     { card: { id: "a1", title: "תצרפי את זה ל-airdr", clientId: "c1", deadline: todayKey, time: "13:30", priority: "regular" } },
     { card: { id: "a2", title: "חאלקה ניל", clientId: "home", deadline: todayKey, time: "17:30", priority: "regular" } },
     { card: { id: "a3", title: "לסדר משימות", clientId: "home", deadline: todayKey, time: "", priority: "regular" } },

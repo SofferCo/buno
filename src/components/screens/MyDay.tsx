@@ -38,9 +38,13 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
 
   // today's calendar events → timeline items
   const eventItems = ((events && events[todayKey]) || []).map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
-  // split open tasks: overdue ("crossed the time") vs the rest of today.
-  const overdueTasks = planTasks.filter((t: any) => deadlineInfo(t.card.deadline)?.tone === "over");
-  const planRest = planTasks.filter((t: any) => deadlineInfo(t.card.deadline)?.tone !== "over");
+  // "crossed the time" is only meaningful for items that HAVE a time — a flexible
+  // task (no clock) can't be late, so it's never overdue and never tagged; it just
+  // sinks to the bottom of the day (below).
+  const isTimed = (c: any) => !!c.time && !flexDay(c);
+  const isOverdue = (c: any) => isTimed(c) && deadlineInfo(c.deadline)?.tone === "over";
+  const overdueTasks = planTasks.filter((t: any) => isOverdue(t.card));
+  const planRest = planTasks.filter((t: any) => !isOverdue(t.card));
   const taskItems = planRest.map((t: any) => ({ kind: "task", id: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
   // today's open items (tasks + events), chronological — the live "order of the day".
   const ahead = [...taskItems, ...eventItems].sort((a: any, b: any) => {
@@ -99,7 +103,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   };
 
   const TLRow = ({ t }: any) => {
-    const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = deadlineInfo(c.deadline)?.tone === "over", isRun = !!c.timerStart, timed = !!c.time && !flexDay(c);
+    const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
     return (
       <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
         <span className="adk-tl-rail"><span className={"adk-tl-node" + (over ? " over" : "")} /></span>
