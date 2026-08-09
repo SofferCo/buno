@@ -88,8 +88,8 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const proj = e.projectId ? clientOf(e.projectId) : null;
     return (
       <div className="adk-tl-row" onClick={() => onOpenEvent?.(e.raw || e)}>
+        <span className="adk-tl-node" />
         <div className={"adk-tl-time" + (e.time ? "" : " flex")}>{e.time || "כל היום"}</div>
-        <div className="adk-tl-rail"><span className="adk-tl-node" /></div>
         <div className="adk-tl-body">
           <div className="ttl">{e.title}</div>
           <div className="meta"><span className="bdot" style={{ background: proj?.color || "#C6613F" }} /><span className="cname">{proj ? proj.name : "יומן"}{e.location ? ` · ${e.location}` : ""}</span></div>
@@ -102,8 +102,8 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = deadlineInfo(c.deadline)?.tone === "over", isRun = !!c.timerStart, timed = !!c.time && !flexDay(c);
     return (
       <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
+        <span className={"adk-tl-node" + (over ? " over" : "")} />
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
-        <div className="adk-tl-rail"><span className={"adk-tl-node" + (over ? " over" : "")} /></div>
         <div className="adk-tl-body">
           <div className="ttl">{routineKind(c) !== "none" && "↻ "}{c.title || "ללא כותרת"}</div>
           <div className="meta">
@@ -126,8 +126,8 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = d.card, cl = clientOf(c.clientId);
     return (
       <div className="adk-tl-row done" onClick={() => onOpenCard(c.id)}>
+        <span className="adk-tl-node done">✓</span>
         <div className="adk-tl-time">{fmtHM(d.at)}</div>
-        <div className="adk-tl-rail"><span className="adk-tl-node done">✓</span></div>
         <div className="adk-tl-body">
           <div className="ttl">{c.title || "ללא כותרת"}</div>
           <div className="meta"><span className="bdot" style={{ background: cl?.color || "var(--muted)" }} /><span className="cname">{cl?.name}</span></div>
@@ -136,7 +136,25 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     );
   };
 
-  const nothing = doneSorted.length === 0 && overdueTasks.length === 0 && ahead.length === 0 && upcoming.length === 0;
+  const NowRow = () => (
+    <div className="adk-tl-nowrow" ref={nowRef}>
+      <span className="adk-tl-node now" />
+      <span className="adk-tl-nowlbl">עכשיו · {timeLabel}</span>
+    </div>
+  );
+  // the ahead list carries the now-mark at its chronological spot (before the first
+  // item still ahead of the clock; at the end if everything today already passed).
+  const aheadRows: any[] = [];
+  let nowPlaced = false;
+  for (const x of ahead) {
+    const p = parseMin(x.time);
+    if (!nowPlaced && p !== null && p >= nowMin) { nowPlaced = true; aheadRows.push(<NowRow key="now" />); }
+    aheadRows.push(x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />);
+  }
+  if (!nowPlaced) aheadRows.push(<NowRow key="now" />);
+
+  const hasToday = doneSorted.length > 0 || overdueTasks.length > 0 || ahead.length > 0;
+  const nothing = !hasToday && upcoming.length === 0;
 
   return (
     <div className="adk-page">
@@ -159,40 +177,29 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
           <div className="adk-day2-tasks">
             {nothing && <div className="adk-day-empty">אין משימות או אירועים בתוכנית של היום.</div>}
 
-            {/* 1 — what closed today (green block, at the top) */}
-            {doneSorted.length > 0 && (<>
-              <div className="adk-tl-head done">נסגרו היום · {doneSorted.length}</div>
-              <div className="adk-tl-donegroup">
-                {doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}
-              </div>
-            </>)}
-
-            {/* 2 — the now-line: a Marker mark that leaves the rail and stops (no full-width cross) */}
-            {!nothing && (
-              <div className="adk-tl-nowrow" ref={nowRef}>
-                <div className="adk-tl-time" />
-                <div className="adk-tl-rail"><span className="adk-tl-nownode" /></div>
-                <div className="adk-tl-nowbody"><span className="ln" /><span className="lbl">עכשיו · {timeLabel}</span></div>
+            {hasToday && (
+              <div className="adk-tl-track">
+                <span className="adk-tl-spine" />
+                <div className="adk-tl-head">סדר היום</div>
+                {/* what closed today — one greenish block, at the top */}
+                {doneSorted.length > 0 && <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>}
+                {/* what crossed the time — grouped, full-word tags */}
+                {overdueTasks.length > 0 && (<>
+                  <div className="adk-tl-sub over">חצו את הזמן</div>
+                  {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
+                </>)}
+                {/* the rest of today, chronological, with the now-mark in its place */}
+                {aheadRows}
               </div>
             )}
 
-            {/* 3 — what crossed the time (open, late), full-word tags */}
-            {overdueTasks.length > 0 && (<>
-              <div className="adk-tl-head over">חצו את הזמן</div>
-              {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
-            </>)}
-
-            {/* 4 — the rest of today, chronological */}
-            {ahead.length > 0 && (<>
-              <div className="adk-tl-head">סדר היום</div>
-              {ahead.map((x: any) => x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />)}
-            </>)}
-
-            {/* 5 — the look ahead */}
-            {upcoming.length > 0 && (<>
-              <div className="adk-tl-head up">בקרוב · 7 ימים</div>
-              {upcoming.map((t: any) => <TLRow key={t.card.id} t={t} />)}
-            </>)}
+            {upcoming.length > 0 && (
+              <div className="adk-tl-track up">
+                <span className="adk-tl-spine" />
+                <div className="adk-tl-head">בקרוב · 7 ימים</div>
+                {upcoming.map((t: any) => <TLRow key={t.card.id} t={t} />)}
+              </div>
+            )}
           </div>
         </div>
       </div>
