@@ -90,33 +90,44 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
       </div>
 
       <div className="adk-panel-body">
-        {isMeeting && (
-          <div style={{ margin: "0 0 16px", padding: "12px 14px", background: "var(--surface-2, #f4f5f6)", borderRadius: 12, border: "1px solid var(--border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 13.5, color: "var(--ink)" }}>
-              <Icon name="calendar" size={15} /><span>{meetWhen}</span>
+        {isMeeting && (() => {
+          const guests = (ev?.attendees || []).filter((a: any) => !a.self);
+          return (
+          <div style={{ margin: "0 0 16px", padding: "14px 16px", background: "var(--surface-2, #f4f5f6)", borderRadius: 14, border: "1px solid var(--border)" }}>
+            {/* meeting name + open-in-calendar (right) · your RSVP (left) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 22, flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14, color: "var(--ink)" }}><Icon name="calendar" size={15} />{card.title || ev?.title || "פגישה"}</span>
+              {ev?.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noreferrer" style={{ fontWeight: 700, fontSize: 12.5, color: "var(--accent-d)" }}>פתח ביומן ↗</a>}
               {ev?.myStatus && <span style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>{MY_STATUS[ev.myStatus] || ""}</span>}
             </div>
-            {ev?.meetLink && <a href={ev.meetLink} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontWeight: 800, fontSize: 13, color: "var(--accent-d)" }}><Icon name="calendar" size={14} /> הצטרף ל‑Google Meet</a>}
-            {(ev?.attendees || []).filter((a: any) => !a.self).length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                {ev.attendees.filter((a: any) => !a.self).slice(0, 6).map((a: any, i: number) => (
-                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--muted)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 9px 3px 4px" }}>
+            {/* time range */}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 8, fontWeight: 800, fontSize: 16, color: "var(--ink)", direction: "ltr", justifyContent: "flex-end" }}>
+              <span>{meetWhen}</span><Icon name="clock" size={15} />
+            </div>
+            {/* participants */}
+            {guests.length > 0 && (<>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--muted)", margin: "14px 0 7px" }}>משתתפים · {guests.length}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {guests.slice(0, 8).map((a: any, i: number) => (
+                  <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--ink)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px 3px 4px" }}>
                     <Avatar name={a.name || a.email} size={18} />{a.name || String(a.email || "").split("@")[0]}
                   </span>
                 ))}
               </div>
-            )}
+            </>)}
+            {/* actions — join is the primary; manage + cancel follow */}
             {onEventAction && !viewer && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12, alignItems: "center" }}>
-                <button className="adk-btn" disabled={!!meetBusy} onClick={() => meetManage("postpone", "נדחתה בחצי שעה ✓")} style={{ height: 32, padding: "0 12px", fontSize: 12.5 }}>{meetBusy === "postpone" ? "דוחה…" : "דחה 30 דק׳"}</button>
-                <button className="adk-btn" disabled={!!meetBusy} onClick={() => onProposeTime?.(ev)} style={{ height: 32, padding: "0 12px", fontSize: 12.5 }}>הצע זמן חדש</button>
-                <button className="adk-btn danger" disabled={!!meetBusy} onClick={() => meetManage("cancel", "הפגישה בוטלה ✓")} style={{ height: 32, padding: "0 12px", fontSize: 12.5 }}>{meetBusy === "cancel" ? "מבטל…" : "בטל פגישה"}</button>
-                {ev?.htmlLink && <a href={ev.htmlLink} target="_blank" rel="noreferrer" style={{ marginInlineStart: "auto", fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>פתח ביומן ↗</a>}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, alignItems: "center" }}>
+                {ev?.meetLink && <a className="adk-btn primary" href={ev.meetLink} target="_blank" rel="noreferrer" style={{ height: 34, padding: "0 16px", fontSize: 13, display: "inline-flex", alignItems: "center" }}>הצטרף לפגישה</a>}
+                <button className="adk-btn" disabled={!!meetBusy} onClick={() => meetManage("postpone", "נדחתה בחצי שעה ✓")} style={{ height: 34, padding: "0 12px", fontSize: 12.5 }}>{meetBusy === "postpone" ? "דוחה…" : "דחה 30 דק׳"}</button>
+                <button className="adk-btn" disabled={!!meetBusy} onClick={() => onProposeTime?.(ev)} style={{ height: 34, padding: "0 12px", fontSize: 12.5 }}>הצע זמן חדש</button>
+                <button disabled={!!meetBusy} onClick={() => meetManage("cancel", "הפגישה בוטלה ✓")} style={{ marginInlineStart: "auto", border: "none", background: "transparent", color: "var(--rec)", fontFamily: "inherit", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>{meetBusy === "cancel" ? "מבטל…" : "בטל פגישה"}</button>
               </div>
             )}
             {meetMsg && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: meetMsg.includes("✓") ? "var(--accent-d)" : "var(--rec)" }}>{meetMsg}</div>}
           </div>
-        )}
+          );
+        })()}
         {card.draft && !viewer && (
           <div className="adk-draft-banner">
             <div className="adk-draft-txt"><Icon name="sun" size={15} /> {card.draft.level === "suggest" ? "buno מציע את הכרטיס הזה" : "טיוטת buno — ממתינה לאישורך"}</div>
