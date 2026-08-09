@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
+import { summarizeBoard } from "./boardContext.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
 
@@ -34,27 +35,8 @@ const UPDATE_CARD_TOOL = { name: "update_card", description: "Edit EXISTING card
 const LOG_PROGRESS_TOOL = { name: "log_progress", description: "When the user shares progress on a task ('אני על הסרטון של Air Doctor, 4 קליפים מוכנים'), log a short activity note as a comment on the matching card. Use ONLY for genuine progress updates, not for creating tasks.", input_schema: { type: "object", properties: { card: { type: "string", description: "Title (or part) of the card the update is about." }, note: { type: "string", description: "The progress note, first-person from the user, ≤15 words Hebrew." } }, required: ["card", "note"] } };
 const GET_CARD_LINK_TOOL = { name: "get_card_link", description: "Return a direct link to a specific card when the user asks where it is or to send a link. Identify by title.", input_schema: { type: "object", properties: { card: { type: "string" } }, required: ["card"] } };
 
-function summarize(projects: any[], cards: any[], cols: any[]): string {
-  const colTitle = new Map<string, string>(cols.map((c: any) => [c.id, c.title]));
-  const projName = new Map<string, string>(projects.map((p: any) => [p.id, p.name]));
-  const active = cards.filter((c: any) => !c.archived);
-  const head = `הפרויקטים: ${projects.map((p: any) => p.name).join(" · ") || "—"}`;
-  if (!active.length) return head + "\n(אין משימות פעילות.)";
-  const byProj: Record<string, any[]> = {};
-  for (const c of active) (byProj[c.project_id] = byProj[c.project_id] || []).push(c);
-  const lines = [head];
-  for (const pid of Object.keys(byProj)) {
-    lines.push(`\nפרויקט: ${projName.get(pid) || "—"}`);
-    for (const c of byProj[pid].slice(0, 30)) {
-      const parts = [`• ${c.title || "ללא כותרת"}`];
-      if (c.column_id && colTitle.get(c.column_id)) parts.push(`[${colTitle.get(c.column_id)}]`);
-      if (c.deadline) parts.push(`דדליין ${c.deadline}`);
-      if (c.priority && c.priority !== "regular") parts.push(c.priority === "critical" ? "קריטי" : "חשוב");
-      lines.push(parts.join(" "));
-    }
-  }
-  return lines.join("\n");
-}
+// board perception now comes from the shared summarizeBoard (_shared/boardContext.ts)
+// — same brain as the web /chat. Comments/attachments are fetched below for parity.
 
 // Get (or create) the user's shared thread — exported so callers can persist the
 // assistant message themselves (with the real send outcome).
@@ -287,7 +269,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   try { const { data: cts } = await admin.from("contacts").select("name,email").eq("user_id", userId).limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
-    boardSummary: summarize(projects, cards, cols) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
+    boardSummary: summarizeBoard(projects, cards, cols, new Map(), new Map(), today, Date.now()) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".

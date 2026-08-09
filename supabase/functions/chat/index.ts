@@ -18,6 +18,7 @@ import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
+import { summarizeBoard } from "../_shared/boardContext.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -27,48 +28,8 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-function summarizeBoard(projects: any[], cards: any[], cols: any[], commentsByCard: Map<string, any[]>, attachByCard: Map<string, any[]>, todayStr: string, nowMs: number): string {
-  const colTitle = new Map<string, string>();
-  for (const c of cols) colTitle.set(c.id, c.title);
-  const projName = new Map<string, string>();
-  for (const p of projects) projName.set(p.id, p.name);
-  const active = cards.filter((c) => !c.archived);
-  const head = `הפרויקטים: ${projects.map((p) => p.name).join(" · ") || "—"}`;
-  if (!active.length) return head + "\n(אין משימות פעילות.)";
-  const DAY = 864e5;
-  const ageStr = (iso: string) => {
-    if (!iso) return "";
-    const d = Math.floor((nowMs - new Date(iso).getTime()) / DAY);
-    return d <= 0 ? "נפתח היום" : d === 1 ? "פתוח יום" : `פתוח ${d} ימים`;
-  };
-  const dueStr = (dl: string) => {
-    if (!dl) return "";
-    const diff = Math.round((new Date(dl + "T00:00:00").getTime() - new Date(todayStr + "T00:00:00").getTime()) / DAY);
-    return diff < 0 ? `דדליין עבר לפני ${-diff} ${-diff === 1 ? "יום" : "ימים"}` : diff === 0 ? "דדליין היום" : diff === 1 ? "דדליין מחר" : `דדליין בעוד ${diff} ימים`;
-  };
-  const byProject: Record<string, any[]> = {};
-  for (const c of active) (byProject[c.project_id] = byProject[c.project_id] || []).push(c);
-  const lines: string[] = [head];
-  for (const pid of Object.keys(byProject)) {
-    lines.push(`\nפרויקט: ${projName.get(pid) || "—"}`);
-    for (const c of byProject[pid].slice(0, 40)) {
-      const parts = [`• ${c.title || "ללא כותרת"}`];
-      if (c.column_id && colTitle.get(c.column_id)) parts.push(`[${colTitle.get(c.column_id)}]`);
-      const due = dueStr(c.deadline); if (due) parts.push(due);
-      const age = ageStr(c.created_at); if (age) parts.push(age);
-      if (c.priority && c.priority !== "regular") parts.push(c.priority === "critical" ? "קריטי" : "חשוב");
-      const cs = commentsByCard.get(c.id) || [];
-      if (cs.length) {
-        const last = cs[cs.length - 1];
-        parts.push(`${cs.length} תגובות (אחרונה — ${last.by_name}: ${String(last.text || "").replace(/\s+/g, " ").slice(0, 50)})`);
-      }
-      const as = attachByCard.get(c.id) || [];
-      if (as.length) parts.push(`${as.length} קבצים${as.some((a: any) => a.name) ? ` (${as.map((a: any) => a.name).filter(Boolean).slice(0, 3).join(", ")})` : ""}`);
-      lines.push(parts.join(" · "));
-    }
-  }
-  return lines.join("\n");
-}
+// summarizeBoard now lives in _shared/boardContext.ts — one brain, one perception
+// (shared with the WhatsApp/sweep core). Imported above.
 
 const CREATE_CARD_TOOL = {
   name: "create_card",
