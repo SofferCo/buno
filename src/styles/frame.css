@@ -17,37 +17,42 @@
 .adk-brief2-now{display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:12.5px;font-weight:700;color:var(--rec);}
 /* completion palette (approved 2026-08-09): distinct from the marker highlight */
 :root{--done:#00AF57;--done-bg:#F2FBF6;--marker:#D9F252;}
-/* the day timeline: ONE continuous spine down the inner edge (left, RTL); every
-   row's content sits to its right, the node sits ON the spine. */
-.adk-tl-track{position:relative;}
-.adk-tl-track.up{margin-top:20px;padding-top:18px;border-top:1px solid var(--border);}
-.adk-tl-spine{position:absolute;inset-inline-end:25px;top:36px;bottom:14px;width:2px;background-color:#d7dee0;border-radius:2px;z-index:1;}
-.adk-tl-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:0 0 10px;padding-inline-end:52px;}
-.adk-tl-sub{font-size:11px;font-weight:800;color:var(--faint);margin:12px 0 4px;padding-inline-end:52px;}
-.adk-tl-sub.over{color:var(--rec);}
+/* the day timeline — a fixed-width list that hugs the divider; every row is ONE
+   grid (RTL, right→left): rail(40) · time(64) · content · action(48). The rail
+   is the RIGHTMOST column, so node + time + title read as one unit. The spine is
+   a single continuous line down the rail column. */
+.adk-tl{position:relative;max-width:880px;}
+.adk-tl-spine{position:absolute;inset-inline-start:19px;top:34px;bottom:12px;width:2px;background-color:#d7dee0;border-radius:2px;z-index:1;}
+.adk-tl-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:22px 0 8px;padding-inline-start:52px;}
+.adk-tl-head:first-of-type{margin-top:0;}
+/* a thin separator before the look-ahead — content-side only, doesn't cross the rail */
+.adk-tl-div{height:1px;background:var(--border);margin:22px 52px 0 0;}
 
-.adk-tl-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:11px 8px;padding-inline-end:52px;border-radius:11px;cursor:pointer;}
+.adk-tl-row{display:grid;grid-template-columns:40px 64px 1fr 48px;align-items:start;column-gap:12px;padding:9px 0;border-radius:11px;cursor:pointer;}
 .adk-tl-row:hover{background:var(--surface-2);}
-.adk-tl-time{width:56px;flex:none;text-align:start;font-size:13.5px;font-weight:800;color:var(--ink);padding-top:2px;font-variant-numeric:tabular-nums;}
-.adk-tl-time.flex{color:var(--faint);font-weight:700;font-size:12px;}
-/* the node — absolutely centred on the spine, painted above it */
-.adk-tl-node{position:absolute;inset-inline-end:15px;top:11px;z-index:2;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:11px;font-weight:900;color:#fff;line-height:1;}
-.adk-tl-node.over{border-color:var(--rec);box-shadow:0 0 0 3px var(--rec-soft);}
+/* rail cell — holds the node, centred; the spine passes through behind it */
+.adk-tl-rail{display:flex;justify-content:center;}
+.adk-tl-node{position:relative;z-index:2;margin-top:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);border:1.5px solid #cfd6d8;box-sizing:border-box;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;line-height:1;flex:none;}
+.adk-tl-node.over{border-color:var(--rec);}
 .adk-tl-node.done{background:var(--done);border-color:var(--done);}
+.adk-tl-time{text-align:start;font-size:13.5px;font-weight:800;color:var(--ink);padding-top:2px;font-variant-numeric:tabular-nums;}
+.adk-tl-time.flex{color:var(--faint);font-weight:700;font-size:12px;}
 /* completed today — one greenish surface; the spine + green nodes read on top */
-.adk-tl-donegroup{position:relative;background:var(--done-bg);border-radius:14px;padding:2px 0;margin-bottom:2px;}
+.adk-tl-donegroup{position:relative;background:var(--done-bg);border-radius:14px;margin:0 0 2px;}
 .adk-tl-donegroup .adk-tl-row:hover{background:rgba(0,175,87,.06);}
-/* the "now" mark — a small Marker node on the spine + a quiet label, in place */
-.adk-tl-nowrow{position:relative;display:flex;align-items:center;min-height:22px;margin:5px 0;padding-inline-end:52px;}
-.adk-tl-nowrow .adk-tl-node.now{top:5px;width:12px;height:12px;inset-inline-end:19px;border:none;background:var(--marker);box-shadow:0 0 0 3px rgba(217,242,82,.30);}
-.adk-tl-nowlbl{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;}
+/* the "now" mark — node on the spine + a short line + label, as ONE Marker unit */
+.adk-tl-nowrow{display:grid;grid-template-columns:40px 1fr;align-items:center;min-height:24px;margin:3px 0;}
+.adk-tl-nowrow .adk-tl-node.now{margin-top:0;width:12px;height:12px;border:none;background:var(--marker);box-shadow:0 0 0 3px rgba(217,242,82,.30);}
+.adk-tl-nowunit{display:flex;align-items:center;gap:8px;}
+.adk-tl-nowunit .ln{width:56px;height:2px;background:var(--marker);border-radius:2px;flex:none;}
+.adk-tl-nowunit .lbl{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap;}
 
-.adk-tl-actions{display:flex;align-items:center;gap:6px;flex:none;margin-top:1px;}
-.adk-tl-actions .qa{opacity:0;border:1px solid var(--border);background:var(--surface);border-radius:8px;height:30px;padding:0 9px;font-family:inherit;font-size:12px;font-weight:800;color:var(--muted);cursor:pointer;transition:opacity .12s,border-color .12s,color .12s;white-space:nowrap;}
+.adk-tl-actions{display:flex;align-items:center;gap:6px;justify-content:flex-start;margin-top:1px;}
+.adk-tl-actions .qa{opacity:0;border:1px solid var(--border);background:var(--surface);border-radius:8px;height:28px;padding:0 8px;font-family:inherit;font-size:11.5px;font-weight:800;color:var(--muted);cursor:pointer;transition:opacity .12s,border-color .12s,color .12s;white-space:nowrap;}
 .adk-tl-row:hover .adk-tl-actions .qa{opacity:1;}
 .adk-tl-actions .qa:hover{border-color:var(--accent);color:var(--accent-d);}
 .adk-tl-actions .qa.done:hover{border-color:var(--done);color:var(--done);}
-.adk-tl-body{flex:1;min-width:0;}
+.adk-tl-body{min-width:0;}
 .adk-tl-body .ttl{font-size:15px;font-weight:700;color:var(--ink);line-height:1.35;}
 .adk-tl-body .meta{display:flex;align-items:center;gap:7px;margin-top:4px;font-size:12px;color:var(--muted);flex-wrap:wrap;}
 .adk-tl-body .cname{font-weight:600;}

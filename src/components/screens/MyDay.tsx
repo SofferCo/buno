@@ -88,7 +88,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const proj = e.projectId ? clientOf(e.projectId) : null;
     return (
       <div className="adk-tl-row" onClick={() => onOpenEvent?.(e.raw || e)}>
-        <span className="adk-tl-node" />
+        <span className="adk-tl-rail"><span className="adk-tl-node" /></span>
         <div className={"adk-tl-time" + (e.time ? "" : " flex")}>{e.time || "כל היום"}</div>
         <div className="adk-tl-body">
           <div className="ttl">{e.title}</div>
@@ -102,7 +102,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = deadlineInfo(c.deadline)?.tone === "over", isRun = !!c.timerStart, timed = !!c.time && !flexDay(c);
     return (
       <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
-        <span className={"adk-tl-node" + (over ? " over" : "")} />
+        <span className="adk-tl-rail"><span className={"adk-tl-node" + (over ? " over" : "")} /></span>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
         <div className="adk-tl-body">
           <div className="ttl">{routineKind(c) !== "none" && "↻ "}{c.title || "ללא כותרת"}</div>
@@ -126,7 +126,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const c = d.card, cl = clientOf(c.clientId);
     return (
       <div className="adk-tl-row done" onClick={() => onOpenCard(c.id)}>
-        <span className="adk-tl-node done">✓</span>
+        <span className="adk-tl-rail"><span className="adk-tl-node done">✓</span></span>
         <div className="adk-tl-time">{fmtHM(d.at)}</div>
         <div className="adk-tl-body">
           <div className="ttl">{c.title || "ללא כותרת"}</div>
@@ -138,8 +138,8 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
 
   const NowRow = () => (
     <div className="adk-tl-nowrow" ref={nowRef}>
-      <span className="adk-tl-node now" />
-      <span className="adk-tl-nowlbl">עכשיו · {timeLabel}</span>
+      <span className="adk-tl-rail"><span className="adk-tl-node now" /></span>
+      <span className="adk-tl-nowunit"><span className="ln" /><span className="lbl">עכשיו · {timeLabel}</span></span>
     </div>
   );
   // the ahead list carries the now-mark at its chronological spot (before the first
@@ -177,27 +177,24 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
           <div className="adk-day2-tasks">
             {nothing && <div className="adk-day-empty">אין משימות או אירועים בתוכנית של היום.</div>}
 
-            {hasToday && (
-              <div className="adk-tl-track">
+            {!nothing && (
+              <div className="adk-tl">
                 <span className="adk-tl-spine" />
-                <div className="adk-tl-head">סדר היום</div>
-                {/* what closed today — one greenish block, at the top */}
-                {doneSorted.length > 0 && <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>}
-                {/* what crossed the time — grouped, full-word tags */}
+                {/* 1 — what crossed the time (equal top-level section) */}
                 {overdueTasks.length > 0 && (<>
-                  <div className="adk-tl-sub over">חצו את הזמן</div>
+                  <div className="adk-tl-head">חצו את הזמן</div>
                   {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
                 </>)}
-                {/* the rest of today, chronological, with the now-mark in its place */}
-                {aheadRows}
-              </div>
-            )}
-
-            {upcoming.length > 0 && (
-              <div className="adk-tl-track up">
-                <span className="adk-tl-spine" />
-                <div className="adk-tl-head">בקרוב · 7 ימים</div>
-                {upcoming.map((t: any) => <TLRow key={t.card.id} t={t} />)}
+                {/* 2 — today: the green closed-block, then the now-mark in place, then the rest */}
+                {hasToday && (doneSorted.length > 0 || ahead.length > 0) && <div className="adk-tl-head">סדר היום</div>}
+                {doneSorted.length > 0 && <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>}
+                {(doneSorted.length > 0 || ahead.length > 0) && aheadRows}
+                {/* 3 — the look ahead */}
+                {upcoming.length > 0 && (<>
+                  {hasToday && <div className="adk-tl-div" />}
+                  <div className="adk-tl-head">בקרוב · 7 ימים</div>
+                  {upcoming.map((t: any) => <TLRow key={t.card.id} t={t} />)}
+                </>)}
               </div>
             )}
           </div>
