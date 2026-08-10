@@ -3,7 +3,7 @@
    + brand watermark (z56–57) so nothing bleeds over the archive. */
 .adk-arch-scrim{position:fixed;inset:0;background:rgba(23,40,47,.32);z-index:60;animation:adk-fade .18s ease;}
 @keyframes adk-fade{from{opacity:0;}to{opacity:1;}}
-.adk-arch{position:fixed;top:0;bottom:0;right:0;width:560px;max-width:96vw;background:var(--surface);z-index:61;box-shadow:-24px 0 60px rgba(0,0,0,.22);display:flex;flex-direction:column;animation:adk-slideR .22s ease;}
+.adk-arch{position:fixed;top:0;bottom:0;inset-inline-start:0;width:560px;max-width:96vw;background:var(--surface);z-index:61;box-shadow:-24px 0 60px rgba(0,0,0,.22);display:flex;flex-direction:column;animation:adk-slideR .22s ease;}
 .adk-arch-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border);}
 .adk-arch-head h2{margin:0;font-size:18px;font-weight:800;flex:1;letter-spacing:-.01em;}
 .adk-arch-filters{padding:13px 18px;border-bottom:1px solid var(--border);background:var(--surface-2);display:flex;flex-direction:column;gap:10px;}
@@ -31,9 +31,9 @@
 .adk-arow .acts button.del:hover{background:var(--rec-soft);border-color:transparent;}
 .adk-arch-empty{text-align:center;color:var(--faint);font-weight:700;padding:40px 10px;}
 /* full-page report */
-.adk-page{position:fixed;inset:0;z-index:55;background:var(--canvas);overflow:hidden;padding:66px 68px 0 0;}
-.adk-pcard{max-width:none;margin:0;background:var(--surface);border:1px solid var(--border);border-left:none;border-bottom:none;border-radius:0;border-top-right-radius:46px;box-shadow:0 0 30px rgba(23,40,47,.06);overflow-y:auto;height:100%;}
-.adk-pcard-head{display:flex;align-items:center;gap:10px;padding:22px 28px;border-top-right-radius:46px;}
+.adk-page{position:fixed;inset:0;z-index:55;background:var(--canvas);overflow:hidden;padding:66px 0 0;padding-inline-start:68px;}
+.adk-pcard{max-width:none;margin:0;background:var(--surface);border:1px solid var(--border);border-inline-end:none;border-bottom:none;border-radius:0;border-start-start-radius:46px;box-shadow:0 0 30px rgba(23,40,47,.06);overflow-y:auto;height:100%;}
+.adk-pcard-head{display:flex;align-items:center;gap:10px;padding:22px 28px;border-start-start-radius:46px;}
 .adk-pcard-head .adk-back{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:0 2px;display:grid;place-items:center;}
 .adk-pcard-head .adk-back:hover{color:var(--accent-d);}
 .adk-pcard-head .titleblk{display:flex;align-items:center;gap:12px;}
