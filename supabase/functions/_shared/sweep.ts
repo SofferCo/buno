@@ -444,7 +444,7 @@ function greetingFor(nowMs: number): string {
 export function daySnapshot(r: SweepResult): string {
   const lines: string[] = [];
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
-  const shape = r.events.length >= 4 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";
+  const shape = r.events.length >= 3 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";   // ≥3 = busy (mirror of computeDayFacts dayLoad)
   const firstName = String(r.profileName || "").trim().split(/\s+/)[0]; // first name only, not "Tal Soffer"
   lines.push(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}. ${shape}.`);
   if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);

@@ -11,6 +11,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
 import { summarizeBoard } from "./boardContext.ts";
+import { computeDayFacts, renderDayFacts } from "./dayFacts.ts";
 import { CORE_TOOLS, matchCard } from "./tools.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
@@ -57,11 +58,19 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const attachByCard = new Map<string, any[]>();
   for (const r of (attRows || [])) { const a = attachByCard.get(r.card_id) || []; a.push(r); attachByCard.set(r.card_id, a); }
   const cardLevel = (asst?.cards || "draft") as "suggest" | "draft" | "act";
-  // item 11 — persisted gender; auto-switch (silently) to feminine if the user
-  // addresses buno in feminine, and remember it across sessions/channels.
+  // item 11 — persisted gender (masculine default). Auto-switch silently to match
+  // how the user ACTUALLY addresses buno — BIDIRECTIONAL, so a wrong guess self-heals
+  // on the next clearly-gendered message. Only UNAMBIGUOUS markers count (feminine -י
+  // imperatives / "את יכולה"; masculine bare forms / "אתה יכול"); dual-spelled forms
+  // like עשית/ראית are NEVER used — they caused false feminine flips (§11 regression).
   let gender: "m" | "f" = asst?.gender === "f" ? "f" : "m";
-  if (gender !== "f" && /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|את יכולה|עשית לי|ראית/.test(userMessage)) {
-    gender = "f"; try { await admin.from("assistant_settings").upsert({ user_id: userId, gender: "f" }, { onConflict: "user_id" }); } catch { /* best-effort */ }
+  {
+    const fem = /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|תראי|תזכירי|את יכולה/.test(userMessage);
+    const masc = !fem && /תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תוסיף|תראה|תזכיר|אתה יכול/.test(userMessage);
+    const next: "m" | "f" | null = fem ? "f" : masc ? "m" : null;
+    if (next && next !== gender) {
+      gender = next; try { await admin.from("assistant_settings").upsert({ user_id: userId, gender: next }, { onConflict: "user_id" }); } catch { /* best-effort */ }
+    }
   }
 
   // ---- tools (same behavior + enforcement as web chat) ----------------------
@@ -230,6 +239,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   // item 4 — deterministic calendar: WhatsApp gets the SAME calendar context as web,
   // so "what's on today/this week" is grounded identically. Failure = say so, never invent.
   let calendarSummary = "";
+  let eventsTodayList: any[] | null = null;   // TODAY's events for the computed day-facts (null = calendar unread)
+  let todayKeyIL = today;                      // IL day, for inPlanToday in the facts
   try {
     const access = await freshAccessToken(admin, userId, "gcal");
     if (access) {
@@ -237,10 +248,12 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       const raw = await listCalendarEvents(access, new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), new Date(now.getTime() + 7 * 864e5).toISOString());
       const fmtDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(d);
       const todayKey = fmtDay(now); const tomorrowKey = fmtDay(new Date(now.getTime() + 864e5));
+      todayKeyIL = todayKey;
       // an opened event became a real card ("cal-<id>") with its own done-state — drop
       // the raw copy so buno reads the card, not a stale "not done" event (web/WA parity).
       const linkedRefs = new Set((cards || []).filter((c: any) => !c.archived && typeof c.origin?.ref === "string" && c.origin.ref.startsWith("cal-")).map((c: any) => c.origin.ref));
       const deduped = (raw || []).filter((e: any) => !linkedRefs.has("cal-" + e.id));
+      eventsTodayList = deduped.filter((e: any) => String(e.start || "").slice(0, 10) === todayKey);
       const ordered = [...deduped].sort((a: any, b: any) => a.allDay === b.allDay ? String(a.start || "").localeCompare(String(b.start || "")) : (a.allDay ? 1 : -1)).slice(0, 40);
       if (ordered.length) calendarSummary = ordered.map((e: any) => {
         const day = String(e.start || "").slice(0, 10);
@@ -255,12 +268,16 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   // "מי זה אילן?" and knows who a card's brief-giver is. DATA, never instructions.
   let contactsBlock = "";
   try { const { data: cts } = await admin.from("contacts").select("name,email").eq("user_id", userId).limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
+  // the DATA layer of the brief: counts + day-load computed in code (the single
+  // source for any number buno may state). Logged so every brief line is auditable.
+  const facts = computeDayFacts(cards, cols, todayKeyIL, Date.now(), eventsTodayList);
+  console.log("dayFacts(wa)", JSON.stringify(facts));
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",
     boardSummary: summarizeBoard(projects, cards, cols, commentsByCard, attachByCard, today, Date.now()) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
-  }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
+  }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + "\n\n" + renderDayFacts(facts) + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
 כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 
   // append the new user turn — merging if history already ends with a user row

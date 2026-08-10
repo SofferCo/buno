@@ -19,6 +19,7 @@ import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarE
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
 import { summarizeBoard } from "../_shared/boardContext.ts";
+import { computeDayFacts, renderDayFacts } from "../_shared/dayFacts.ts";
 import { WEB_TOOLS, matchCard } from "../_shared/tools.ts";
 
 const cors = {
@@ -89,10 +90,20 @@ Deno.serve(async (req) => {
   const attachByCard = new Map<string, any[]>();
   for (const a of att.data || []) (attachByCard.get(a.card_id) || attachByCard.set(a.card_id, []).get(a.card_id))!.push(a);
   const cardLevel = (asst.data?.cards || "draft") as "suggest" | "draft" | "act"; // server-side matrix
-  // item 11 — persisted gender; auto-switch (silently) to feminine if addressed so.
+  // item 11 — persisted gender (masculine default). Auto-switch silently to match
+  // how the user ACTUALLY addresses buno — BIDIRECTIONAL, so a wrong guess self-heals
+  // on the next clearly-gendered message. Only UNAMBIGUOUS markers count: feminine =
+  // imperatives ending -י ("תעשי"), or "את יכולה"; masculine = the bare forms
+  // ("תעשה") or "אתה יכול". Forms spelled the same for both genders (עשית/ראית) are
+  // NEVER used — they caused false feminine flips (buno-reliability §11 regression).
   let gender: "m" | "f" = asst.data?.gender === "f" ? "f" : "m";
-  if (gender !== "f" && /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|את יכולה|עשית לי|ראית/.test(userMessage)) {
-    gender = "f"; try { await supabase.from("assistant_settings").upsert({ user_id: user.id, gender: "f" }, { onConflict: "user_id" }); } catch { /* best-effort */ }
+  {
+    const fem = /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|תראי|תזכירי|את יכולה/.test(userMessage);
+    const masc = !fem && /תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תוסיף|תראה|תזכיר|אתה יכול/.test(userMessage);
+    const next: "m" | "f" | null = fem ? "f" : masc ? "m" : null;
+    if (next && next !== gender) {
+      gender = next; try { await supabase.from("assistant_settings").upsert({ user_id: user.id, gender: next }, { onConflict: "user_id" }); } catch { /* best-effort */ }
+    }
   }
 
   // ---- calendar context: the twin must see the schedule, not just the board.
@@ -121,6 +132,9 @@ Deno.serve(async (req) => {
 
   let calendarSummary = "";
   let scoped: any[] = [];
+  // TODAY's events specifically (for the computed day-facts) — null until the
+  // calendar is actually read, so an unread calendar leaves eventsToday unknown.
+  let eventsTodayList: any[] | null = null;
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const access = await freshAccessToken(admin, user.id, "gcal");
@@ -131,6 +145,7 @@ Deno.serve(async (req) => {
       // summary) instead of double-listing it — or worse, calling a DONE task "not done".
       const linkedRefs = new Set((cards.data || []).filter((c: any) => !c.archived && typeof c.origin?.ref === "string" && c.origin.ref.startsWith("cal-")).map((c: any) => c.origin.ref));
       const deduped = raw.filter((e: any) => !linkedRefs.has("cal-" + e.id));
+      eventsTodayList = deduped.filter((e: any) => dateOf(e) === todayStr2);
       const inScope = scope === "week" ? deduped : deduped.filter((e: any) => dateOf(e) === scopeDay);
       scoped = orderEvents(inScope);
       if (scoped.length) {
@@ -310,6 +325,10 @@ Deno.serve(async (req) => {
   // contacts — real people so buno can answer "מי זה אילן?" + know a card's giver.
   let contactsBlock = "";
   try { const { data: cts } = await supabase.from("contacts").select("name,email").limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
+  // the DATA layer of the brief: counts + day-load computed in code (the single
+  // source for any number buno may state). Logged so every brief line is auditable.
+  const facts = computeDayFacts(cards.data || [], cols.data || [], todayStr2, nowD.getTime(), eventsTodayList);
+  console.log("dayFacts(web)", JSON.stringify(facts));
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
@@ -320,7 +339,7 @@ Deno.serve(async (req) => {
     // email is never available in the chat. Keeps the prompt honest to itself.
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "web",
-  }) + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + `
+  }) + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + "\n\n" + renderDayFacts(facts) + `
 
 === כללי־יסוד (מעל הכל — שבירתם שוברת אמון) ===
 1. קצר. זו העדיפות העליונה. ברירת מחדל: 1–3 משפטים קצרים, רק אם המשתמש ביקש במפורש פירוט. בלי הרצאות, בלי להסביר מתודולוגיה ("צעד קטן יזיז..."), בלי "זה ייקח שתי דקות", בלי להסביר מה זה כרטיס/בריף, בלי לחזור על מה שכבר מוצג על המסך. ענה לשאלה ותעצור.
