@@ -74,6 +74,30 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] .adk-chat-streamchips button:hover{background:var(--overlay);}
 /* completed-task bar: near-neutral surface, green only in the check circle (no green fill) */
 :root[data-theme="dark"] .adk-tl-donegroup .adk-tl-row:hover{background:rgba(255,255,255,.04);}
+/* dark: no drop shadows — separation comes from the elevation scale, not shadows (they
+   dither on the warm-neutral surfaces). Selection rings (0 0 0 spread) are untouched. */
+:root[data-theme="dark"] .adk-cal-filt-menu,
+:root[data-theme="dark"] .adk-cal-layout,
+:root[data-theme="dark"] .adk-card,
+:root[data-theme="dark"] .adk-chat,
+:root[data-theme="dark"] .adk-chat-input,
+:root[data-theme="dark"] .adk-combo-list,
+:root[data-theme="dark"] .adk-connect-toast,
+:root[data-theme="dark"] .adk-dp-pop,
+:root[data-theme="dark"] .adk-drop,
+:root[data-theme="dark"] .adk-fab,
+:root[data-theme="dark"] .adk-kmenu,
+:root[data-theme="dark"] .adk-modal,
+:root[data-theme="dark"] .adk-mtoggle,
+:root[data-theme="dark"] .adk-notif,
+:root[data-theme="dark"] .adk-pcard,
+:root[data-theme="dark"] .adk-peek,
+:root[data-theme="dark"] .adk-period-menu,
+:root[data-theme="dark"] .adk-plus-menu,
+:root[data-theme="dark"] .adk-projpick-menu,
+:root[data-theme="dark"] .adk-ptask,
+:root[data-theme="dark"] .adk-arch,
+:root[data-theme="dark"] .adk-cmt-send{box-shadow:none;}
 :root[data-theme="dark"] .adk-rail-btn::after,
 :root[data-theme="dark"] .adk-icon-btn::after,
 :root[data-theme="dark"] .adk-att-item .del{color:var(--canvas);}

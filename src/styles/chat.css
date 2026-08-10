@@ -87,7 +87,8 @@
 .adk-fab img{width:26px;height:26px;display:block;}
 /* buno brand mark — white logo tucked in the top-right, bleeding 21px off the top
    and 18.8px off the right (per design). Click-through, above content. */
-.adk-brand-wm{position:fixed;top:-21px;inset-inline-start:-18.8px;width:152px;height:156px;pointer-events:none;z-index:57;}
+.adk-brand-wm{position:fixed;top:-21px;right:-18.8px;width:152px;height:156px;pointer-events:none;z-index:57;}
+html[dir="ltr"] .adk-brand-wm{right:auto;left:-18.8px;transform:scaleX(-1);}
 /* the corner flourish shows on the board but must not poke over a full-page overlay
    (settings / report / dashboard / archive) */
 .adk:has(.adk-page) .adk-brand-wm{display:none;}
@@ -96,7 +97,7 @@
 /* frosted-glass composer pill floating over the messages */
 /* composer = a RAISED container, lighter than the surface below it, solid (no frost) */
 .adk-chat-input{position:absolute;bottom:0;inset-inline:0;z-index:3;display:flex;align-items:center;gap:2px;min-height:52px;margin:12px 14px;padding:0 8px 0 12px;border:1px solid var(--border);border-radius:28px;background:var(--surface-2);box-shadow:0 6px 24px rgba(0,0,0,.10);}
-.adk-chat-input:focus-within{border-color:rgba(217,242,82,.4);}
+.adk-chat-input:focus-within{border-color:var(--ink);}
 .adk-chat-input input{flex:1;min-width:0;border:none;background:transparent;padding:8px 8px;font-size:14px;font-family:inherit;color:var(--ink);}
 .adk-chat-input input::placeholder{color:var(--faint);}
 .adk-chat-input input:focus{outline:none;}

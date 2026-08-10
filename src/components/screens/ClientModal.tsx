@@ -100,6 +100,7 @@ function SharingSection({ sharing }: { sharing: any }) {
 export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any) {
   const [f, setF] = useState(client || { id: uid("cl"), name: "", color: SWATCHES[0], contact: "", email: "", notes: "", rate: "", members: [], logo: null, why: "" });
   const [memberInput, setMemberInput] = useState("");
+  const [showColors, setShowColors] = useState(false);
   const members = f.members || [];
   function addMember() { const n = memberInput.trim(); if (!n || members.includes(n)) return; setF({ ...f, members: [...members, n] }); setMemberInput(""); }
   const fileRef = useRef<any>();
@@ -115,13 +116,18 @@ export function ClientModal({ client, onClose, onSave, onDelete, sharing }: any)
             {f.logo ? <div className="adk-img-prev"><img src={f.logo} alt="" /><button onClick={() => setF({ ...f, logo: null })}>הסר</button></div> : <div className="adk-img-drop" onClick={() => fileRef.current.click()}>📎 העלה לוגו</div>}
           </div>
           <div className="adk-field"><label>צבע (כשאין לוגו)</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SWATCHES.map((s) => <button type="button" key={s} onClick={() => setF({ ...f, color: s })} style={{ width: 28, height: 28, borderRadius: 8, background: s, cursor: "pointer", border: "none", padding: 0, boxShadow: f.color === s ? "0 0 0 3px var(--surface), 0 0 0 5px " + s : "none" }} />)}
-              {/* custom color — native picker behind a "+" swatch; shows the picked color when off-palette */}
-              <label title="צבע אישי" style={{ position: "relative", width: 28, height: 28, borderRadius: 8, cursor: "pointer", display: "grid", placeItems: "center", background: !SWATCHES.includes(f.color) ? f.color : "var(--surface-2)", border: "1px solid var(--border)", boxShadow: !SWATCHES.includes(f.color) ? "0 0 0 3px var(--surface), 0 0 0 5px " + f.color : "none" }}>
-                <input type="color" value={f.color} onChange={(e) => setF({ ...f, color: e.target.value })} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
-                <span style={{ fontSize: 15, fontWeight: 800, lineHeight: 1, color: !SWATCHES.includes(f.color) ? "#fff" : "var(--muted)", pointerEvents: "none" }}>+</span>
-              </label>
+            <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
+              {SWATCHES.slice(0, 7).map((s) => <button type="button" key={s} onClick={() => setF({ ...f, color: s })} style={{ width: 28, height: 28, borderRadius: 8, background: s, cursor: "pointer", border: "none", padding: 0, boxShadow: f.color === s ? "0 0 0 3px var(--surface), 0 0 0 5px " + s : "none" }} />)}
+              {/* "+" opens the fuller palette (no OS colour dialog) */}
+              <button type="button" onClick={() => setShowColors((v) => !v)} title="עוד צבעים" style={{ width: 28, height: 28, borderRadius: 8, cursor: "pointer", display: "grid", placeItems: "center", background: !SWATCHES.slice(0, 7).includes(f.color) ? f.color : "var(--surface-2)", border: "1px solid var(--border)", padding: 0, boxShadow: !SWATCHES.slice(0, 7).includes(f.color) ? "0 0 0 3px var(--surface), 0 0 0 5px " + f.color : "none" }}>
+                <span style={{ fontSize: 15, fontWeight: 800, lineHeight: 1, color: !SWATCHES.slice(0, 7).includes(f.color) ? "#fff" : "var(--muted)" }}>+</span>
+              </button>
+              {showColors && (<>
+                <div style={{ position: "fixed", inset: 0, zIndex: 39 }} onClick={() => setShowColors(false)} />
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", insetInlineStart: 0, zIndex: 40, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12, padding: 10, display: "grid", gridTemplateColumns: "repeat(7, 28px)", gap: 8, boxShadow: "0 14px 34px rgba(0,0,0,.25)" }}>
+                  {SWATCHES.map((s) => <button type="button" key={s} onClick={() => { setF({ ...f, color: s }); setShowColors(false); }} style={{ width: 28, height: 28, borderRadius: 8, background: s, cursor: "pointer", border: "none", padding: 0, boxShadow: f.color === s ? "0 0 0 3px var(--surface-2), 0 0 0 5px " + s : "none" }} />)}
+                </div>
+              </>)}
             </div>
           </div>
           <div className="adk-grid2">
