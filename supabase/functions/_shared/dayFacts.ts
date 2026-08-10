@@ -13,6 +13,7 @@
 const DAY_MS = 864e5;
 
 export type CoreTask = { title: string; reason: string };
+export type ReplyArrived = { card: string; from: string; summary: string };
 
 export type DayFacts = {
   date: string;
@@ -28,6 +29,10 @@ export type DayFacts = {
   stuckCards: number;                            // alive cards with no activity ≥3 days
   waitingCards: number;
   draftsPending: number;
+  // Wave B — need a light query in the door (subtasks / thread updates):
+  almostDone: string | null;                     // title of an alive card whose subtasks are mostly done
+  topClient: string | null;                      // project with the most logged time (RANK only, no figure → can't contradict the board)
+  repliesArrived: { count: number; first: ReplyArrived | null };  // substantive replies that landed recently on cards you track
   dayLoad: "light" | "normal" | "busy" | null;   // null when eventsToday is unknown
 };
 
@@ -54,8 +59,22 @@ const startHour = (e: any) => e.allDay ? -1 : Number(String(e.start || "").slice
 export function computeDayFacts(input: {
   cards: any[]; cols: any[]; todayStr: string; nowMs: number;
   events: { title?: string; start?: string; allDay?: boolean; myStatus?: string | null }[] | null;
+  // Wave B (all optional — absent → those fields stay null/empty, nothing breaks):
+  projects?: any[];
+  subHoursByCard?: Map<string, number>;
+  subDoneByCard?: Map<string, { done: number; total: number }>;
+  recentReplies?: ReplyArrived[];
 }): DayFacts {
   const { cards, cols, todayStr, nowMs, events } = input;
+  const subHoursByCard = input.subHoursByCard || new Map<string, number>();
+  const subDoneByCard = input.subDoneByCard || new Map<string, { done: number; total: number }>();
+  const projects = input.projects || [];
+  const recentReplies = input.recentReplies || [];
+  const cardSecondsOf = (c: any): number => {
+    let s = (Number(c.time_spent) || 0) + (subHoursByCard.get(c.id) || 0) * 3600;
+    if (c.timer_start) s += Math.floor((nowMs - new Date(c.timer_start).getTime()) / 1000);
+    return s;
+  };
   const colById = new Map(cols.map((c: any) => [c.id, c]));
   const alive = (c: any) => !c.archived && !c.draft && !isDoneCol(colById.get(c.column_id));
   const hasTitle = (c: any) => !!String(c.title || "").trim();
@@ -86,6 +105,29 @@ export function computeDayFacts(input: {
     coreTask = { title: String(core.title), reason };
   }
 
+  // Wave B — topClient (RANK only, by logged time incl. subtask hours + running
+  // timer), almost-closed (subtasks mostly done), and replies that just landed.
+  const topClient = (() => {
+    const byProj = new Map<string, number>();
+    for (const c of cards) { if (!alive(c)) continue; const s = cardSecondsOf(c); if (s > 0) byProj.set(c.project_id, (byProj.get(c.project_id) || 0) + s); }
+    let bestId: string | null = null, bestSec = 0;
+    for (const [pid, sec] of byProj) if (sec > bestSec) { bestSec = sec; bestId = pid; }
+    const p = bestId ? projects.find((x: any) => x.id === bestId) : null;
+    return p ? (String(p.name || "").trim() || null) : null;
+  })();
+  const almostDone = (() => {
+    let best: any = null, bestScore = -1;
+    for (const c of aliveWork) {
+      const s = subDoneByCard.get(c.id); if (!s || s.total < 2) continue;
+      const r = s.done / s.total; if (r < 0.6) continue;
+      const idle = (nowMs - lastActivityMs(c)) / DAY_MS;
+      const score = r * 100 + Math.min(idle, 30);   // prefer more-complete, then more-idle
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best ? String(best.title) : null;
+  })();
+  const repliesArrived = { count: recentReplies.length, first: recentReplies[0] || null };
+
   const timed = (events || []).filter((e) => !e.allDay).sort((a, b) => String(a.start || "").localeCompare(String(b.start || "")));
   const eventsToday = events === null ? null : events.length;
   const firstEvent = timed.length ? { title: String(timed[0].title || ""), time: String(timed[0].start || "").slice(11, 16) } : null;
@@ -93,7 +135,7 @@ export function computeDayFacts(input: {
   const morningFree = events === null ? null : !timed.some((e) => { const h = startHour(e); return h >= 0 && h < 12; });
   const dayLoad = eventsToday === null ? null : eventsToday >= 3 ? "busy" : eventsToday === 0 ? "light" : "normal";
 
-  return { date: todayStr, eventsToday, firstEvent, invitesPending, morningFree, tasksToday: planned.length, noEstimate, overdue, deadlinesThisWeek, coreTask, stuckCards: stuck, waitingCards: waiting, draftsPending: drafts, dayLoad };
+  return { date: todayStr, eventsToday, firstEvent, invitesPending, morningFree, tasksToday: planned.length, noEstimate, overdue, deadlinesThisWeek, coreTask, stuckCards: stuck, waitingCards: waiting, draftsPending: drafts, almostDone, topClient, repliesArrived, dayLoad };
 }
 
 // Render the facts as a prompt block. A line whose backing field is empty/unknown
@@ -113,6 +155,12 @@ export function renderDayFacts(f: DayFacts): string {
   L.push(`משימות תקועות (≥3 ימים ללא תזוזה): ${f.stuckCards}`);
   if (f.waitingCards > 0) L.push(`משימות בהמתנה: ${f.waitingCards}`);
   if (f.draftsPending > 0) L.push(`טיוטות שממתינות לאישור: ${f.draftsPending}`);
+  if (f.almostDone) L.push(`כמעט סגור (רוב תת־המשימות בוצעו): "${f.almostDone}"`);
+  if (f.repliesArrived.count > 0) {
+    L.push(`תשובות חדשות שהגיעו על כרטיסים שאתה עוקב אחריהם: ${f.repliesArrived.count}`);
+    if (f.repliesArrived.first) L.push(`  הבולטת: ${f.repliesArrived.first.from} על "${f.repliesArrived.first.card}" — ${f.repliesArrived.first.summary}`);
+  }
+  if (f.topClient) L.push(`הלקוח עם הכי הרבה זמן שנצבר לאחרונה: ${f.topClient}`);
   if (load) L.push(`עומס היום: ${load}`);
   return `=== עובדות היום · מחושב בקוד · המקור היחיד למספרים, לליבה ולתיאור העומס (DATA) ===
 ${L.join("\n")}

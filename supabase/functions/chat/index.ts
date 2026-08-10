@@ -325,9 +325,36 @@ Deno.serve(async (req) => {
   // contacts — real people so buno can answer "מי זה אילן?" + know a card's giver.
   let contactsBlock = "";
   try { const { data: cts } = await supabase.from("contacts").select("name,email").limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
+  // Wave B inputs (best-effort): subtask progress (almost-closed) + replies that
+  // landed recently on tracked cards (from the nightly sweep's thread-update log).
+  const allCardIds = (cards.data || []).map((c: any) => c.id);
+  const subHoursByCard = new Map<string, number>();
+  const subDoneByCard = new Map<string, { done: number; total: number }>();
+  const recentReplies: { card: string; from: string; summary: string }[] = [];
+  try {
+    if (allCardIds.length) {
+      const sinceReplies = new Date(nowD.getTime() - 36 * 3600e3).toISOString();
+      const [subsR, repR] = await Promise.all([
+        supabase.from("subtask").select("card_id,hours,done").in("card_id", allCardIds),
+        supabase.from("card_thread_update").select("card_id,from_name,summary,created_at").in("card_id", allCardIds).gte("created_at", sinceReplies).order("created_at", { ascending: false }),
+      ]);
+      for (const s of subsR.data || []) {
+        subHoursByCard.set(s.card_id, (subHoursByCard.get(s.card_id) || 0) + (Number(s.hours) || 0));
+        const e = subDoneByCard.get(s.card_id) || { done: 0, total: 0 }; e.total++; if (s.done) e.done++; subDoneByCard.set(s.card_id, e);
+      }
+      const titleById = new Map((cards.data || []).map((c: any) => [c.id, String(c.title || "")]));
+      const aliveIds = new Set((cards.data || []).filter((c: any) => !c.archived && !c.draft).map((c: any) => c.id));
+      const seen = new Set<string>();
+      for (const r of repR.data || []) {
+        if (!aliveIds.has(r.card_id) || seen.has(r.card_id)) continue;   // one (newest) per card
+        seen.add(r.card_id);
+        recentReplies.push({ card: titleById.get(r.card_id) || "משימה", from: String(r.from_name || ""), summary: String(r.summary || "") });
+      }
+    }
+  } catch { /* Wave B inputs best-effort — never block the brief */ }
   // the DATA layer of the brief: counts + day-load computed in code (the single
   // source for any number buno may state). Logged so every brief line is auditable.
-  const facts = computeDayFacts({ cards: cards.data || [], cols: cols.data || [], todayStr: todayStr2, nowMs: nowD.getTime(), events: eventsTodayList });
+  const facts = computeDayFacts({ cards: cards.data || [], cols: cols.data || [], projects, todayStr: todayStr2, nowMs: nowD.getTime(), events: eventsTodayList, subHoursByCard, subDoneByCard, recentReplies });
   console.log("dayFacts(web)", JSON.stringify(facts));
   const sys = systemPrompt({
     productName: "buno",
