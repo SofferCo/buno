@@ -18,6 +18,13 @@ const DICTS: Record<string, Record<string, string>> = { he, en };
 export const dirFor = (lang: string) => LANGS.find((l) => l.code === lang)?.dir || "rtl";
 
 type T = (key: string, fallback?: string) => string;
+// Build a translator for a known language without a provider — used by App-level
+// chrome (the rail/floats live ABOVE their own I18nProvider, so useT there would
+// only ever see the Hebrew default). Same fallback chain as the provider's t.
+export const makeT = (lang: string): T => {
+  const dict = DICTS[lang] || he;
+  return (key, fallback) => dict[key] ?? (he as Record<string, string>)[key] ?? fallback ?? key;
+};
 // default (no provider) still resolves to Hebrew, so a component used outside the provider
 // shows real text, never a raw key.
 const Ctx = createContext<{ lang: string; dir: "rtl" | "ltr"; t: T }>({ lang: "he", dir: "rtl", t: (k, f) => (he as Record<string, string>)[k] ?? f ?? k });

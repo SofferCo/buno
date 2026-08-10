@@ -27,5 +27,15 @@
   "settings.timeRoundNote": "עבודה נמדדת כערך, לא כדקות — לכן ברירת המחדל מעגלת כלפי מעלה לשעה שלמה.",
   "settings.capacity": "קיבולת יומית",
   "settings.capacityDesc": "מעל 80% מהיום — בונו יציין שהיום צפוף",
-  "settings.hoursShort": "ש׳"
+  "settings.hoursShort": "ש׳",
+  "common.close": "סגור",
+  "nav.myDay": "היום שלי",
+  "nav.projects": "פרויקטים",
+  "nav.calendar": "יומן",
+  "nav.dashboard": "דשבורד",
+  "nav.settings": "הגדרות",
+  "nav.report": "דוח",
+  "nav.archive": "ארכיון",
+  "nav.share": "שיתוף",
+  "nav.notifications": "התראות"
 }

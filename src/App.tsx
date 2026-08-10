@@ -22,7 +22,7 @@ import { addPeriod, daysUntil, flexDay, relTime, routineKind, todayStr, ymOf } f
 import { fmtMoney, fmtShort, fmtModeHours } from "./lib/format";
 import { setUidMode, uid } from "./lib/id";
 import { supabase } from "./lib/supabase";
-import { I18nProvider, dirFor } from "./lib/i18n";
+import { I18nProvider, dirFor, makeT } from "./lib/i18n";
 import { loadRemote, SyncEngine } from "./data/remote";
 import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
@@ -147,6 +147,7 @@ export default function App() {
   // UI language: sets <html lang/dir> so the page direction follows the chosen language
   // (start/end logical props do the rest). Default Hebrew. Saved in profile.settings.
   const langPref = (profile?.settings?.lang as string) || "he";
+  const t = makeT(langPref);
   useEffect(() => { document.documentElement.lang = langPref; document.documentElement.dir = dirFor(langPref); }, [langPref]);
   const engineRef = useRef<SyncEngine | null>(null);
   const [importPending, setImportPending] = useState<any>(null);
@@ -739,9 +740,9 @@ export default function App() {
           <div className="adk-stat"><b>{openCount}</b><small>משימות</small></div>
           <div className="adk-stat"><b>{fmtModeHours(sumHours(curCards, now, roundMode), roundMode)}</b><small>שעות</small></div>
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
-          <button className="adk-icon-btn" data-label="דוח" onClick={() => openPage("report")}><Icon name="chart" /></button>
-          <button className="adk-icon-btn" data-label="ארכיון" onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
-          {cloud && current && <button className="adk-icon-btn" data-label="שיתוף" onClick={() => setShareFor(current)}><Icon name="share" /></button>}
+          <button className="adk-icon-btn" data-label={t("nav.report")} onClick={() => openPage("report")}><Icon name="chart" /></button>
+          <button className="adk-icon-btn" data-label={t("nav.archive")} onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
+          {cloud && current && <button className="adk-icon-btn" data-label={t("nav.share")} onClick={() => setShareFor(current)}><Icon name="share" /></button>}
         </div>
       </div>
 
@@ -749,7 +750,7 @@ export default function App() {
         <button className="adk-float-av" style={{ background: nameColor(profile.name || identity?.name || identity?.email || "אני") }} title="הדשבורד שלי" onClick={() => openPage("dash")}>
           {(profile.photo || identity?.photo) ? <img src={profile.photo || identity?.photo || undefined} alt="" /> : <span>{(profile.name || identity?.name) ? initials(profile.name || identity?.name) : (identity?.email ? initials(identity.email) : "אני")}</span>}
         </button>
-        <button className="adk-float-bell" title="התראות" onClick={() => { setNotifOpen((v) => { const nv = !v; if (nv) setNotifSeen(Date.now()); return nv; }); }}>
+        <button className="adk-float-bell" title={t("nav.notifications")} onClick={() => { setNotifOpen((v) => { const nv = !v; if (nv) setNotifSeen(Date.now()); return nv; }); }}>
           <Icon name="bell" size={19} />{unreadCount > 0 && <span className="ic-badge">{unreadCount}</span>}
         </button>
         {syncErr && <div className="adk-sync-err">הסנכרון לענן נתקל בשגיאה: {syncErr} · השינויים שמורים מקומית וינסו שוב</div>}
@@ -764,9 +765,9 @@ export default function App() {
             onClose={() => setNotifOpen(false)} />
         </>)}
         <div className="adk-rail bare">
-          <button className="adk-rail-btn" data-label="היום שלי" onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
+          <button className="adk-rail-btn" data-label={t("nav.myDay")} onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
           <div className="adk-peek-zone" onMouseEnter={peekOpen} onMouseLeave={peekClose}>
-            <button className="adk-rail-btn" data-label="פרויקטים" onClick={() => { if (clients[0]) setCurrentId(clients[0].id); openPage(null); }}><Icon name="grid" /></button>
+            <button className="adk-rail-btn" data-label={t("nav.projects")} onClick={() => { if (clients[0]) setCurrentId(clients[0].id); openPage(null); }}><Icon name="grid" /></button>
             {projPeek && (
               <div className="adk-peek" onMouseEnter={peekHold} onMouseLeave={peekClose}>
                 <button className="adk-peek-row special" onClick={() => { openPage("day"); setProjPeek(false); }}>
@@ -786,10 +787,10 @@ export default function App() {
               </div>
             )}
           </div>
-          <button className="adk-rail-btn" data-label="יומן" onClick={() => openPage("cal")}><Icon name="calendar" /></button>
-          <button className="adk-rail-btn" data-label="דשבורד" onClick={() => openPage("dash")}><Icon name="chart" /></button>
+          <button className="adk-rail-btn" data-label={t("nav.calendar")} onClick={() => openPage("cal")}><Icon name="calendar" /></button>
+          <button className="adk-rail-btn" data-label={t("nav.dashboard")} onClick={() => openPage("dash")}><Icon name="chart" /></button>
         </div>
-        <button className="adk-float-gear bare" data-label="הגדרות" onClick={() => openPage("settings")}><Icon name="gear" size={20} /></button>
+        <button className="adk-float-gear bare" data-label={t("nav.settings")} onClick={() => openPage("settings")}><Icon name="gear" size={20} /></button>
       </>)}
 
       <BoardView columns={columns} order={order} cards={cards} clientId={currentId} assets={assets} now={now} viewer={roleViewer} canManageColumns={canManageColumns}

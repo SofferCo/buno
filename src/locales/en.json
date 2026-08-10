@@ -27,5 +27,15 @@
   "settings.timeRoundNote": "Work is measured as value, not minutes — so the default rounds up to a full hour.",
   "settings.capacity": "Daily capacity",
   "settings.capacityDesc": "Above 80% of the day — buno notes the day is packed",
-  "settings.hoursShort": "h"
+  "settings.hoursShort": "h",
+  "common.close": "Close",
+  "nav.myDay": "My Day",
+  "nav.projects": "Projects",
+  "nav.calendar": "Calendar",
+  "nav.dashboard": "Dashboard",
+  "nav.settings": "Settings",
+  "nav.report": "Report",
+  "nav.archive": "Archive",
+  "nav.share": "Share",
+  "nav.notifications": "Notifications"
 }
