@@ -98,6 +98,11 @@ html[dir="ltr"] .adk{direction:ltr;}
 :root[data-theme="dark"] .adk-ptask,
 :root[data-theme="dark"] .adk-arch,
 :root[data-theme="dark"] .adk-cmt-send{box-shadow:none;}
+/* the highlighted "היום שלי" tile used a light cream gradient → dark marker-surface (marker
+   mixed 12% into the canvas), so it stays emphasized without a saturated light fill. */
+:root[data-theme="dark"] .adk-drop-item.special{background:#2B2E1F;}
+:root[data-theme="dark"] .adk-drop-item.special:hover{background:#333722;}
+:root[data-theme="dark"] .adk-peek-row.special{background:#2B2E1F;}
 :root[data-theme="dark"] .adk-rail-btn::after,
 :root[data-theme="dark"] .adk-icon-btn::after,
 :root[data-theme="dark"] .adk-att-item .del{color:var(--canvas);}

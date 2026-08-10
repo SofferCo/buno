@@ -107,8 +107,8 @@ html[dir="ltr"] .adk-brand-wm{right:auto;left:-18.8px;transform:scaleX(-1);}
 .adk-chat-input .adk-attach:hover{background:var(--overlay);color:var(--ink);border:none;}
 /* send = the primary action. Empty: overlay circle, muted arrow (present but idle).
    Ready: filled --ink circle, --canvas arrow — the value inversion, like the user bubble. */
-.adk-chat-input .adk-cmt-send{width:40px;height:40px;flex:none;border:none;background:var(--overlay);color:var(--faint);display:grid;place-items:center;cursor:pointer;border-radius:50%;transition:background .12s,color .12s;}
-.adk-chat-input .adk-cmt-send.ready{background:var(--ink);color:var(--canvas);}
+.adk-chat-input .adk-cmt-send{width:40px;height:40px;flex:none;border:none;background:var(--overlay);color:var(--muted);display:grid;place-items:center;cursor:pointer;border-radius:50%;transition:background .12s,color .12s;}
+.adk-chat-input .adk-cmt-send.ready{background:var(--overlay);color:#fff;}
 .adk-chat-input .adk-cmt-send:hover{filter:brightness(1.08);}
 .adk-mic{width:34px;height:34px;flex:none;border:none;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;border-radius:50%;font-family:inherit;}
 .adk-mic:hover{background:var(--overlay);color:var(--ink);}
