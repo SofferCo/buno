@@ -3,6 +3,7 @@ import { BoardView } from "./components/board/BoardView";
 import { CardPanel } from "./components/card/CardPanel";
 import { ArchivePanel } from "./components/screens/ArchivePanel";
 import { CalendarPanel } from "./components/screens/CalendarPanel";
+import { NotifPanel } from "./components/screens/NotifPanel";
 import { ChatPanel } from "./components/screens/ChatPanel";
 import { ClientModal } from "./components/screens/ClientModal";
 import { MyDay } from "./components/screens/MyDay";
@@ -85,21 +86,28 @@ export default function App() {
   const peekHold = () => { clearTimeout(projPeekT.current); setProjPeek(true); };
   const peekClose = () => { clearTimeout(projPeekT.current); projPeekT.current = setTimeout(() => setProjPeek(false), 160); };
   const notifs = useMemo(() => {
-    const out = [];
-    Object.values(cards).forEach((c) => {
+    // Each row: title = what happened (no "טיוטת buno ·" prefix — the TYPE moves to the chip),
+    // status = the chip, desc = info the title doesn't already carry (else null), person = the
+    // human source (comment/request) so its avatar gets a project-colour ring; a draft's source
+    // is buno → the project avatar. complete = a draft has title+project+date (gates inline אשר).
+    const out: any[] = [];
+    Object.values(cards).forEach((c: any) => {
       if (c.archived) return;
-      const cn = clients.find((x) => x.id === c.clientId)?.name || "";
-      const col = clients.find((x) => x.id === c.clientId)?.color || null;
-      // a card with no title can't be shown in lists — surface it in the bell instead, with a link to complete it
-      if (!String(c.title || "").trim()) { out.push({ id: "u" + c.id, type: "untitled", at: c.createdAt, cardId: c.id, title: "כרטיס בלי כותרת", client: cn, color: col, text: "כרטיס בלי כותרת ממתין להשלמה" }); return; }
-      if (c.draft) out.push({ id: "d" + c.id, type: "draft", at: c.draft.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: "טיוטת buno ממתינה לאישור" });
-      if (c.proposed) out.push({ id: "p" + c.id, type: "request", at: c.proposed.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: `בקשת תזמון מ${c.proposed.by || "לקוח"}` });
-      (c.comments || []).forEach((cm) => {
+      const cl = clients.find((x: any) => x.id === c.clientId);
+      const cn = cl?.name || ""; const col = cl?.color || null;
+      const title = String(c.title || "").trim();
+      if (!title) { out.push({ id: "u" + c.id, type: "untitled", status: "להשלמה", at: c.createdAt, cardId: c.id, title: "כרטיס בלי כותרת", client: cn, color: col, desc: cn || null, person: null, complete: false }); return; }
+      if (c.draft) out.push({ id: "d" + c.id, type: "draft", status: "ממתין לאישור", at: c.draft.at || c.createdAt, cardId: c.id, title, client: cn, color: col, desc: c.deadline ? `דדליין ${c.deadline}${cn ? ` · ${cn}` : ""}` : (cn || null), person: null, complete: !!(title && c.clientId && c.deadline) });
+      if (c.proposed) out.push({ id: "p" + c.id, type: "request", status: "בקשת תזמון", at: c.proposed.at || c.createdAt, cardId: c.id, title, client: cn, color: col, desc: c.proposed.when ? `מוצע: ${c.proposed.when}` : null, person: c.proposed.by || null, complete: false });
+      (c.comments || []).forEach((cm: any) => {
         const mention = /@\S/.test(cm.text || "");
-        out.push({ id: "c" + cm.id, type: mention ? "mention" : "comment", at: cm.at || c.createdAt, cardId: c.id, title: c.title || "משימה", client: cn, color: col, text: `${cm.by}: ${(cm.text || "").replace(/\s+/g, " ").slice(0, 44)}` });
+        out.push({ id: "c" + cm.id, type: mention ? "mention" : "comment", status: mention ? "תויגת" : "תגובה חדשה", at: cm.at || c.createdAt, cardId: c.id, title, client: cn, color: col, desc: (cm.text || "").replace(/\s+/g, " ").slice(0, 70) || null, person: cm.by || null, complete: false });
       });
     });
-    return out.sort((a, b) => b.at - a.at).slice(0, 30);
+    // dedup identical drafts (buno's duplicate cards → one row) by type+title+client
+    const seen = new Set<string>(); const dedup: any[] = [];
+    for (const n of out.sort((a, b) => b.at - a.at)) { const k = `${n.type}|${n.title}|${n.client}`; if (seen.has(k)) continue; seen.add(k); dedup.push(n); }
+    return dedup.slice(0, 40);
   }, [cards, clients]);
   const unreadCount = notifs.filter((n) => n.at > notifSeen).length;
   // buno is permanent — no open/close state. On mobile, where both can't share
@@ -748,22 +756,12 @@ export default function App() {
         {connectToast && <div className="adk-connect-toast">{connectToast}</div>}
         {notifOpen && (<>
           <div className="adk-notif-scrim" onClick={() => setNotifOpen(false)} />
-          <div className="adk-notif">
-            <div className="adk-notif-head"><b>התראות</b>{notifs.length > 0 && <button onClick={() => { setNotifSeen(Date.now()); }}>סמן הכל כנקרא</button>}</div>
-            <div className="adk-notif-list">
-              {notifs.length === 0 && <div className="adk-notif-empty">אין תנועות חדשות ✦</div>}
-              {notifs.map((n) => (
-                <button key={n.id} className={"adk-notif-item" + (n.at > notifSeen ? " unread" : "")} onClick={() => { setNotifOpen(false); setEditing(n.cardId); }}>
-                  <span className={"adk-notif-dot " + n.type} style={n.color ? { background: n.color } : undefined} />
-                  <span className="adk-notif-body">
-                    <span className="t">{n.type === "draft" ? "טיוטת buno" : n.type === "request" ? "בקשת תזמון" : n.type === "mention" ? "תויגת" : n.type === "untitled" ? "להשלמה" : "תגובה"} · <b>{n.title}</b>{n.client && <em> · {n.client}</em>}</span>
-                    <span className="s">{n.text}</span>
-                    <span className="tm">{relTime(n.at)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <NotifPanel notifs={notifs} notifSeen={notifSeen} now={now}
+            onApprove={(id: string) => { const c = cards[id]; if (c) updateCard(id, { draft: undefined, cc: Array.from(new Set([...(c.cc || []), profile.name].map((s) => (s || "").trim()).filter(Boolean))) }); }}
+            onReject={(id: string) => deleteCard(id, "owner")}
+            onOpen={(id: string) => { setNotifOpen(false); setEditing(id); }}
+            onMarkAll={() => setNotifSeen(Date.now())}
+            onClose={() => setNotifOpen(false)} />
         </>)}
         <div className="adk-rail bare">
           <button className="adk-rail-btn" data-label="היום שלי" onClick={() => openPage("day")}><Icon name="sun" />{planTasks.length > 0 && <span className="ic-badge">{planTasks.length}</span>}</button>
