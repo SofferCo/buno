@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "../ui/Icon";
 import { initials } from "../../lib/people";
+import { useT } from "../../lib/i18n";
 import { loadAssistantThread, sendReviewAction, subscribeAssistant } from "../../data/assistant";
 
 // buno writes plain Hebrew, but the model still occasionally emits Markdown
@@ -30,6 +31,7 @@ function fmtMsgTime(ms: number): string {
 }
 
 export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace, onGoBoard, onSuggestionClick }: any) {
+  const { t } = useT();
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
   const [input, setInput] = useState("");
@@ -237,9 +239,9 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             <b>buno</b>
           </div>
           <div className="sp" style={{ flex: 1 }} />
-          <button className="adk-conn-tag" title={`מחובר ל־ ${connectedNames}`} onClick={() => onOpenSettings?.()}><span className="d" />מחובר</button>
+          <button className="adk-conn-tag" title={t("chat.connectedToPrefix") + connectedNames} onClick={() => onOpenSettings?.()}><span className="d" />{t("chat.connected")}</button>
           {/* mobile only: jump to the board (buno stays live, just moves behind) */}
-          <button className="adk-chat-board" title="הלוח" onClick={() => onGoBoard?.()}><Icon name="grid" size={18} /></button>
+          <button className="adk-chat-board" title={t("chat.board")} onClick={() => onGoBoard?.()}><Icon name="grid" size={18} /></button>
         </div>
         <div className="adk-chat-body" ref={boxRef}>
           {msgs.map((m: any, i) => (
@@ -344,7 +346,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             </>)}
             <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
           </div>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? "כתוב מה לעשות עם הקובץ…" : "שאל את בונו…"} />
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? t("chat.fileAction") : t("chat.ask")} />
           <button className={"adk-cmt-send" + (input.trim() ? " ready" : "")} onClick={() => send()} title="שלח"><Icon name="arrowUp" size={18} /></button>
           <button className="adk-mic" title="הקלטה קולית — בקרוב" onClick={() => {}}><Icon name="mic" size={18} /></button>
         </div>

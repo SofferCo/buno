@@ -5,8 +5,10 @@ import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
 import { fmtClock, fmtShort } from "../../lib/format";
 import { peopleOf } from "../../lib/people";
 import { cardSeconds } from "../../lib/time";
+import { useT } from "../../lib/i18n";
 
 export function BoardView({ columns, order, cards, clientId, assets, now, viewer, canManageColumns = true, filter, dnd, onOpenCard, onToggleTimer, onAddCard, onRenameCol, onDeleteColumn, onAddColumn }: any) {
+  const { t } = useT();
   const firstImage = (c) => { const a = (c.attachments || []).find((x) => x.type === "image"); return a ? assets[a.id] : null; };
   const d = dnd || {};
   return (
@@ -26,11 +28,11 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
                 ? <span className="adk-col-title" style={{ fontWeight: 700, padding: "2px 4px" }}>{col.title}</span>
                 : <input className="adk-col-title" value={col.title} onChange={(e) => onRenameCol(col.id, e.target.value)} spellCheck={false} />}
               <span className="adk-count">{ids.length}</span>
-              {!viewer && canManageColumns && (order[col.id] || []).length === 0 && <button className="adk-colmenu" title="מחק עמודה ריקה" onClick={() => onDeleteColumn(col.id)}>×</button>}
+              {!viewer && canManageColumns && (order[col.id] || []).length === 0 && <button className="adk-colmenu" title={t("board.deleteEmptyCol")} onClick={() => onDeleteColumn(col.id)}>×</button>}
             </div>
-            {colTime > 0 && <div className="adk-col-time">⏱ {fmtShort(colTime)} בעמודה</div>}
+            {colTime > 0 && <div className="adk-col-time">⏱ {fmtShort(colTime)} {t("board.inColumn")}</div>}
             <div className="adk-cards">
-              {ids.length === 0 && <div className="adk-empty">{viewer ? "—" : "גרור לכאן משימות"}</div>}
+              {ids.length === 0 && <div className="adk-empty">{viewer ? "—" : t("board.dropTasks")}</div>}
               {ids.map((id) => {
                 const card = cards[id]; const secs = cardSeconds(card, now); const isRun = !!card.timerStart;
                 const dl = deadlineInfo(card.deadline); const pri = PRIORITY[card.priority]; const thumb = firstImage(card);
@@ -45,16 +47,16 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
                     onClick={() => onOpenCard(id)}>
                     {thumb && <img className="adk-card-thumb" src={thumb} alt="" />}
                     <div className="adk-card-in">
-                      <p className="adk-card-title">{routineKind(card) !== "none" && <span className="adk-routine-tag">↻ </span>}{card.title || "ללא כותרת"}</p>
+                      <p className="adk-card-title">{routineKind(card) !== "none" && <span className="adk-routine-tag">↻ </span>}{card.title || t("board.untitled")}</p>
                       <div className="adk-card-meta">
                         {card.priority !== "regular" && <span className="adk-pri" style={{ background: pri.soft, color: pri.color }}>● {pri.label}</span>}
-                        {dl && <span className={"adk-dl " + dl.tone}>📅 {flexDay(card) ? "יום גמיש" : dl.text}</span>}
+                        {dl && <span className={"adk-dl " + dl.tone}>📅 {flexDay(card) ? t("board.flexDay") : dl.text}</span>}
                         {card.time && <span className="adk-dl soon">🕐 {card.time}</span>}
                         {st.length > 0 && <span className="adk-checkmini">☑ {done}/{st.length}</span>}
                         {(card.comments || []).length > 0 && <span className="adk-checkmini"><Icon name="comment" size={13} /> {card.comments.length}</span>}
-                        {card.proposed && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="בקשת לקוח ממתינה לאישור">⏳ בקשה</span>}
-                        {card.draft && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title="טיוטת העוזר"><Icon name="sun" size={12} /> טיוטה</span>}
-                        {card.cardType === "waiting" && <span className="adk-checkmini" style={{ background: "#EEF2F4", color: "#5B6B72" }} title={card.waitingOn ? `ממתין ל${card.waitingOn}` : "ממתין לתשובה"}>⏳ ממתין{card.waitingOn ? ` · ${card.waitingOn}` : ""}</span>}
+                        {card.proposed && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title={t("board.requestPending")}>⏳ {t("board.request")}</span>}
+                        {card.draft && <span className="adk-checkmini" style={{ background: "#FBF0DC", color: "#B9770F" }} title={t("board.draftTitle")}><Icon name="sun" size={12} /> {t("board.draft")}</span>}
+                        {card.cardType === "waiting" && <span className="adk-checkmini" style={{ background: "#EEF2F4", color: "#5B6B72" }} title={card.waitingOn ? t("board.waitingForPrefix") + card.waitingOn : t("board.waitingReply")}>⏳ {t("board.waiting")}{card.waitingOn ? ` · ${card.waitingOn}` : ""}</span>}
                       </div>
                       <div className="adk-card-foot">
                         {peopleOf(card).length > 0 && (
@@ -64,18 +66,18 @@ export function BoardView({ columns, order, cards, clientId, assets, now, viewer
                           </div>
                         )}
                         <span className={"adk-time-badge" + (isRun ? " live" : "")} style={{ marginInlineStart: peopleOf(card).length ? 0 : "auto" }}>{isRun ? <span className="rec-dot" /> : "⏱"} {isRun ? fmtClock(secs) : fmtShort(secs)}</span>
-                        {!viewer && <button className={"adk-timer-btn" + (isRun ? " on" : "")} title={isRun ? "עצור" : "התחל"} onClick={(e) => { e.stopPropagation(); onToggleTimer(id); }}>{isRun ? "■" : "▶"}</button>}
+                        {!viewer && <button className={"adk-timer-btn" + (isRun ? " on" : "")} title={isRun ? t("common.stop") : t("common.start")} onClick={(e) => { e.stopPropagation(); onToggleTimer(id); }}>{isRun ? "■" : "▶"}</button>}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-            {!viewer && <button className="adk-add" onClick={() => onAddCard(col.id)}>+ משימה</button>}
+            {!viewer && <button className="adk-add" onClick={() => onAddCard(col.id)}>+ {t("board.taskWord")}</button>}
           </div>
         );
       })}
-      {!viewer && canManageColumns && <div className="adk-addcol"><button onClick={onAddColumn}><span className="plus">+</span><span className="lbl"> עמודה</span></button></div>}
+      {!viewer && canManageColumns && <div className="adk-addcol"><button onClick={onAddColumn}><span className="plus">+</span><span className="lbl"> {t("board.columnWord")}</span></button></div>}
     </div>
   );
 }

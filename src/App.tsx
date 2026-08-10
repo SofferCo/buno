@@ -712,7 +712,7 @@ export default function App() {
         <div className="adk-csel">
           <div className="adk-csel-btn" onClick={() => setClientMenu((v) => !v)}>
             <Badge client={current} />
-            <div><div className="nm">{current?.name || "בחר לקוח"}</div><div className="sub">{clientCards(currentId).length} משימות</div></div>
+            <div><div className="nm">{current?.name || t("header.selectClient")}</div><div className="sub">{clientCards(currentId).length} {t("header.tasksCount")}</div></div>
             <span className="chev"><Icon name="chevD" size={16} /></span>
           </div>
           {clientMenu && (<>
@@ -737,8 +737,8 @@ export default function App() {
           </>)}
         </div>
         <div className="adk-stats" style={{ marginInlineStart: "auto" }}>
-          <div className="adk-stat"><b>{openCount}</b><small>משימות</small></div>
-          <div className="adk-stat"><b>{fmtModeHours(sumHours(curCards, now, roundMode), roundMode)}</b><small>שעות</small></div>
+          <div className="adk-stat"><b>{openCount}</b><small>{t("stat.tasks")}</small></div>
+          <div className="adk-stat"><b>{fmtModeHours(sumHours(curCards, now, roundMode), roundMode)}</b><small>{t("stat.hours")}</small></div>
           {running && <div className="adk-stat" style={{ background: "var(--rec-soft)", borderColor: "transparent" }}><b style={{ color: "var(--rec)", display: "flex", alignItems: "center", gap: 6 }}><span className="rec-dot" />מוקלט</b><small style={{ color: "var(--rec)" }}>טיימר פעיל</small></div>}
           <button className="adk-icon-btn" data-label={t("nav.report")} onClick={() => openPage("report")}><Icon name="chart" /></button>
           <button className="adk-icon-btn" data-label={t("nav.archive")} onClick={() => openPage("archive")}><Icon name="archive" />{archiveList.length > 0 && <span className="ic-badge">{archiveList.length}</span>}</button>
