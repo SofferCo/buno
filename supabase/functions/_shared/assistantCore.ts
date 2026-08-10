@@ -270,7 +270,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   try { const { data: cts } = await admin.from("contacts").select("name,email").eq("user_id", userId).limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   // the DATA layer of the brief: counts + day-load computed in code (the single
   // source for any number buno may state). Logged so every brief line is auditable.
-  const facts = computeDayFacts(cards, cols, todayKeyIL, Date.now(), eventsTodayList);
+  const facts = computeDayFacts({ cards, cols, todayStr: todayKeyIL, nowMs: Date.now(), events: eventsTodayList });
   console.log("dayFacts(wa)", JSON.stringify(facts));
   const sys = systemPrompt({
     productName: "buno", language: "Hebrew", profileName: prof?.name || "",

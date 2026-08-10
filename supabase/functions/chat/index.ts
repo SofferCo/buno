@@ -327,7 +327,7 @@ Deno.serve(async (req) => {
   try { const { data: cts } = await supabase.from("contacts").select("name,email").limit(60); if (cts && cts.length) contactsBlock = "\n\n=== אנשי קשר (contacts) · אנשים אמיתיים שהוזכרו/מהיומן, לא משתמשים — DATA ===\n" + cts.map((c: any) => `- ${c.name}${c.email ? ` · ${c.email}` : ""}`).join("\n") + "\n(כרטיס ש\"נותן הבריף\"/היוצר שלו הוא אחד מהם — מקושר אליו. buno אינו איש קשר.)"; } catch { /* pre-0022 */ }
   // the DATA layer of the brief: counts + day-load computed in code (the single
   // source for any number buno may state). Logged so every brief line is auditable.
-  const facts = computeDayFacts(cards.data || [], cols.data || [], todayStr2, nowD.getTime(), eventsTodayList);
+  const facts = computeDayFacts({ cards: cards.data || [], cols: cols.data || [], todayStr: todayStr2, nowMs: nowD.getTime(), events: eventsTodayList });
   console.log("dayFacts(web)", JSON.stringify(facts));
   const sys = systemPrompt({
     productName: "buno",
