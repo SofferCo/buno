@@ -55,6 +55,8 @@ export default function App() {
   const [clientEdit, setClientEdit] = useState<any>(null);
   const [shareFor, setShareFor] = useState<any>(null);   // dedicated share dialog target
   const [dayOpen, setDayOpen] = useState(true); // default landing = "היום שלי" (board is one click away)
+  // morning-brief ritual (My-Day only, per-day, virtual — never a real board card)
+  const [ritual, setRitual] = useState<{ date: string; organizeDone: boolean } | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportPeriod, setReportPeriod] = useState<string | null>(null); // when opened from the dashboard, carry its period
@@ -393,6 +395,19 @@ export default function App() {
       return (name === p.name && photo === p.photo) ? p : { ...p, name, photo };
     });
   }, [loaded, identity]);
+
+  // Morning-brief ritual (personal, My-Day only): a per-day pair of ritual rows.
+  // "בריף בוקר" is auto-done the moment the user shows up (endowed progress);
+  // "לסדר את משימות היום" stays in their hands. Virtual + keyed by date, so they
+  // never touch the board, never pile up, and reset themselves each morning.
+  useEffect(() => {
+    if (!loaded) return;
+    const today = todayStr();
+    let next = { date: today, organizeDone: false };
+    try { const raw = localStorage.getItem("buno_ritual"); const prev = raw ? JSON.parse(raw) : null; if (prev && prev.date === today) next = prev; localStorage.setItem("buno_ritual", JSON.stringify(next)); } catch { /* localStorage optional */ }
+    setRitual(next);
+  }, [loaded]);
+  const setRitualOrganize = (done: boolean) => setRitual((r) => { const n = { date: r?.date || todayStr(), organizeDone: done }; try { localStorage.setItem("buno_ritual", JSON.stringify(n)); } catch { /* optional */ } return n; });
 
   // Deep link (item 7): buno.io/?card=<id> from a buno-sent link opens that card.
   const cardLinkDone = useRef(false);
@@ -877,6 +892,8 @@ export default function App() {
           onOpenCard={(id) => setEditing(id)}
           onToggleTimer={toggleTimer} onDone={(id) => moveCard(id, "col-done")}
           onReopen={(id) => moveCard(id, cards[id]?.activeColumn)}
+          ritualActive={!!ritual} ritualOrganizeDone={!!ritual?.organizeDone}
+          onRitualDone={() => setRitualOrganize(true)} onRitualReopen={() => setRitualOrganize(false)}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 

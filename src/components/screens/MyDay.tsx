@@ -25,7 +25,7 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
@@ -157,6 +157,41 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     );
   };
 
+  // ---- ritual rows (My-Day only, virtual): the morning-brief pair ------------
+  // "בריף בוקר" is born already-done — an endowed-progress win for showing up.
+  // "לסדר את משימות היום" stays in the user's hands: one tap on the rail node.
+  const BriefRitualRow = () => (
+    <div className="adk-tl-row done ritual" title="הבריף של הבוקר — נפתח כשנכנסת">
+      <span className="adk-tl-rail"><span className="adk-tl-node done">✓</span></span>
+      <div className="adk-tl-time flex">בוקר</div>
+      <div className="adk-tl-body">
+        <div className="ttl">בריף בוקר</div>
+        <div className="meta"><span className="bdot" style={{ background: "var(--marker)" }} /><span className="cname">ריטואל · buno</span></div>
+      </div>
+    </div>
+  );
+  const OrganizeDoneRow = () => (
+    <div className="adk-tl-row done ritual">
+      <button className="adk-tl-rail" title="החזר לפתוח" onClick={(e) => { e.stopPropagation(); onRitualReopen?.(); }}><span className="adk-tl-node done">✓</span></button>
+      <div className="adk-tl-time flex">ריטואל</div>
+      <div className="adk-tl-body">
+        <div className="ttl">לסדר את משימות היום</div>
+        <div className="meta"><span className="bdot" style={{ background: "var(--marker)" }} /><span className="cname">ריטואל יומי</span></div>
+      </div>
+    </div>
+  );
+  const OrganizeOpenRow = () => (
+    <div className="adk-tl-row ritual">
+      <button className="adk-tl-rail" title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onRitualDone?.(); }}><span className="adk-tl-node" /></button>
+      <div className="adk-tl-time flex">ריטואל</div>
+      <div className="adk-tl-body">
+        <div className="ttl">לסדר את משימות היום</div>
+        <div className="meta"><span className="bdot" style={{ background: "var(--marker)" }} /><span className="cname">ריטואל יומי · בשליטתך</span></div>
+      </div>
+      <div className="adk-tl-actions"><button className="qa done" title="בוצע" onClick={(e) => { e.stopPropagation(); onRitualDone?.(); }}>✓ בוצע</button></div>
+    </div>
+  );
+
   const NowRow = () => (
     <div className="adk-tl-nowrow" ref={nowRef} title={`עכשיו · ${timeLabel}`}>
       <span className="adk-tl-rail"><span className="adk-tl-node now" /></span>
@@ -177,7 +212,10 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   }
   if (!nowPlaced) aheadRows.push(<NowRow key="now" />);
 
-  const hasToday = doneSorted.length > 0 || overdueTasks.length > 0 || ahead.length > 0;
+  // ritual rows count as "closed today" (brief always; organize when done)
+  const ritualClosedCount = ritualActive ? (1 + (ritualOrganizeDone ? 1 : 0)) : 0;
+  const ritualOpen = ritualActive && !ritualOrganizeDone;
+  const hasToday = doneSorted.length > 0 || ritualActive || overdueTasks.length > 0 || ahead.length > 0;
   const nothing = !hasToday && upcoming.length === 0;
 
   return (
@@ -204,18 +242,25 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
             {!nothing && (
               <div className="adk-tl">
                 <span className="adk-tl-spine" />
-                {/* 1 — DONE at the very top: everything above the now-line is handled */}
-                {doneSorted.length > 0 && (<>
-                  <div className="adk-tl-head">נסגרו היום · {doneSorted.length}</div>
-                  <div className="adk-tl-donegroup">{doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}</div>
+                {/* 1 — DONE at the very top: everything above the now-line is handled.
+                    The morning-brief ritual leads it — an endowed-progress head-start. */}
+                {(doneSorted.length > 0 || ritualActive) && (<>
+                  <div className="adk-tl-head">נסגרו היום · {doneSorted.length + ritualClosedCount}</div>
+                  <div className="adk-tl-donegroup">
+                    {ritualActive && <BriefRitualRow />}
+                    {ritualActive && ritualOrganizeDone && <OrganizeDoneRow />}
+                    {doneSorted.map((d: any) => <DoneRow key={"done-" + d.card.id} d={d} />)}
+                  </div>
                 </>)}
                 {/* 2 — overdue: first among the actionable, but BELOW done */}
                 {overdueTasks.length > 0 && (<>
                   <div className="adk-tl-head">חצו את הזמן</div>
                   {overdueTasks.map((t: any) => <TLRow key={t.card.id} t={t} />)}
                 </>)}
-                {/* 3 — the now-line, then the rest of today: timed first, flexible last */}
-                {ahead.length > 0 && <div className="adk-tl-head">סדר היום</div>}
+                {/* 3 — the now-line, then the rest of today: timed first, flexible last.
+                    The "organize the day" ritual leads the actionable list when still open. */}
+                {(ahead.length > 0 || ritualOpen) && <div className="adk-tl-head">סדר היום</div>}
+                {ritualOpen && <OrganizeOpenRow />}
                 {aheadRows}
                 {/* 4 — the look ahead */}
                 {upcoming.length > 0 && (<>

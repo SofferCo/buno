@@ -8,6 +8,7 @@ export function MyDayPreview() {
   const hp = new URLSearchParams(location.search).get("h");
   const now = (() => { const b = new Date(); if (hp !== null) b.setHours(Number(hp), 5, 0, 0); return b.getTime(); })();
   const [doneIds, setDoneIds] = useState<Record<string, number>>({}); // id → completion ms (live toggle to verify mark-done)
+  const [organizeDone, setOrganizeDone] = useState(false); // ritual "organize the day" toggle
   const d = new Date(now);
   const pad = (n: number) => String(n).padStart(2, "0");
   const dayStr = (off: number) => { const x = new Date(now + off * 864e5); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
@@ -55,6 +56,8 @@ export function MyDayPreview() {
       onToggleTimer={() => {}} onDefer={() => {}}
       onDone={(id: string) => setDoneIds((p) => ({ ...p, [id]: now }))}
       onReopen={(id: string) => setDoneIds((p) => { const n = { ...p }; delete n[id]; return n; })}
+      ritualActive ritualOrganizeDone={organizeDone}
+      onRitualDone={() => setOrganizeDone(true)} onRitualReopen={() => setOrganizeDone(false)}
     />
   );
 }
