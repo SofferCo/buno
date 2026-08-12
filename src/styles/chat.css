@@ -98,9 +98,10 @@ html[dir="ltr"] .adk-brand-wm{right:auto;left:-18.8px;transform:scaleX(-1);}
 /* composer = a RAISED container, lighter than the surface below it, solid (no frost) */
 .adk-chat-input{position:absolute;bottom:0;inset-inline:0;z-index:3;display:flex;align-items:center;gap:2px;min-height:52px;margin:12px 14px;padding:0 8px 0 12px;border:1px solid var(--border);border-radius:28px;background:var(--surface-2);box-shadow:0 6px 24px rgba(0,0,0,.10);}
 .adk-chat-input:focus-within{border-color:var(--ink);}
-.adk-chat-input input{flex:1;min-width:0;border:none;background:transparent;padding:8px 8px;font-size:14px;font-family:inherit;color:var(--ink);}
-.adk-chat-input input::placeholder{color:var(--faint);}
-.adk-chat-input input:focus{outline:none;}
+.adk-chat-input input,.adk-chat-input textarea{flex:1;min-width:0;border:none;background:transparent;padding:8px 8px;font-size:14px;font-family:inherit;color:var(--ink);}
+.adk-chat-input textarea{resize:none;line-height:1.45;max-height:120px;overflow-y:auto;display:block;}
+.adk-chat-input input::placeholder,.adk-chat-input textarea::placeholder{color:var(--faint);}
+.adk-chat-input input:focus,.adk-chat-input textarea:focus{outline:none;}
 .adk-chat-input .adk-plus{flex:none;}
 /* secondary icons: mic + attach — quiet, equal, never competing with send */
 .adk-chat-input .adk-attach{width:34px;height:34px;border:none;background:transparent;color:var(--muted);}

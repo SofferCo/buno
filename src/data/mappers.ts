@@ -106,6 +106,10 @@ export function profileToRow(profile: any, lastReset: string, currentId: string 
     settings: {
       time_round_mode: profile.settings?.timeRound || "ceil_hour",
       daily_capacity_hours: Number(profile.settings?.dailyCapacity) || 6,
+      // UI prefs — theme + interface language. Persisted here so they survive a
+      // cloud reload (their absence made the choice reset to system/Hebrew daily).
+      theme: profile.settings?.theme || "system",
+      lang: profile.settings?.lang || "he",
       last_reset: lastReset || null,
       current_project: currentId || null,
       onboarding: profile.settings?.onboarding || null,   // A1 first-run state (jsonb; no migration)
@@ -119,6 +123,6 @@ export function rowToProfile(r: any, asst: any) {
     assistant: asst
       ? { cards: asst.cards, calendar: asst.calendar, outbound: asst.outbound }
       : { cards: "draft", calendar: "draft", outbound: "suggest" },
-    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour", dailyCapacity: Number(r?.settings?.daily_capacity_hours) || 6, onboarding: r?.settings?.onboarding || null },
+    settings: { timeRound: r?.settings?.time_round_mode || "ceil_hour", dailyCapacity: Number(r?.settings?.daily_capacity_hours) || 6, theme: r?.settings?.theme || "system", lang: r?.settings?.lang || "he", onboarding: r?.settings?.onboarding || null },
   };
 }

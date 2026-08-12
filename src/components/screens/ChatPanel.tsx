@@ -44,6 +44,10 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
   const plusFileRef = useRef<any>();
   function clearPending() { setPendingFile(null); if (pendingUrl) { URL.revokeObjectURL(pendingUrl); setPendingUrl(null); } }
   const boxRef = useRef<any>();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // auto-grow the composer as the user writes multi-line (Shift+Enter), and snap
+  // back to one line after send (input cleared) — capped by max-height in CSS.
+  useEffect(() => { const el = inputRef.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; } }, [input]);
   const seededRef = useRef(false);
   const threadRef = useRef<string | undefined>(undefined);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
@@ -346,7 +350,9 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
             </>)}
             <input ref={plusFileRef} type="file" hidden onChange={onPickFile} />
           </div>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={pendingFile ? t("chat.fileAction") : t("chat.ask")} />
+          <textarea ref={inputRef} value={input} rows={1} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
+            placeholder={pendingFile ? t("chat.fileAction") : t("chat.ask")} />
           <button className={"adk-cmt-send" + (input.trim() ? " ready" : "")} onClick={() => send()} title="שלח"><Icon name="arrowUp" size={18} /></button>
           <button className="adk-mic" title="הקלטה קולית — בקרוב" onClick={() => {}}><Icon name="mic" size={18} /></button>
         </div>
