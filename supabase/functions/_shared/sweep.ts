@@ -271,7 +271,8 @@ const BRIEF_EMAIL_TOOL = {
 export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
 export type EmailAwaiting = { from: string; gist: string };
 export type MeetingPrep = { title: string; time: string; project: string; openCards: number };
-export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewOpening: Render | null; waChannelDown: boolean; draftsWalked: boolean; emailsAwaiting: EmailAwaiting[]; emailMustNotMiss: { from: string; why: string } | null; meetingPrep: MeetingPrep | null };
+export type ReviewBreakdown = { drafts: number; updates: number; invites: number };
+export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewBreakdown: ReviewBreakdown; reviewOpening: Render | null; waChannelDown: boolean; draftsWalked: boolean; emailsAwaiting: EmailAwaiting[]; emailMustNotMiss: { from: string; why: string } | null; meetingPrep: MeetingPrep | null };
 
 export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: string): Promise<SweepResult | null> {
   const access = await freshAccessToken(admin, userId, "gcal");
@@ -280,7 +281,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   // the user's projects (owner/member only — where a card may be created)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
-  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewOpening: null, waChannelDown: false, draftsWalked: false, emailsAwaiting: [], emailMustNotMiss: null, meetingPrep: null };
+  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewBreakdown: { drafts: 0, updates: 0, invites: 0 }, reviewOpening: null, waChannelDown: false, draftsWalked: false, emailsAwaiting: [], emailMustNotMiss: null, meetingPrep: null };
   // WhatsApp channel health — 3+ consecutive send failures ⇒ warn (likely token)
   let waChannelDown = false;
   try { const { data: waLink } = await admin.from("whatsapp_link").select("wa_fail_streak,verified").eq("user_id", userId).maybeSingle(); if (waLink?.verified && (Number(waLink.wa_fail_streak) || 0) >= 3) waChannelDown = true; } catch { /* pre-0016 */ }
@@ -505,7 +506,12 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     else await clearSession(admin, userId);
   } catch { /* review_session may not exist before 0015 — degrade */ }
 
-  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewOpening, waChannelDown, draftsWalked, emailsAwaiting, emailMustNotMiss, meetingPrep };
+  const reviewBreakdown: ReviewBreakdown = {
+    drafts: reviewQueue.filter((i) => i.kind === "draft").length,
+    updates: reviewQueue.filter((i) => i.kind === "update").length,
+    invites: reviewQueue.filter((i) => i.kind === "invite").length,
+  };
+  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewBreakdown, reviewOpening, waChannelDown, draftsWalked, emailsAwaiting, emailMustNotMiss, meetingPrep };
 }
 
 // Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say
@@ -518,13 +524,13 @@ function greetingFor(nowMs: number): string {
   return "לילה טוב";
 }
 
-// The day snapshot in buno's voice (observe, don't command). Two renderings from
-// ONE content: plain text for the web thread (buno's messages are plain), and a
-// WhatsApp variant — *bold* labels + a blank line between topics + the CTA last —
-// so the morning push reads as scannable sections, not one dense block.
+// The day snapshot in buno's voice (observe, don't command). ONE content, two
+// renderings — both scannable (bold topic labels + a blank line between topics,
+// CTA last). Only the bold SYNTAX differs: WhatsApp uses *single* asterisks; the
+// web chat bubble renders **double** asterisks as bold (renderLine in ChatPanel).
 export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): string {
   const wa = !!opts?.whatsapp;
-  const b = (s: string) => wa ? `*${s}*` : s;   // bold only on WhatsApp
+  const b = (s: string) => wa ? `*${s}*` : `**${s}**`;   // WhatsApp *bold* · web chat **bold**
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
   // "busy" counts real MEETINGS only (timed + someone else on it) — not all-day
   // items or solo personal blocks (mirror of computeDayFacts dayLoad).
@@ -549,11 +555,20 @@ export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): stri
   if (r.meetingPrep && r.meetingPrep.openCards > 0) brief.push(`${b(`לקראת ${r.meetingPrep.time}:`)} ${r.meetingPrep.title} — ${r.meetingPrep.openCards} כרטיסים פתוחים ב${r.meetingPrep.project}, שווה לרפרש לפני.`);
 
   const nudges = r.nudges || [];
-  const offer = r.reviewCount ? (r.draftsWalked ? `יש ${r.reviewCount} דברים לעבור עליהם — נעבור?` : `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?`) : "";
+  // itemize the guided walk so "N things" isn't an opaque number — say WHAT: drafts
+  // buno made from email, updates on existing cards, calendar invites to answer.
+  const bd = r.reviewBreakdown || { drafts: 0, updates: 0, invites: 0 };
+  const bdParts = [
+    bd.drafts ? (bd.drafts === 1 ? "טיוטה אחת" : `${bd.drafts} טיוטות`) : "",
+    bd.updates ? (bd.updates === 1 ? "עדכון אחד" : `${bd.updates} עדכונים`) : "",
+    bd.invites ? (bd.invites === 1 ? "הזמנה אחת" : `${bd.invites} הזמנות`) : "",
+  ].filter(Boolean).join(", ");
+  const offer = r.reviewCount ? `${b("נעבור על התיבה?")} ${r.reviewCount} ${r.reviewCount === 1 ? "דבר" : "דברים"}${bdParts ? ` — ${bdParts}` : ""}.` : "";
   const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
 
-  // groups → blank line between them on WhatsApp; a single stream on the web. The
-  // CTA (offer) comes LAST, after the observations, so it reads as the next step.
+  // groups → a blank line between them (scannable sections). The CTA (offer) comes
+  // LAST, after the observations, so it reads as the next step. Same shape on both
+  // channels; only the bold syntax differs (handled by b()).
   const groups: string[][] = [[open.join(" ")], waWarn ? [waWarn] : [], brief, nudges, offer ? [offer] : []].filter((g) => g.length);
-  return wa ? groups.map((g) => g.join("\n")).join("\n\n") : groups.flat().join("\n");
+  return groups.map((g) => g.join("\n")).join("\n\n");
 }
