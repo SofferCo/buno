@@ -58,7 +58,7 @@ const startHour = (e: any) => e.allDay ? -1 : Number(String(e.start || "").slice
 // morningFree stay unknown (their lines are never written). [] means read + empty.
 export function computeDayFacts(input: {
   cards: any[]; cols: any[]; todayStr: string; nowMs: number;
-  events: { title?: string; start?: string; allDay?: boolean; myStatus?: string | null }[] | null;
+  events: { title?: string; start?: string; allDay?: boolean; myStatus?: string | null; attendees?: { self?: boolean }[] }[] | null;
   // Wave B (all optional — absent → those fields stay null/empty, nothing breaks):
   projects?: any[];
   subHoursByCard?: Map<string, number>;
@@ -133,7 +133,11 @@ export function computeDayFacts(input: {
   const firstEvent = timed.length ? { title: String(timed[0].title || ""), time: String(timed[0].start || "").slice(11, 16) } : null;
   const invitesPending = events === null ? 0 : events.filter((e) => e.myStatus === "needsAction").length;
   const morningFree = events === null ? null : !timed.some((e) => { const h = startHour(e); return h >= 0 && h < 12; });
-  const dayLoad = eventsToday === null ? null : eventsToday >= 3 ? "busy" : eventsToday === 0 ? "light" : "normal";
+  // day-LOAD counts real MEETINGS only — a timed event with someone else on it —
+  // so all-day items and solo personal blocks (a lunch, a reminder) don't inflate
+  // "busy". A day of self-blocks is still open FOR MEETINGS.
+  const meetings = (events || []).filter((e) => !e.allDay && Array.isArray(e.attendees) && e.attendees.some((a) => !a.self));
+  const dayLoad = events === null ? null : meetings.length >= 3 ? "busy" : meetings.length === 0 ? "light" : "normal";
 
   return { date: todayStr, eventsToday, firstEvent, invitesPending, morningFree, tasksToday: planned.length, noEstimate, overdue, deadlinesThisWeek, coreTask, stuckCards: stuck, waitingCards: waiting, draftsPending: drafts, almostDone, topClient, repliesArrived, dayLoad };
 }

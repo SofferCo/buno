@@ -526,7 +526,10 @@ export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): stri
   const wa = !!opts?.whatsapp;
   const b = (s: string) => wa ? `*${s}*` : s;   // bold only on WhatsApp
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
-  const shape = r.events.length >= 3 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";   // ≥3 = busy (mirror of computeDayFacts dayLoad)
+  // "busy" counts real MEETINGS only (timed + someone else on it) — not all-day
+  // items or solo personal blocks (mirror of computeDayFacts dayLoad).
+  const meetings = (r.events || []).filter((e: any) => !e.allDay && Array.isArray(e.attendees) && e.attendees.some((a: any) => !a.self));
+  const shape = meetings.length >= 3 ? "יום עמוס" : meetings.length === 0 ? "יום פתוח ביומן" : "יום רגיל";
   const firstName = String(r.profileName || "").trim().split(/\s+/)[0]; // first name only, not "Tal Soffer"
 
   // opening stays ONE paragraph (space-joined) so the web thread reads as a lede.
