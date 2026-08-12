@@ -84,7 +84,8 @@ Deno.serve(async (req) => {
         if (link?.verified && link.phone) {
           // item 14 — ONE morning message: the snapshot text (which already carries
           // the single offer line) + one button. No separate second "shall we?" ask.
-          const open = { text: snapshot, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
+          // WhatsApp gets the formatted variant (*bold* labels + blank lines).
+          const open = { text: daySnapshot(r, { whatsapp: true }), actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
           const s = await sendRender(link.phone, open); waSent = s.ok;
           const streak = await noteWaSend(admin, userId, s);
           if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waErrorReason(s), "streak", streak);

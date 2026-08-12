@@ -518,28 +518,39 @@ function greetingFor(nowMs: number): string {
   return "לילה טוב";
 }
 
-// One-line day snapshot in the assistant's voice (observe, don't command).
-export function daySnapshot(r: SweepResult): string {
-  const lines: string[] = [];
+// The day snapshot in buno's voice (observe, don't command). Two renderings from
+// ONE content: plain text for the web thread (buno's messages are plain), and a
+// WhatsApp variant — *bold* labels + a blank line between topics + the CTA last —
+// so the morning push reads as scannable sections, not one dense block.
+export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): string {
+  const wa = !!opts?.whatsapp;
+  const b = (s: string) => wa ? `*${s}*` : s;   // bold only on WhatsApp
   const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
   const shape = r.events.length >= 3 ? "יום עמוס" : r.events.length === 0 ? "יום פתוח ביומן" : "יום רגיל";   // ≥3 = busy (mirror of computeDayFacts dayLoad)
   const firstName = String(r.profileName || "").trim().split(/\s+/)[0]; // first name only, not "Tal Soffer"
-  lines.push(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}. ${shape}.`);
-  if (first) lines.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
-  if (r.created.length && !r.draftsWalked) lines.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
-  else if (!r.reviewCount) lines.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
-  // the opening stays ONE paragraph; the guided walk starts only on engagement.
-  const offer = r.reviewCount ? (r.draftsWalked ? `יש ${r.reviewCount} דברים לעבור עליהם — נעבור?` : `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?`) : "";
-  const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
-  // brief-intelligence lines (Wave B/C) — each backed by a real email / a matched
-  // meeting. Awaiting-reply, must-not-miss, and meeting prep get their own lines.
+
+  // opening stays ONE paragraph (space-joined) so the web thread reads as a lede.
+  const open: string[] = [`${b(`${greetingFor(Date.now())}${firstName ? ` ${firstName}` : ""}.`)} ${shape}.`];
+  if (first) open.push(`הראשון ביומן: ${first.title} ב־${(first.start || "").slice(11, 16)}.`);
+  if (r.created.length && !r.draftsWalked) open.push(`עברתי על המייל וסימנתי ${r.created.length === 1 ? "טיוטה אחת שממתינה" : `${r.created.length} טיוטות שממתינות`} לך על הלוח.`);
+  else if (!r.reviewCount) open.push("עברתי על המייל — אין פריט חדש שדורש משימה.");
+
+  // brief-intelligence (Wave B/C) — each line backed by a real email / a matched
+  // meeting. Bold labels on WhatsApp make them scan as distinct topics.
   const brief: string[] = [];
-  if (r.emailMustNotMiss) brief.push(`אל תפספס: ${r.emailMustNotMiss.from} — ${r.emailMustNotMiss.why}.`);
+  if (r.emailMustNotMiss) brief.push(`${b("אל תפספס:")} ${r.emailMustNotMiss.from} — ${r.emailMustNotMiss.why}.`);
   if (r.emailsAwaiting && r.emailsAwaiting.length) {
     const b0 = r.emailsAwaiting[0];
-    brief.push(`ממתינים לתשובתך: ${r.emailsAwaiting.length === 1 ? "מייל אחד" : `${r.emailsAwaiting.length} מיילים`}${b0 ? ` — הבולט: ${b0.from}${b0.gist ? ` (${b0.gist})` : ""}` : ""}.`);
+    brief.push(`${b("ממתינים לתשובתך:")} ${r.emailsAwaiting.length === 1 ? "מייל אחד" : `${r.emailsAwaiting.length} מיילים`}${b0 ? ` — הבולט: ${b0.from}${b0.gist ? ` (${b0.gist})` : ""}` : ""}.`);
   }
-  if (r.meetingPrep && r.meetingPrep.openCards > 0) brief.push(`לקראת ${r.meetingPrep.time} (${r.meetingPrep.title}): ${r.meetingPrep.openCards} כרטיסים פתוחים ב${r.meetingPrep.project} — שווה לרפרש לפני.`);
-  // proactive nudges (P1.5–P1.7) get their own lines under the opening brief.
-  return [lines.join(" "), waWarn, ...brief, offer, ...(r.nudges || [])].filter(Boolean).join("\n");
+  if (r.meetingPrep && r.meetingPrep.openCards > 0) brief.push(`${b(`לקראת ${r.meetingPrep.time}:`)} ${r.meetingPrep.title} — ${r.meetingPrep.openCards} כרטיסים פתוחים ב${r.meetingPrep.project}, שווה לרפרש לפני.`);
+
+  const nudges = r.nudges || [];
+  const offer = r.reviewCount ? (r.draftsWalked ? `יש ${r.reviewCount} דברים לעבור עליהם — נעבור?` : `יש גם ${r.reviewCount} עדכונים משרשורים — נעבור עליהם?`) : "";
+  const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";
+
+  // groups → blank line between them on WhatsApp; a single stream on the web. The
+  // CTA (offer) comes LAST, after the observations, so it reads as the next step.
+  const groups: string[][] = [[open.join(" ")], waWarn ? [waWarn] : [], brief, nudges, offer ? [offer] : []].filter((g) => g.length);
+  return wa ? groups.map((g) => g.join("\n")).join("\n\n") : groups.flat().join("\n");
 }
