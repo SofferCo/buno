@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
     // a list of items belongs in a CHECKLIST (subtasks), never crammed into description.
     const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
     if (checklist.length) { try { await supabase.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
-    created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
+    created.push({ id: data.id, title: data.title, project: project.name, project_id: project.id, level: cardLevel });
     const tail = unassigned ? " (לא הייתי בטוח לאיזה פרויקט לשייך — שמתי ב״אישי״, תגיד לי ואעביר)" : "";
     return cardLevel === "act"
       ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}${tail}.`
@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
 6. עדיפות: כשנשאל "מה הכי דחוף/חשוב" — קריטי ראשון, אחריו חשוב, ורק אז דדליין (בעקביות עם "היום שלי").
 7. החלטה = הודעה משלה: אל תבלע שאלת כן/לא בתוך פסקת טקסט (למשל "רוצה שאתעד את X כהושלם?"). אם המשתמש לא ביקש פעולה — אל תבצע ואל תשאל בפרוזה; דווח קצר מה עשית ותעצור. הבקשה של המשתמש היא הטריגר, לא ניחוש שלך.
 8. יצירת כרטיס = שורת אישור אחת בלבד: כשאתה מוסיף משימה, ענה במשפט קצר על מה שביקשו בלבד (למשל "צירפתי להיום את 'לסדר משימות'"). הכרטיס עצמו כבר מוצג על המסך עם הפרויקט וכפתורי אישור — אל תחזור עליו. אסור: לסקור את היומן, למנות משימות/פגישות אחרות שלא התבקשו, או "לתקן" משהו שאמרת קודם. רק מה שביקשו.
-9. נאמנות לבקשה: כשבקשת יצירה כוללת פרטים — פרויקט (project_id), אנשים ("עם נמרוד עוז" → people), פירוט (description), חלוקה לשלבים (checklist), נותן-בריף (brief_from) — כל אחד מהם חייב להיכנס לשדה המתאים בכלי. אל תשמיט פרט שנאמר. באישור הקצר ציין מה נכנס, ואם משהו מהבקשה לא מומש — אמור זאת במפורש. קבצים: אתה עדיין לא יכול לצרף קובץ שנשלח בצ'אט לכרטיס — אם ביקשו, אמור בכנות "עוד לא יודע לצרף קבצים מהצ'אט — צרף מהכרטיס עצמו", אל תעמיד פנים שצירפת.
+9. נאמנות לבקשה: כשבקשת יצירה כוללת פרטים — פרויקט (project_id), אנשים ("עם נמרוד עוז" → people), פירוט (description), חלוקה לשלבים (checklist), נותן-בריף (brief_from) — כל אחד מהם חייב להיכנס לשדה המתאים בכלי. אל תשמיט פרט שנאמר. באישור הקצר ציין מה נכנס, ואם משהו מהבקשה לא מומש — אמור זאת במפורש. קבצים: אם ההודעה כוללת "(מצורף קובץ ...)" — קובץ הועלה בצ'אט והאפליקציה תצרף אותו אוטומטית לכרטיס שתיצור, אז פשוט צור את הכרטיס כרגיל (אל תיצור כרטיס נפרד לקובץ). אם המשתמש מזכיר קובץ שאין לגביו רמז כזה — אמור בכנות "אין לי את הקובץ כאן — צרף אותו מהכרטיס עצמו", אל תעמיד פנים.
 
 Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 

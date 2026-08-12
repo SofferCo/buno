@@ -568,6 +568,23 @@ export default function App() {
       }
     }
   }
+  // attach a file to a card that may NOT be in local state yet (e.g. one buno just
+  // created via the edge) — done entirely through the data layer (storage + the
+  // attachment row), then refresh so it appears. State-timing-proof.
+  async function attachFileToCard(cardId: string, projectId: string, file: any): Promise<boolean> {
+    if (!supabase || !identity || !cardId || !projectId) return false;
+    try {
+      const isImg = String(file.type || "").startsWith("image/");
+      const dataUrl = isImg ? await resizeImage(file, 1000, "image/jpeg", 0.72) : await readDataURL(file);
+      if (!dataUrl || dataUrl.length > 4600000) return false;
+      const { data: row } = await supabase.from("attachment").insert({ card_id: cardId, type: isImg ? "image" : "file", name: file.name, meta: { mime: file.type } }).select("id").single();
+      if (!row) return false;
+      const key = await uploadAsset(supabase, projectId, cardId, row.id, dataUrl);
+      if (key) await supabase.from("attachment").update({ storage_key: key }).eq("id", row.id);
+      await refreshBoardFromCloud(currentId);
+      return true;
+    } catch { return false; }
+  }
   function addLink(cardId) { const attId = uid("att"); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: [...(p[cardId].attachments || []), { id: attId, type: "link", name: "", url: "" }] } })); }
   function updateAtt(cardId, attId, patch) { setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.map((a) => (a.id === attId ? { ...a, ...patch } : a)) } })); }
   function removeAtt(cardId, attId) { const a = cards[cardId]?.attachments?.find((x: any) => x.id === attId); if (a && a.type !== "link") { storage.delete(APREFIX + attId).catch(() => {}); if (supabase && a.storageKey) removeAsset(supabase, a.storageKey); } setAssets((p) => { const n = { ...p }; delete n[attId]; return n; }); setCards((p) => ({ ...p, [cardId]: { ...p[cardId], attachments: p[cardId].attachments.filter((x) => x.id !== attId) } })); }
@@ -947,6 +964,7 @@ export default function App() {
         onReviewComplete={() => setRitualOrganize(true)}
         onSuggestionClick={(key: string) => { if (supabase) supabase.rpc("bump_suggestion", { p_key: key, p_shown: 0, p_clicked: 1 }).then(() => {}, () => {}); }}
         onUploadFile={(file: any, intent?: string) => { const id = assistantAction("create_card", { title: (intent || file.name || "").slice(0, 80), description: intent ? `מהקובץ ${file.name}` : "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
+        onAttachToCard={(cardId: string, projectId: string, file: any) => attachFileToCard(cardId, projectId, file)}
         onOpenCard={(id) => setEditing(id)}
         onOpenEvent={(ev) => setEventOpen({ ev, projectId: inferEventProjectId(ev.attendees || [], clients, ev.organizer) })}
         eventColor={(ev: any) => { const id = inferEventProjectId(ev.attendees || [], clients, ev.organizer); return clients.find((c) => c.id === id)?.color || null; }}

@@ -30,7 +30,7 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace, onGoBoard, onSuggestionClick, onReviewComplete }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace, onGoBoard, onSuggestionClick, onReviewComplete, onAttachToCard }: any) {
   const { t } = useT();
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
@@ -109,6 +109,29 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       if (!text) { setMsgs((m) => [...m, { by: "twin", text: `קיבלתי את "${file.name}". מה לעשות איתו — לפתוח ממנו משימה, לצרף ללקוח, או לנתח?`, at: Date.now() }]); return; }
       clearPending(); setInput("");
       setMsgs((m) => [...m, { by: "me", text: `📎 ${file.name} — ${text}`, at: Date.now() }]);
+      // route through buno so the card is STRUCTURED (project, checklist, people…),
+      // then attach the staged file to the card buno created.
+      if (live && ask) {
+        setTyping(true);
+        try {
+          const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
+          const res = await ask(`${text}\n(מצורף קובץ "${file.name}" — קשר אותו לכרטיס שאתה יוצר מהבקשה)`, history, threadRef.current);
+          if (res?.threadId) threadRef.current = res.threadId;
+          setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, actions: res?.actions?.length ? res.actions : undefined, review: res?.review || undefined }]);
+          const c0 = res?.created?.[0];
+          if (c0?.id && c0?.project_id && onAttachToCard) {
+            const ok = await onAttachToCard(c0.id, c0.project_id, file);
+            setMsgs((m) => [...m, { by: "twin", text: ok ? `📎 צירפתי את "${file.name}" לכרטיס.` : `לא הצלחתי לצרף את הקובץ — אפשר לצרף מהכרטיס עצמו.`, at: Date.now() }]);
+          } else {
+            setMsgs((m) => [...m, { by: "twin", text: `הקובץ "${file.name}" נשאר אצלי — לא נוצר כרטיס לצרף אליו. תגיד לי לאיזה כרטיס.`, at: Date.now() }]);
+          }
+          if (res?.pending && res.pending > 0) setSessionState({ pending: res.pending, started: !!res.started });
+          if (Array.isArray(res?.suggestions)) setDynSug(res.suggestions);
+        } catch { setMsgs((m) => [...m, { by: "twin", text: "buno לא זמין כרגע. נסה שוב בעוד רגע.", at: Date.now() }]); }
+        finally { setTyping(false); }
+        return;
+      }
+      // local mode (no cloud): the old client-side path.
       onUploadFile?.(file, text);
       setMsgs((m) => [...m, { by: "twin", text: `פתחתי טיוטה מהקובץ: "${text}". הקובץ מצורף — אפשר לפתוח ולסדר.`, at: Date.now() }]);
       return;
