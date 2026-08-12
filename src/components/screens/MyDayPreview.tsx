@@ -58,6 +58,7 @@ export function MyDayPreview() {
       onReopen={(id: string) => setDoneIds((p) => { const n = { ...p }; delete n[id]; return n; })}
       ritualActive ritualOrganizeDone={organizeDone}
       onRitualDone={() => setOrganizeDone(true)} onRitualReopen={() => setOrganizeDone(false)}
+      onBriefOpen={() => alert("פתח את הבריף בצ'אט")}
     />
   );
 }

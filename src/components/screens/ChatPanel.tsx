@@ -30,7 +30,7 @@ function fmtMsgTime(ms: number): string {
   return sameDay ? hm : `${d.getDate()}.${d.getMonth() + 1} · ${hm}`;
 }
 
-export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace, onGoBoard, onSuggestionClick }: any) {
+export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUsed, ask, live, profileName, calConnected, mailConnected, onOpenCard, onOpenEvent, onOpenSettings, onApproveCard, onRejectCard, onSweepNow, onReviewAction, onUploadFile, eventColor, eventProject, cardColor, invited, onInvitedSeen, onWantPersonalSpace, onGoBoard, onSuggestionClick, onReviewComplete }: any) {
   const { t } = useT();
   const hi = profileName ? `היי ${profileName} 👋` : "היי 👋";
   const [msgs, setMsgs] = useState([{ by: "twin", text: `${hi} אני buno. אני רואה את הלוח שלך ואפשר לשאול אותי עליו — מה פתוח, מה דחוף, מה קורה אצל לקוח מסוים.` }]);
@@ -176,6 +176,8 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       const r = await onReviewAction(id);
       setSessionState(r?.pending && r.pending > 0 ? { pending: r.pending, started: !!r.started } : null);
       if (r?.reply) setMsgs((m) => [...m, { by: "twin", text: r.reply, at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
+      // finishing the guided walk IS "organizing the day" — auto-complete that ritual.
+      if (r?.reviewDone) onReviewComplete?.();
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
     finally { setTyping(false); }
   }

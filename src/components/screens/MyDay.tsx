@@ -25,7 +25,7 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
@@ -160,14 +160,16 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   // ---- ritual rows (My-Day only, virtual): the morning-brief pair ------------
   // "בריף בוקר" is born already-done — an endowed-progress win for showing up.
   // "לסדר את משימות היום" stays in the user's hands: one tap on the rail node.
+  // the brief card IS the chat brief — clicking it opens the brief in the chat.
   const BriefRitualRow = () => (
-    <div className="adk-tl-row done ritual" title="הבריף של הבוקר — נפתח כשנכנסת">
+    <div className="adk-tl-row done ritual" title="פתח את הבריף בצ'אט" onClick={() => onBriefOpen?.()} style={{ cursor: "pointer" }}>
       <span className="adk-tl-rail"><span className="adk-tl-node done">✓</span></span>
       <div className="adk-tl-time flex">בוקר</div>
       <div className="adk-tl-body">
         <div className="ttl">בריף בוקר</div>
         <div className="meta"><span className="bdot" style={{ background: "var(--marker)" }} /><span className="cname">ריטואל · buno</span></div>
       </div>
+      <div className="adk-tl-actions"><span className="qa" style={{ display: "inline-flex" }}>פתח בריף →</span></div>
     </div>
   );
   const OrganizeDoneRow = () => (

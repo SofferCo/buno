@@ -894,6 +894,7 @@ export default function App() {
           onReopen={(id) => moveCard(id, cards[id]?.activeColumn)}
           ritualActive={!!ritual} ritualOrganizeDone={!!ritual?.organizeDone}
           onRitualDone={() => setRitualOrganize(true)} onRitualReopen={() => setRitualOrganize(false)}
+          onBriefOpen={() => { setDayOpen(false); setMobileView("chat"); }}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 
@@ -943,6 +944,7 @@ export default function App() {
         onRejectCard={(id) => deleteCard(id, "owner")}
         onSweepNow={async () => { const r = await sweepNow(); if (r?.ok && (r?.created?.length || r?.review)) await refreshBoardFromCloud(currentId); return r; }}
         onReviewAction={async (id: string) => { const r = await sendReviewAction(id); await refreshBoardFromCloud(currentId); return r; }}
+        onReviewComplete={() => setRitualOrganize(true)}
         onSuggestionClick={(key: string) => { if (supabase) supabase.rpc("bump_suggestion", { p_key: key, p_shown: 0, p_clicked: 1 }).then(() => {}, () => {}); }}
         onUploadFile={(file: any, intent?: string) => { const id = assistantAction("create_card", { title: (intent || file.name || "").slice(0, 80), description: intent ? `מהקובץ ${file.name}` : "קובץ שהועלה מהצ'אט", origin: { type: "chat", ref: "upload-" + Date.now() } }); if (id) addFiles(id, [file]); }}
         onOpenCard={(id) => setEditing(id)}
