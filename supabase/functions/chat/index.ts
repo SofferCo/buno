@@ -96,10 +96,14 @@ Deno.serve(async (req) => {
   // imperatives ending -י ("תעשי"), or "את יכולה"; masculine = the bare forms
   // ("תעשה") or "אתה יכול". Forms spelled the same for both genders (עשית/ראית) are
   // NEVER used — they caused false feminine flips (buno-reliability §11 regression).
+  // Only flip on EXPLICIT DIRECT ADDRESS to buno — a gendered pronoun+adjective
+  // ("את צודקת", "אתה יכול") or an imperative addressed to buno with "לי" ("תעשי
+  // לי", "תגיד לי"). A bare imperative or an incidental gendered word never flips
+  // (it may be the user's own phrasing or about a third party). Masculine default.
   let gender: "m" | "f" = asst.data?.gender === "f" ? "f" : "m";
   {
-    const fem = /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|תראי|תזכירי|את יכולה/.test(userMessage);
-    const masc = !fem && /תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תוסיף|תראה|תזכיר|אתה יכול/.test(userMessage);
+    const fem = /את (צודקת|יכולה|בטוחה|יודעת|מבינה|רואה|מוכנה)|(תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תראי|תזכירי) לי/.test(userMessage);
+    const masc = !fem && /אתה (צודק|יכול|בטוח|יודע|מבין|רואה|מוכן)|(תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תראה|תזכיר) לי/.test(userMessage);
     const next: "m" | "f" | null = fem ? "f" : masc ? "m" : null;
     if (next && next !== gender) {
       gender = next; try { await supabase.from("assistant_settings").upsert({ user_id: user.id, gender: next }, { onConflict: "user_id" }); } catch { /* best-effort */ }

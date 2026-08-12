@@ -63,10 +63,12 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   // on the next clearly-gendered message. Only UNAMBIGUOUS markers count (feminine -י
   // imperatives / "את יכולה"; masculine bare forms / "אתה יכול"); dual-spelled forms
   // like עשית/ראית are NEVER used — they caused false feminine flips (§11 regression).
+  // Only flip on EXPLICIT DIRECT ADDRESS (pronoun+adjective / imperative+"לי") —
+  // never a bare imperative or an incidental gendered word. Masculine default.
   let gender: "m" | "f" = asst?.gender === "f" ? "f" : "m";
   {
-    const fem = /תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תוסיפי|תראי|תזכירי|את יכולה/.test(userMessage);
-    const masc = !fem && /תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תוסיף|תראה|תזכיר|אתה יכול/.test(userMessage);
+    const fem = /את (צודקת|יכולה|בטוחה|יודעת|מבינה|רואה|מוכנה)|(תעשי|תגידי|תבדקי|תפתחי|תסדרי|תכתבי|תשלחי|תראי|תזכירי) לי/.test(userMessage);
+    const masc = !fem && /אתה (צודק|יכול|בטוח|יודע|מבין|רואה|מוכן)|(תעשה|תגיד|תבדוק|תפתח|תסדר|תכתוב|תשלח|תראה|תזכיר) לי/.test(userMessage);
     const next: "m" | "f" | null = fem ? "f" : masc ? "m" : null;
     if (next && next !== gender) {
       gender = next; try { await admin.from("assistant_settings").upsert({ user_id: userId, gender: next }, { onConflict: "user_id" }); } catch { /* best-effort */ }

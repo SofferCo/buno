@@ -69,6 +69,32 @@ export function currentRender(s: { queue: ReviewItem[]; cursor: number }): Rende
   return renderItem(s.queue[s.cursor], s.cursor, s.queue.length);
 }
 
+// 🔴4 — the queue stores a SNAPSHOT (project name captured at scan time). Before
+// showing an item, re-read the card's LIVE state (project, title) so the walk never
+// contradicts the board (the "chat says Air Doctor, board says אישי" bug). A card
+// that moved shows its new board; a card deleted / no-longer-a-draft returns null
+// and is skipped quietly. Only the queue ORDER + ids come from the snapshot.
+async function hydrate(admin: SupabaseClient, item: ReviewItem): Promise<ReviewItem | null> {
+  if (item.kind === "draft") {
+    const { data: c } = await admin.from("card").select("title,project_id,archived,draft").eq("id", item.cardId).maybeSingle();
+    if (!c || c.archived || !c.draft) return null;   // approved / rejected / gone → skip
+    const { data: p } = await admin.from("project").select("name").eq("id", c.project_id).maybeSingle();
+    return { ...item, title: String(c.title || item.title), project: String(p?.name || item.project || "") };
+  }
+  if (item.kind === "update") {
+    const { data: c } = await admin.from("card").select("title,archived").eq("id", item.cardId).maybeSingle();
+    if (!c || c.archived) return null;
+    return { ...item, cardTitle: String(c.title || item.cardTitle) };
+  }
+  return item; // invite — no card to hydrate
+}
+// advance from `cursor` to the first item that still exists live; hydrate it.
+async function presentFrom(admin: SupabaseClient, queue: ReviewItem[], cursor: number): Promise<{ item: ReviewItem | null; cursor: number }> {
+  let i = cursor;
+  while (i < queue.length) { const live = await hydrate(admin, queue[i]); if (live) return { item: live, cursor: i }; i++; }
+  return { item: null, cursor: i };
+}
+
 // ---- actions ---------------------------------------------------------------
 async function doneColumn(admin: SupabaseClient, projectId: string): Promise<any> {
   const { data } = await admin.from("board_column").select("id,key,is_done").eq("project_id", projectId);
@@ -100,11 +126,14 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   const item = s.queue[s.cursor];
   if (!item) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true, pending: 0 }; }
 
-  // present the current item (no state change) — with its progress line.
+  // present the current item from LIVE state (skip any that vanished since the scan).
   if (actionId === "rv:start" || actionId === "rv:open_cal") {
-    const r = currentRender(s);
-    const p = progressLine(s.cursor, s.queue.length);
-    return { ...r, text: [p, r.text].filter(Boolean).join("\n"), pending: s.queue.length - s.cursor, started: true };
+    const { item: live, cursor: c } = await presentFrom(admin, s.queue, s.cursor);
+    if (c !== s.cursor) await setSession(admin, userId, s.queue, c);
+    if (!live) { await clearSession(admin, userId); return { text: "זהו, עברנו על הכול. הלוח מעודכן.", actions: [], done: true, pending: 0 }; }
+    const r = renderItem(live, c, s.queue.length);
+    const p = progressLine(c, s.queue.length);
+    return { ...r, text: [p, r.text].filter(Boolean).join("\n"), pending: s.queue.length - c, started: true };
   }
 
   let ack = "";
@@ -134,17 +163,19 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
     }
   } catch { ack = "לא הצלחתי — ממשיך."; }
 
-  const next = { queue: s.queue, cursor: s.cursor + 1 };
-  await setSession(admin, userId, next.queue, next.cursor);
-  const r = currentRender(next);
-  if (r.done) { await clearSession(admin, userId); return { ...r, text: [ack, r.text].filter(Boolean).join("\n"), pending: 0 }; }
+  // advance, then present the next LIVE item (skipping any that vanished), and
+  // persist the resolved cursor so we never re-check a gone card.
+  const { item: liveNext, cursor: nc } = await presentFrom(admin, s.queue, s.cursor + 1);
+  await setSession(admin, userId, s.queue, nc);
+  if (!liveNext) { await clearSession(admin, userId); return { text: [ack, "זהו, עברנו על הכול. הלוח מעודכן."].filter(Boolean).join("\n"), actions: [], done: true, pending: 0 }; }
+  const r = renderItem(liveNext, nc, s.queue.length);
   // ack on its own line, a blank line, then "ממשיכים הלאה X מתוך Y", then the item.
-  const p = progressLine(next.cursor, next.queue.length);
+  const p = progressLine(nc, s.queue.length);
   const parts: string[] = [];
   if (ack) parts.push(ack, "");
   if (p) parts.push(p);
   parts.push(r.text);
-  return { ...r, text: parts.join("\n"), pending: next.queue.length - next.cursor, started: true };
+  return { ...r, text: parts.join("\n"), pending: s.queue.length - nc, started: true };
 }
 
 async function cardProject(admin: SupabaseClient, cardId: string): Promise<string> {
