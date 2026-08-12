@@ -33,6 +33,7 @@ export type DayFacts = {
   almostDone: string | null;                     // title of an alive card whose subtasks are mostly done
   topClient: string | null;                      // project with the most logged time (RANK only, no figure → can't contradict the board)
   repliesArrived: { count: number; first: ReplyArrived | null };  // substantive replies that landed recently on cards you track
+  openByProject: { name: string; open: number }[];  // 🔴1 — computed per-project open count, so "כמה ב-X" is measured, never eyeballed
   dayLoad: "light" | "normal" | "busy" | null;   // null when eventsToday is unknown
 };
 
@@ -127,6 +128,12 @@ export function computeDayFacts(input: {
     return best ? String(best.title) : null;
   })();
   const repliesArrived = { count: recentReplies.length, first: recentReplies[0] || null };
+  // per-project OPEN count (alive) — the measured answer to "כמה משימות ב-X".
+  const openByProject = (() => {
+    const byId = new Map<string, number>();
+    for (const c of cards) { if (!alive(c) || !hasTitle(c)) continue; byId.set(c.project_id, (byId.get(c.project_id) || 0) + 1); }
+    return projects.map((p: any) => ({ name: String(p.name || ""), open: byId.get(p.id) || 0 })).filter((x) => x.open > 0).sort((a, b) => b.open - a.open);
+  })();
 
   const timed = (events || []).filter((e) => !e.allDay).sort((a, b) => String(a.start || "").localeCompare(String(b.start || "")));
   const eventsToday = events === null ? null : events.length;
@@ -139,7 +146,7 @@ export function computeDayFacts(input: {
   const meetings = (events || []).filter((e) => !e.allDay && Array.isArray(e.attendees) && e.attendees.some((a) => !a.self));
   const dayLoad = events === null ? null : meetings.length >= 3 ? "busy" : meetings.length === 0 ? "light" : "normal";
 
-  return { date: todayStr, eventsToday, firstEvent, invitesPending, morningFree, tasksToday: planned.length, noEstimate, overdue, deadlinesThisWeek, coreTask, stuckCards: stuck, waitingCards: waiting, draftsPending: drafts, almostDone, topClient, repliesArrived, dayLoad };
+  return { date: todayStr, eventsToday, firstEvent, invitesPending, morningFree, tasksToday: planned.length, noEstimate, overdue, deadlinesThisWeek, coreTask, stuckCards: stuck, waitingCards: waiting, draftsPending: drafts, almostDone, topClient, repliesArrived, openByProject, dayLoad };
 }
 
 // Render the facts as a prompt block. A line whose backing field is empty/unknown
@@ -165,6 +172,7 @@ export function renderDayFacts(f: DayFacts): string {
     if (f.repliesArrived.first) L.push(`  הבולטת: ${f.repliesArrived.first.from} על "${f.repliesArrived.first.card}" — ${f.repliesArrived.first.summary}`);
   }
   if (f.topClient) L.push(`הלקוח עם הכי הרבה זמן שנצבר לאחרונה: ${f.topClient}`);
+  if (f.openByProject.length) L.push(`משימות פתוחות לפי פרויקט: ${f.openByProject.map((p) => `${p.name} ${p.open}`).join(" · ")}`);
   if (load) L.push(`עומס היום: ${load}`);
   return `=== עובדות היום · מחושב בקוד · המקור היחיד למספרים, לליבה ולתיאור העומס (DATA) ===
 ${L.join("\n")}

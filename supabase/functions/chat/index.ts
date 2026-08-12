@@ -188,9 +188,11 @@ Deno.serve(async (req) => {
     // lives in draft/origin metadata only.
     const bf = String(input?.brief_from || "").trim();
     const giver = bf && !/^(buno|בונו|העוזר)$/i.test(bf) ? bf : "";
+    // people attached to the task ("עם נמרוד עוז") → CC on the card + contacts.
+    const peopleList = Array.isArray(input?.people) ? input.people.map((s: any) => String(s || "").trim()).filter((s: string) => s && !/^(buno|בונו|העוזר)$/i.test(s)).slice(0, 10) : [];
     const row: any = {
       project_id: project.id, column_id: brief?.id || null, position: maxPos,
-      title, creator: giver || "buno", description: String(input?.description || ""),
+      title, creator: giver || "buno", description: String(input?.description || ""), cc: peopleList,
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
       origin: { type: "chat", ref: "chat-" + crypto.randomUUID(), ...(unassigned ? { needs_assignment: true } : {}) },
@@ -199,6 +201,8 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase.from("card").insert(row).select("id,title").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
     if (giver) { try { await supabase.from("contacts").upsert({ user_id: user.id, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
+    // every attached person becomes a contact (not only the brief-giver path).
+    for (const nm of peopleList) { try { await supabase.from("contacts").upsert({ user_id: user.id, name: nm, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* best-effort */ } }
     // a list of items belongs in a CHECKLIST (subtasks), never crammed into description.
     const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
     if (checklist.length) { try { await supabase.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
@@ -405,6 +409,7 @@ Deno.serve(async (req) => {
 6. עדיפות: כשנשאל "מה הכי דחוף/חשוב" — קריטי ראשון, אחריו חשוב, ורק אז דדליין (בעקביות עם "היום שלי").
 7. החלטה = הודעה משלה: אל תבלע שאלת כן/לא בתוך פסקת טקסט (למשל "רוצה שאתעד את X כהושלם?"). אם המשתמש לא ביקש פעולה — אל תבצע ואל תשאל בפרוזה; דווח קצר מה עשית ותעצור. הבקשה של המשתמש היא הטריגר, לא ניחוש שלך.
 8. יצירת כרטיס = שורת אישור אחת בלבד: כשאתה מוסיף משימה, ענה במשפט קצר על מה שביקשו בלבד (למשל "צירפתי להיום את 'לסדר משימות'"). הכרטיס עצמו כבר מוצג על המסך עם הפרויקט וכפתורי אישור — אל תחזור עליו. אסור: לסקור את היומן, למנות משימות/פגישות אחרות שלא התבקשו, או "לתקן" משהו שאמרת קודם. רק מה שביקשו.
+9. נאמנות לבקשה: כשבקשת יצירה כוללת פרטים — פרויקט (project_id), אנשים ("עם נמרוד עוז" → people), פירוט (description), חלוקה לשלבים (checklist), נותן-בריף (brief_from) — כל אחד מהם חייב להיכנס לשדה המתאים בכלי. אל תשמיט פרט שנאמר. באישור הקצר ציין מה נכנס, ואם משהו מהבקשה לא מומש — אמור זאת במפורש. קבצים: אתה עדיין לא יכול לצרף קובץ שנשלח בצ'אט לכרטיס — אם ביקשו, אמור בכנות "עוד לא יודע לצרף קבצים מהצ'אט — צרף מהכרטיס עצמו", אל תעמיד פנים שצירפת.
 
 Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
 

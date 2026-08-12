@@ -96,14 +96,16 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     // brief-giver = a real person (a contact), never buno.
     const bf = String(input?.brief_from || "").trim();
     const giver = bf && !/^(buno|בונו|העוזר)$/i.test(bf) ? bf : "";
+    const peopleList = Array.isArray(input?.people) ? input.people.map((s: any) => String(s || "").trim()).filter((s: string) => s && !/^(buno|בונו|העוזר)$/i.test(s)).slice(0, 10) : [];
     const { data, error } = await admin.from("card").insert({
-      project_id: project.id, column_id: brief?.id || null, position: maxPos, title, creator: giver || "buno",
+      project_id: project.id, column_id: brief?.id || null, position: maxPos, title, creator: giver || "buno", cc: peopleList,
       description: String(input?.description || ""), deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
       origin: { type: "whatsapp", ref: "wa-" + crypto.randomUUID(), ...(unassignedC ? { needs_assignment: true } : {}) }, draft,
     }).select("id,title,project_id,column_id,archived").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
     if (giver) { try { await admin.from("contacts").upsert({ user_id: userId, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
+    for (const nm of peopleList) { try { await admin.from("contacts").upsert({ user_id: userId, name: nm, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* best-effort */ } }
     const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
     if (checklist.length) { try { await admin.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
     cards.push(data); created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });

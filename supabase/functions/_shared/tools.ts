@@ -18,6 +18,7 @@ export const CREATE_CARD_TOOL = {
       priority: { type: "string", enum: ["regular", "important", "critical"], description: "Optional priority; default regular." },
       brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work summarized with אילן', 'a task from דנה'), put that person's NAME here. buno records them as the brief-giver and creates a contact. You are a tool — NEVER put yourself/buno here. Leave empty if no real person is the source." },
       checklist: { type: "array", items: { type: "string" }, description: "When the task is made of a LIST of items or steps (a packing list, a shopping list, sub-steps), put each item here as a separate checklist entry — do NOT cram them into 'description'. Each becomes a checkable subtask. Hebrew, short." },
+      people: { type: "array", items: { type: "string" }, description: "Names of PEOPLE the user attached to this task — collaborators / whoever it's 'with' ('עם נמרוד עוז', 'תשתף את דנה'). Each is added as a CC on the card and saved as a contact. Do NOT put yourself/buno here. This is separate from brief_from (the one who GAVE the brief)." },
     },
     required: ["title"],
   },
