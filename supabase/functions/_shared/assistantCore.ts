@@ -82,7 +82,12 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const findCard = (q: string) => matchCard(cards.filter((c: any) => !c.archived && !doneColIds.has(c.column_id)), q);
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim(); if (!title) return "לא נוצר: חסרה כותרת.";
-    const project = projects.find((p: any) => input?.project && p.name && p.name.toLowerCase().includes(String(input.project).toLowerCase())) || projects[0];
+    // 🔴2 — assign by EXACT project_id from the enum; unassigned/invalid → the
+    // personal board (never projects[0], a client, by accident).
+    const wantId = String(input?.project_id || input?.project || "").trim();
+    let project = wantId && wantId !== "unassigned" ? projects.find((p: any) => p.id === wantId) : null;
+    let unassignedC = false;
+    if (!project) { project = projects.find((p: any) => p.is_personal) || projects.find((p: any) => /אישי|בית|personal|home/i.test(String(p.name || ""))) || projects[0]; unassignedC = true; }
     if (!project) return "לא נוצר: אין פרויקט זמין.";
     const projCols = cols.filter((c: any) => c.project_id === project.id);
     const brief = projCols.find((c: any) => c.key === "col-brief") || projCols.slice().sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))[0];
@@ -95,20 +100,21 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       project_id: project.id, column_id: brief?.id || null, position: maxPos, title, creator: giver || "buno",
       description: String(input?.description || ""), deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
-      origin: { type: "whatsapp", ref: "wa-" + crypto.randomUUID() }, draft,
+      origin: { type: "whatsapp", ref: "wa-" + crypto.randomUUID(), ...(unassignedC ? { needs_assignment: true } : {}) }, draft,
     }).select("id,title,project_id,column_id,archived").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
     if (giver) { try { await admin.from("contacts").upsert({ user_id: userId, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
     const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
     if (checklist.length) { try { await admin.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
     cards.push(data); created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
-    return cardLevel === "act" ? `נוצר כרטיס "${title}" ב${project.name}.` : `נוצרה טיוטה "${title}" ב${project.name}, ממתינה לאישורך.`;
+    const tailC = unassignedC ? " (לא הייתי בטוח לאיזה פרויקט — שמתי ב״אישי״, תגיד לי ואעביר)" : "";
+    return cardLevel === "act" ? `נוצר כרטיס "${title}" ב${project.name}${tailC}.` : `נוצרה טיוטה "${title}" ב${project.name}${tailC}, ממתינה לאישורך.`;
   }
   async function doCreateCards(input: any): Promise<string> {
     const list = Array.isArray(input?.cards) ? input.cards.slice(0, 40) : [];
     if (!list.length) return "לא צוינו משימות.";
     const before = created.length; let failed = 0;
-    for (const item of list) { const out = await doCreateCard({ ...item, project: item?.project || input?.project }); if (out.startsWith("לא נוצר")) failed++; }
+    for (const item of list) { const out = await doCreateCard({ ...item, project_id: item?.project_id || input?.project_id }); if (out.startsWith("לא נוצר")) failed++; }
     const n = created.length - before; const projName = created[created.length - 1]?.project || "";
     return `${cardLevel === "act" ? `נוצרו ${n} כרטיסים` : `נוצרו ${n} טיוטות`}${projName ? ` ב${projName}` : ""}${failed ? ` (${failed} נכשלו)` : ""}.`;
   }
@@ -311,7 +317,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     boardSummary: summarizeBoard(projects, cards, cols, commentsByCard, attachByCard, today, Date.now()) + (projects.some((p: any) => String(p.why || "").trim()) ? "\n\n=== מטרות הבורדים (why) ===\n" + projects.filter((p: any) => String(p.why || "").trim()).map((p: any) => `- ${p.name}: ${String(p.why).trim()}`).join("\n") : "") + contactsBlock,
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
-  }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + "\n\n" + renderDayFacts(facts) + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
+  }) + ("\n\n=== פרויקטים (id → שם) · ל-project_id העתק id מכאן בדיוק, או 'unassigned' ===\n" + projects.map((p: any) => `${p.id} = ${p.name}${(p.is_personal || /אישי|בית|personal|home/i.test(String(p.name || ""))) ? "  (הבורד האישי — לכל משימה אישית/בית/סידור)" : ""}`).join("\n") + "\n(משימה שאינה עבודה של לקוח → הבורד האישי. לא בטוח → 'unassigned'.)") + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + "\n\n" + renderDayFacts(facts) + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
 הבנה לפני פעולה (הכי חשוב): כשמישהו נותן ערימת דברים או מתאר מטרה/אירוע ("אני טס לחו״ל, הנה מה שצריך...") — אל תתמלל, תבין. זהה את התמה ובנה נכון: קבץ פריטים קשורים למשימה אחת, רשימת פריטים → checklist (לא כרטיס לכל פריט, לא גוש בתיאור); מעט משימות טובות ולא ערימה; נתב לפי התמה (נסיעה/עציצים/בית = בורד אישי, לעולם לא לקוח); הצלב עם ההקשר שיש לך; ודווח קצר מה בנית ולמה.
 כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). רשימת פריטים/שלבים (אריזה, קניות, צ'קליסט) → checklist ב-create_card או add_subtasks ב-update_card — לעולם לא לדחוס רשימה לתוך description. אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 

@@ -13,7 +13,7 @@ export const CREATE_CARD_TOOL = {
     properties: {
       title: { type: "string", description: "Short task title, ≤10 words, starting with a verb. In Hebrew." },
       description: { type: "string", description: "Optional one-sentence context, in Hebrew." },
-      project: { type: "string", description: "Optional project name to place the card under (match one of the user's projects)." },
+      project_id: { type: "string", description: "The id of the target project. MUST be copied verbatim from the 'פרויקטים (id → שם)' list in the system prompt — pick the id whose name matches where the task belongs. If you are not sure, or nothing fits, return 'unassigned'. NEVER invent an id, and NEVER put a name here. A personal/home/errand task → the personal board's id (it's in the list)." },
       deadline: { type: "string", description: "Optional due date as YYYY-MM-DD, only if the user stated a real one." },
       priority: { type: "string", enum: ["regular", "important", "critical"], description: "Optional priority; default regular." },
       brief_from: { type: "string", description: "If a specific PERSON gave this brief/estimate/work (e.g. 'the work summarized with אילן', 'a task from דנה'), put that person's NAME here. buno records them as the brief-giver and creates a contact. You are a tool — NEVER put yourself/buno here. Leave empty if no real person is the source." },
@@ -29,7 +29,7 @@ export const CREATE_CARDS_TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      project: { type: "string", description: "Optional project name for all cards (match one of the user's projects, or a board you just created)." },
+      project_id: { type: "string", description: "The id of the project for ALL these cards — copied verbatim from the 'פרויקטים (id → שם)' list in the system prompt, or 'unassigned' if unsure. NEVER a name, NEVER invented. Per-card project_id overrides this." },
       cards: {
         type: "array",
         description: "The tasks to create.",
@@ -38,6 +38,8 @@ export const CREATE_CARDS_TOOL = {
           properties: {
             title: { type: "string", description: "Short Hebrew title, verb-first." },
             description: { type: "string" },
+            project_id: { type: "string", description: "Optional per-card project id (verbatim from the list, or 'unassigned') — overrides the top-level one." },
+            checklist: { type: "array", items: { type: "string" }, description: "Sub-items/steps as a checklist (a packing list, steps) — never in description." },
             deadline: { type: "string", description: "YYYY-MM-DD, only if the user stated one." },
             priority: { type: "string", enum: ["regular", "important", "critical"] },
           },

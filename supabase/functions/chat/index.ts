@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
     supabase.from("attachment").select("card_id,type,name"),
   ]);
   const projects = proj.data || [];
+  const personalBoard = () => projects.find((p: any) => p.is_personal) || projects.find((p: any) => /אישי|בית|personal|home/i.test(String(p.name || "")));
   // group comments/attachments per card so buno sees the real content, not just
   // titles (self-audit weakness B) — comments sorted oldest→newest for "last".
   const commentsByCard = new Map<string, any[]>();
@@ -170,9 +171,12 @@ Deno.serve(async (req) => {
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim();
     if (!title) return "לא נוצר: חסרה כותרת.";
-    // resolve project: by name, else current, else first
-    let project = projects.find((p) => input?.project && p.name && p.name.toLowerCase().includes(String(input.project).toLowerCase()));
-    if (!project) project = projects.find((p) => p.id === currentProjectId) || projects[0];
+    // 🔴2 — resolve by EXACT project_id from the injected enum. Anything else →
+    // 'unassigned' → the personal board (never a silently-guessed client).
+    const wantId = String(input?.project_id || input?.project || "").trim();
+    let project = wantId && wantId !== "unassigned" ? projects.find((p) => p.id === wantId) : null;
+    let unassigned = false;
+    if (!project) { project = personalBoard() || projects.find((p) => p.id === currentProjectId) || projects[0]; unassigned = true; }
     if (!project) return "לא נוצר: אין פרויקט זמין.";
     // brief column (key col-brief) or lowest-position column of that project
     const projCols = (cols.data || []).filter((c) => c.project_id === project!.id);
@@ -189,7 +193,7 @@ Deno.serve(async (req) => {
       title, creator: giver || "buno", description: String(input?.description || ""),
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(input?.deadline || "") ? input.deadline : null,
       priority: ["regular", "important", "critical"].includes(input?.priority) ? input.priority : "regular",
-      origin: { type: "chat", ref: "chat-" + crypto.randomUUID() },
+      origin: { type: "chat", ref: "chat-" + crypto.randomUUID(), ...(unassigned ? { needs_assignment: true } : {}) },
       draft,
     };
     const { data, error } = await supabase.from("card").insert(row).select("id,title").single();
@@ -199,9 +203,10 @@ Deno.serve(async (req) => {
     const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
     if (checklist.length) { try { await supabase.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
     created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
+    const tail = unassigned ? " (לא הייתי בטוח לאיזה פרויקט לשייך — שמתי ב״אישי״, תגיד לי ואעביר)" : "";
     return cardLevel === "act"
-      ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}.`
-      : `נוצרה טיוטה "${title}" בפרויקט ${project.name}, ממתינה לאישור המשתמש.`;
+      ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}${tail}.`
+      : `נוצרה טיוטה "${title}" בפרויקט ${project.name}${tail}, ממתינה לאישור המשתמש.`;
   }
   // bulk create — one tool call for many cards (avoids blowing max_tokens on many
   // separate create_card calls). Reuses the single-create insert + enforcement.
@@ -209,7 +214,7 @@ Deno.serve(async (req) => {
     const list = Array.isArray(input?.cards) ? input.cards.slice(0, 40) : [];
     if (!list.length) return "לא צוינו משימות ליצירה.";
     const before = created.length; let failed = 0;
-    for (const item of list) { const out = await doCreateCard({ ...item, project: item?.project || input?.project }); if (out.startsWith("לא נוצר")) failed++; }
+    for (const item of list) { const out = await doCreateCard({ ...item, project_id: item?.project_id || input?.project_id }); if (out.startsWith("לא נוצר")) failed++; }
     const n = created.length - before;
     const projName = created[created.length - 1]?.project || "";
     return `${cardLevel === "act" ? `נוצרו ${n} כרטיסים` : `נוצרו ${n} טיוטות`}${projName ? ` ב${projName}` : ""}${failed ? ` (${failed} נכשלו)` : ""}.`;
@@ -368,6 +373,11 @@ Deno.serve(async (req) => {
   // source for any number buno may state). Logged so every brief line is auditable.
   const facts = computeDayFacts({ cards: cards.data || [], cols: cols.data || [], projects, todayStr: todayStr2, nowMs: nowD.getTime(), events: eventsTodayList, subHoursByCard, subDoneByCard, recentReplies });
   console.log("dayFacts(web)", JSON.stringify(facts));
+  // 🔴2 — the model assigns a project by copying an id from THIS list (an enum),
+  // never a free name. Anything else → 'unassigned' → the personal board.
+  const projIdBlock = "\n\n=== פרויקטים (id → שם) · ל-project_id העתק id מכאן בדיוק, או 'unassigned' ===\n" +
+    projects.map((p: any) => `${p.id} = ${p.name}${(p.is_personal || /אישי|בית|personal|home/i.test(String(p.name || ""))) ? "  (הבורד האישי — לכל משימה אישית/בית/סידור)" : ""}`).join("\n") +
+    "\n(משימה שאינה עבודה של לקוח ספציפי → הבורד האישי. לא בטוח → 'unassigned'.)";
   const sys = systemPrompt({
     productName: "buno",
     language: "Hebrew",
@@ -378,7 +388,7 @@ Deno.serve(async (req) => {
     // email is never available in the chat. Keeps the prompt honest to itself.
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "web",
-  }) + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + "\n\n" + renderDayFacts(facts) + `
+  }) + projIdBlock + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + (calendarSummary ? `\n\n=== היומן שלך · ${scope === "week" ? "7 ימים קרובים" : scope === "tomorrow" ? `מחר (${tomorrowStr})` : `היום (${todayStr2})`} · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל בלבד: אם שאלו "מה פתוח היום" — דבר על היום בלבד, פגישות לפי סדר השעות, בלי לגלוש למחר או לשבוע (אלא אם ביקשו). קצר ותכליתי — בלי לחזור על כל שורה ביומן. אם משתתף בפגישה שייך ללקוח מסוים (לפי דומיין המייל), אפשר לקשר את הפגישה לאותו לקוח.` : "") + "\n\n" + renderDayFacts(facts) + `
 
 === כללי־יסוד (מעל הכל — שבירתם שוברת אמון) ===
 0. הבנה לפני פעולה — הכלל שמעל כולם. כשמישהו נותן ערימת דברים או מתאר מטרה/אירוע ("אני טס לחו״ל לשבוע, הנה מה שצריך: להשקות עציצים, לארוז — 10 חולצות, דרכונים..."): אל תתמלל, תבין. קודם זהה את התמה, ואז בנה אותה נכון (בכלים) — התשובה עצמה נשארת קצרה, אבל המבנה חכם:
