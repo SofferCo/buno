@@ -22,6 +22,22 @@ import { summarizeBoard } from "../_shared/boardContext.ts";
 import { computeDayFacts, renderDayFacts } from "../_shared/dayFacts.ts";
 import { WEB_TOOLS, matchCard } from "../_shared/tools.ts";
 
+// 🔴 request-fulfillment validator — ENFORCEMENT, not a prompt hope (rule 9 made
+// real). Before a create runs, compare the user's own words to the tool params:
+// a named existing project not selected, a person ("עם X") without people, a
+// split/checklist mention without checklist → the call is blocked and the model
+// gets a structured "missing: …" error to retry (bounded rounds), then executes
+// with a gap-declaration. The pipeline enforces the rule; the model can't forget it.
+const escRe = (s: string) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function missingFromRequest(msg: string, input: any, projects: any[]): string[] {
+  const m = String(msg || ""); const miss: string[] = [];
+  const named = projects.find((p: any) => p.name && String(p.name).trim().length >= 2 && !p.is_personal && new RegExp(escRe(String(p.name).trim()), "i").test(m));
+  if (named && String(input?.project_id || "") !== named.id) miss.push(`project_id="${named.id}" (הבקשה מזכירה את "${named.name}")`);
+  if (/(?:^|\s)(עם|תשתף את|תשתפי את|שתף את|לשתף את|יחד עם)\s+[א-ת]{2,}/.test(m) && !(Array.isArray(input?.people) && input.people.length)) miss.push("people (מוזכר אדם — 'עם ...')");
+  if (/(שני חלקים|לשני חלקים|לכמה חלקים|צ'?ק.?ליסט|check.?list|סעיפים|תת.?משימות|מחולק|חלוקה ל|רשימת (פריטים|דברים|קניות))/.test(m) && !(Array.isArray(input?.checklist) && input.checklist.length)) miss.push("checklist (הבקשה כוללת חלוקה/רשימה)");
+  return miss;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -66,6 +82,15 @@ Deno.serve(async (req) => {
   if (reviewAction.startsWith("rv:")) {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const r = await handleAction(admin, user.id, reviewAction);
+    // #2 — persist each guided-walk turn (text only, no dangling buttons) so the
+    // conversation SURVIVES a reload. It used to live only in the client session and
+    // vanished on refresh (the walk "took over" and left nothing behind).
+    if (reviewAction !== "rv:peek" && String(r.text || "").trim()) {
+      try {
+        const { data: th } = await admin.from("assistant_thread").select("id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (th?.id) await admin.from("assistant_message").insert({ thread_id: th.id, role: "assistant", door: "web", content: r.text, meta: null });
+      } catch { /* best-effort persistence */ }
+    }
     return json({ reply: r.text, actions: r.actions, reviewDone: !!r.done, review: r.project ? { project: r.project } : undefined, pending: r.pending ?? 0, started: !!r.started });
   }
 
@@ -465,6 +490,7 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
 
   let reply = "";
   try {
+    let validationRounds = 0;   // 🔴 request-fidelity retries (bounded)
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
         model: "claude-sonnet-5",
@@ -485,6 +511,16 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
       const results = [];
       for (const tu of toolUses) {
         let out = "כלי לא מוכר.";
+        // ENFORCE request fidelity before a create runs (bounded retries, then execute).
+        if (tu.name === "create_card" || tu.name === "create_cards") {
+          const inputs = tu.name === "create_card" ? [tu.input] : (Array.isArray(tu.input?.cards) ? tu.input.cards.map((c: any) => ({ ...c, project_id: c?.project_id || tu.input?.project_id })) : []);
+          const miss = [...new Set(inputs.flatMap((inp: any) => missingFromRequest(userMessage, inp, projects)))];
+          if (miss.length && validationRounds < 2) {
+            validationRounds++;
+            results.push({ type: "tool_result", tool_use_id: tu.id, is_error: true, content: `לא בוצע — פרטים מהבקשה חסרים בשדות: ${miss.join(" · ")}. קרא שוב לכלי עם השדות מלאים. אם באמת אי אפשר למלא שדה (למשל קובץ שאין לך) — צור בכל זאת והצהר למשתמש מה חסר.` });
+            continue;
+          }
+        }
         if (tu.name === "create_card") out = await doCreateCard(tu.input);
         else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
         else if (tu.name === "update_card") out = await doUpdateCard(tu.input);
