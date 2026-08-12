@@ -97,6 +97,8 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     }).select("id,title,project_id,column_id,archived").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
     if (giver) { try { await admin.from("contacts").upsert({ user_id: userId, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
+    const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
+    if (checklist.length) { try { await admin.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
     cards.push(data); created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
     return cardLevel === "act" ? `נוצר כרטיס "${title}" ב${project.name}.` : `נוצרה טיוטה "${title}" ב${project.name}, ממתינה לאישורך.`;
   }
@@ -171,7 +173,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       targets = [one];
     }
     if (!targets.length) return "לא נמצאו כרטיסים לעדכון.";
-    if (!Object.keys(patch).length && !moveProj) return "לא צוין מה לעדכן.";
+    // a list of items → CHECKLIST (subtasks) on the card, never the description.
+    const addSubs = Array.isArray(input?.add_subtasks) ? input.add_subtasks.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
+    if (!Object.keys(patch).length && !moveProj && !addSubs.length) return "לא צוין מה לעדכן.";
+    if (addSubs.length) { for (const c of targets) { try { const { data: ex } = await admin.from("subtask").select("id").eq("card_id", c.id); const base = (ex || []).length; await admin.from("subtask").insert(addSubs.map((text: string, i: number) => ({ card_id: c.id, text, position: base + i }))); changed.push(c.id); } catch { /* subtasks best-effort */ } } }
+    if (!Object.keys(patch).length && !moveProj) return targets.length > 1 ? `הוספתי צ'קליסט ל-${targets.length} כרטיסים.` : `הוספתי ${addSubs.length} פריטים לצ'קליסט של "${targets[0].title}".`;
     let ok = 0, fail = 0;
     for (const c of targets) {
       const upd: any = { ...patch };
@@ -304,7 +310,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + "\n\n" + renderDayFacts(facts) + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
-כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
+כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). רשימת פריטים/שלבים (אריזה, קניות, צ'קליסט) → checklist ב-create_card או add_subtasks ב-update_card — לעולם לא לדחוס רשימה לתוך description. אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 
   // append the new user turn — merging if history already ends with a user row
   // (would otherwise be two consecutive "user" messages → 400).

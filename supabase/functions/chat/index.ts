@@ -191,6 +191,9 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase.from("card").insert(row).select("id,title").single();
     if (error) return "לא נוצר (שגיאה): " + error.message;
     if (giver) { try { await supabase.from("contacts").upsert({ user_id: user.id, name: giver, source: "mentioned", created_from: data.id }, { onConflict: "user_id,name" }); } catch { /* pre-0022 */ } }
+    // a list of items belongs in a CHECKLIST (subtasks), never crammed into description.
+    const checklist = Array.isArray(input?.checklist) ? input.checklist.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
+    if (checklist.length) { try { await supabase.from("subtask").insert(checklist.map((text: string, i: number) => ({ card_id: data.id, text, position: i }))); } catch { /* subtasks best-effort */ } }
     created.push({ id: data.id, title: data.title, project: project.name, level: cardLevel });
     return cardLevel === "act"
       ? `נוצר כרטיס פעיל "${title}" בפרויקט ${project.name}.`
@@ -284,7 +287,12 @@ Deno.serve(async (req) => {
       targets = activeCards().filter((c: any) => c.project_id === fp.id);
     } else { const one = findCard(input?.card); if (!one) return `לא מצאתי כרטיס פעיל בשם "${input?.card}".`; targets = [one]; }
     if (!targets.length) return "לא נמצאו כרטיסים לעדכון.";
-    if (!Object.keys(patch).length && !moveProj) return "לא צוין מה לעדכן.";
+    // a list of items → CHECKLIST (subtasks) on the card, never the description.
+    const addSubs = Array.isArray(input?.add_subtasks) ? input.add_subtasks.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 40) : [];
+    if (!Object.keys(patch).length && !moveProj && !addSubs.length) return "לא צוין מה לעדכן.";
+    if (addSubs.length) { for (const c of targets) { try { const { data: ex } = await supabase.from("subtask").select("id").eq("card_id", c.id); const base = (ex || []).length; await supabase.from("subtask").insert(addSubs.map((text: string, i: number) => ({ card_id: c.id, text, position: base + i }))); changed.push(c.id); } catch { /* subtasks best-effort */ } } }
+    // adding only a checklist (no other field) → done here, no card-column update.
+    if (!Object.keys(patch).length && !moveProj) return targets.length > 1 ? `הוספתי צ'קליסט ל-${targets.length} כרטיסים.` : `הוספתי ${addSubs.length} פריטים לצ'קליסט של "${targets[0].title}".`;
     let ok = 0, fail = 0;
     for (const c of targets) {
       const upd: any = { ...patch };

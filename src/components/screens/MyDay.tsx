@@ -83,7 +83,8 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   if (openCount === 0) headline = doneCount ? "סגרת את כל מה שתכננת." : "שום דבר לא מחכה לך היום.";
   else if (late && productive) headline = "יום פורה. כל הכבוד.";
   else if (late) headline = "ערב — מחר יום חדש.";
-  else if (openCount >= 5) headline = `יום עמוס: ${openCount} משימות.`;
+  // lead with what the day is ABOUT (the dominant project / the top task), not an
+  // alarmist raw count — "יום עמוס: 5 משימות" read as noise, not insight.
   else if (domName && domN >= Math.ceil(openCount / 2) && openCount >= 2) headline = <>היום נשען על <span className="clay">"{domName}"</span>.</>;
   else if (top) headline = <>היום נשען על <span className="clay">"{top.title || "משימה"}"</span>.</>;
   else headline = `${openCount} ${openCount === 1 ? "משימה" : "משימות"} על השולחן.`;
