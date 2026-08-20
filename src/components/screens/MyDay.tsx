@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { PRIORITY } from "../../lib/constants";
 import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
@@ -25,9 +25,15 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, onReorderFlex }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
+  // drag-to-reorder for FLEXIBLE (untimed) tasks — the user arranges their sequence.
+  // dragRef holds the active id synchronously (state lags a tick); dragId/overId are
+  // for the visual states only.
+  const dragRef = useRef<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
@@ -105,6 +111,15 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   else if (late && openCount > 0 && productive) briefLines.push(`נשארו ${openCount === 1 ? "עוד דבר קטן אחד" : `${openCount} דברים קטנים`} — אם יש כוח; אחרת, ערב טוב.`);
   else if (late && openCount > 0) briefLines.push(`${openCount} עדיין פתוחות — בלי לחץ, מחר יום חדש.`);
 
+  // reorder the flexible (untimed) tasks: drop `drag` right before `target`.
+  const flexAheadIds = () => ahead.filter((x: any) => x.kind === "task" && !x.time).map((x: any) => x.t.card.id);
+  function moveFlexBefore(drag: string, target: string) {
+    const without = flexAheadIds().filter((x: string) => x !== drag);
+    let to = without.indexOf(target); if (to < 0) to = without.length;
+    without.splice(to, 0, drag);
+    onReorderFlex?.(without);
+  }
+
   // ---- rows (each carries a rail node; the spine is a per-row ::before) --------
   const EventRow = ({ e }: any) => {
     const proj = e.projectId ? clientOf(e.projectId) : null;
@@ -120,10 +135,17 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     );
   };
 
-  const TLRow = ({ t }: any) => {
+  const TLRow = ({ t, canDrag = false }: any) => {
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
+    const flex = canDrag && !timed && !!onReorderFlex;   // only today's untimed tasks are hand-orderable
     return (
-      <div className="adk-tl-row" onClick={() => onOpenCard(c.id)}>
+      <div className={"adk-tl-row" + (flex ? " flexdrag" : "") + (dragId === c.id ? " dragging" : "") + (overId === c.id ? " dragover" : "")}
+        draggable={flex}
+        onDragStart={flex ? (e: any) => { dragRef.current = c.id; setDragId(c.id); try { e.dataTransfer.effectAllowed = "move"; } catch {} } : undefined}
+        onDragOver={flex ? (e: any) => { if (dragRef.current && dragRef.current !== c.id) { e.preventDefault(); if (overId !== c.id) setOverId(c.id); } } : undefined}
+        onDrop={flex ? (e: any) => { e.preventDefault(); e.stopPropagation(); const d = dragRef.current; if (d && d !== c.id) moveFlexBefore(d, c.id); dragRef.current = null; setDragId(null); setOverId(null); } : undefined}
+        onDragEnd={flex ? () => { dragRef.current = null; setDragId(null); setOverId(null); } : undefined}
+        onClick={() => onOpenCard(c.id)}>
         <button className="adk-tl-rail" title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }}><span className={"adk-tl-node" + (over ? " over" : "")} /></button>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
         <div className="adk-tl-body">
@@ -211,7 +233,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     // the now-mark sits above everything still ahead — a future-timed item OR a
     // flexible (no-time) one; only a timed item whose hour already passed stays above it.
     if (!nowPlaced && (p === null || p >= nowMin)) { nowPlaced = true; aheadRows.push(<NowRow key="now" />); }
-    aheadRows.push(x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} />);
+    aheadRows.push(x.kind === "event" ? <EventRow key={x.id} e={x} /> : <TLRow key={x.id} t={x.t} canDrag />);
   }
   if (!nowPlaced) aheadRows.push(<NowRow key="now" />);
 

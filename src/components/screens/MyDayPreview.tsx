@@ -59,6 +59,7 @@ export function MyDayPreview() {
       ritualActive ritualOrganizeDone={organizeDone}
       onRitualDone={() => setOrganizeDone(true)} onRitualReopen={() => setOrganizeDone(false)}
       onBriefOpen={() => alert("פתח את הבריף בצ'אט")}
+      onReorderFlex={(ids: string[]) => console.log("reorder flex:", ids)}
     />
   );
 }
