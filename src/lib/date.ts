@@ -44,3 +44,36 @@ export function last12Months() {
   for (let i = 11; i >= 0; i--) { const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1); out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
   return out;
 }
+
+// ---- sub-month periods: "today" and "this week" (Sun–Sat) --------------------
+// The dashboards bucket by MONTH; these give the finer day-level range so the same
+// data can be scoped to a single day or the running week. Billing follows the
+// DEADLINE date (the day the user controls), else creation — matching billYm.
+export const DAY_MS = 86400000;
+export const startOfDayMs = (ms: number) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+export function billDayMs(c: any): number {
+  const d = c?.deadline ? new Date(String(c.deadline) + "T00:00:00") : new Date(c.createdAt);
+  d.setHours(0, 0, 0, 0); return d.getTime();
+}
+// a day-level period → its [fromMs, toMs] inclusive day span; null for month periods.
+export function dayRange(period: string, now: number): { fromMs: number; toMs: number } | null {
+  const t = startOfDayMs(now);
+  if (period === "day") return { fromMs: t, toMs: t + DAY_MS - 1 };
+  if (period === "week") { const from = t - new Date(t).getDay() * DAY_MS; return { fromMs: from, toMs: from + 7 * DAY_MS - 1 }; }
+  return null;
+}
+// the day-midnight timestamps inside a range, oldest → newest (bar-chart buckets).
+export function rangeDays(fromMs: number, toMs: number): number[] {
+  const out: number[] = []; for (let m = startOfDayMs(fromMs); m <= toMs; m += DAY_MS) out.push(m); return out;
+}
+// short bar label for a day bucket: weekday letter + d/m, e.g. "א׳ 20/8".
+export function dayShort(ms: number): string {
+  const d = new Date(ms); const wd = d.toLocaleDateString("he-IL", { weekday: "narrow" });
+  return `${wd} ${d.getDate()}/${d.getMonth() + 1}`;
+}
+// header range label for a day period.
+export function dayRangeLabel(period: string, now: number): string {
+  const r = dayRange(period, now); if (!r) return "";
+  const fmt = (ms: number) => new Date(ms).toLocaleDateString("he-IL", { day: "numeric", month: "long" });
+  return period === "day" ? new Date(r.fromMs).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `${fmt(r.fromMs)} – ${fmt(r.toMs)}`;
+}

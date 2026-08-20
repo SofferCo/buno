@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Icon } from "../ui/Icon";
 import { PeriodPicker } from "../ui/PeriodPicker";
-import { last12Months, ymLabel, ymOf } from "../../lib/date";
+import { last12Months, ymLabel, ymOf, dayRange, rangeDays, billDayMs, dayShort, dayRangeLabel } from "../../lib/date";
 import { fmtHours, fmtMoney } from "../../lib/format";
 import { resizeImage } from "../../lib/image";
 import { initials, nameColor } from "../../lib/people";
@@ -13,17 +13,21 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   const curYm = ymOf(now);
   const [period, setPeriod] = useState("month");   // default: the current month
 
-  // which months the current period spans
-  const months = period === "quarter" ? seq.slice(-3) : period === "12m" ? seq : period === "month" ? [curYm] : [period];
+  // day-level periods ("היום" / "השבוע") scope by an actual date RANGE; everything
+  // else scopes by whole months. range is non-null only for day/week.
+  const range = dayRange(period, now);
+  const dayMode = !!range;
+  // which months the current period spans (empty in day-mode — it scopes by range).
+  const months = dayMode ? [] : period === "quarter" ? seq.slice(-3) : period === "12m" ? seq : period === "month" ? [curYm] : [period];
   const scopeSet = new Set(months);
-  const single = months.length === 1;      // a single month → break the bar chart into DAYS
+  const single = !dayMode && months.length === 1;      // a single month → break the bar chart into DAYS
   // billing month follows the DEADLINE (the date the user controls), else creation.
   const billYm = (c: any) => (c.deadline ? String(c.deadline).slice(0, 7) : ymOf(c.createdAt));
   const billDay = (c: any) => { const d = c.deadline ? new Date(String(c.deadline) + "T00:00:00") : new Date(c.createdAt); return d.getDate(); };
   const daysInMonth = (ym: string) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
   // deleted / archived tasks never count toward hours or billing.
   const live = (Object.values(cards) as any[]).filter((c: any) => !c.archived);
-  const inScope = (c: any) => scopeSet.has(billYm(c));
+  const inScope = (c: any) => dayMode ? (billDayMs(c) >= range!.fromMs && billDayMs(c) <= range!.toMs) : scopeSet.has(billYm(c));
   const scoped = live.filter(inScope);
 
   const per = clients.map((cl: any) => {
@@ -47,19 +51,20 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   // stacked bar chart: buckets are DAYS for a single month, else the months in scope.
   // A single CURRENT month shows only the elapsed days + 2 (e.g. on the 9th → 1..11);
   // a past month shows all its days. Rendered left→right (1 on the left).
-  const dayLimit = months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0]);
-  const buckets: (number | string)[] = single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : months;
+  const dayLimit = single ? (months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0])) : 0;
+  // buckets: day-timestamps in day-mode, days-of-month for a single month, else months.
+  const buckets: (number | string)[] = dayMode ? rangeDays(range!.fromMs, range!.toMs) : single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : months;
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const showTip = (e: any, text: string) => setTip({ x: e.clientX, y: e.clientY, text });
   const bucketData = buckets.map((bk) => {
-    const inB = single ? scoped.filter((c) => billDay(c) === bk) : scoped.filter((c) => billYm(c) === bk);
+    const inB = dayMode ? scoped.filter((c) => billDayMs(c) === bk) : single ? scoped.filter((c) => billDay(c) === bk) : scoped.filter((c) => billYm(c) === bk);
     const segs = clients.map((cl: any) => ({ cl, sec: inB.filter((c: any) => c.clientId === cl.id).reduce((a: number, c: any) => a + cardSeconds(c, now), 0) })).filter((s: any) => s.sec > 0);
     return { bk, segs, total: segs.reduce((a: number, s: any) => a + s.sec, 0) };
   });
   const maxB = Math.max(1, ...bucketData.map((b) => b.total));
 
-  const scopeLabel = period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
-  const rangeLabel = period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
+  const scopeLabel = period === "day" ? "היום" : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
+  const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   async function onPhoto(e: any) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch { /* ignore */ } }
 
   return (
@@ -122,7 +127,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
               )}
             </div>
             <div className="adk-panel-block">
-              <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"} · צבע לפי פרוייקט</p>
+              <p className="adk-block-title">שעות עבודה לפי {dayMode || single ? "יום" : "חודש"} · צבע לפי פרוייקט</p>
               <div className="adk-barchart" style={{ direction: "ltr" }}>
                 {bucketData.map((m) => (
                   <div className="adk-bc-col" key={String(m.bk)}>
@@ -134,7 +139,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                         ))}
                       </div>
                     </div>
-                    <div className="adk-bc-x">{single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
+                    <div className="adk-bc-x">{dayMode ? dayShort(m.bk as number) : single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
                   </div>
                 ))}
               </div>

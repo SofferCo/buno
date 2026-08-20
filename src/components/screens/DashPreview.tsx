@@ -9,6 +9,10 @@ export function DashPreview() {
   const prev = new Date(d.getFullYear(), d.getMonth() - 1, 15);
   const prevDay = (day: number) => `${prev.getFullYear()}-${pad(prev.getMonth() + 1)}-${pad(day)}`;
   const h = (n: number) => n * 3600;
+  // anchors for the day/week views: today, and days inside the running week (Sun-based)
+  const todayStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const sunday = new Date(d); sunday.setDate(d.getDate() - d.getDay());
+  const weekDay = (off: number) => { const x = new Date(sunday); x.setDate(sunday.getDate() + off); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
 
   const clients = [
     { id: "codata", name: "codata", color: "#334155", rate: 350 },
@@ -32,6 +36,11 @@ export function DashPreview() {
     mk("air-prev", "air", h(2), prevDay(18), { createdAt: prev.getTime() }),
     // DELETED task with hours — must NOT appear in billing (C2)
     mk("ghost", "codata", h(10), curDay(3), { archived: true, archivedAt: now }),
+    // TODAY + this-week anchors (so ?dash=1 can show the "היום" / "השבוע" views)
+    mk("today-codata", "codata", h(2), todayStr),
+    mk("today-air", "air", h(1), todayStr),
+    mk("wk-sun-bio", "bio", h(1.5), weekDay(0)),
+    mk("wk-tue-codata", "codata", h(3), weekDay(2)),
   ];
   const cards: any = {}; list.forEach((c) => (cards[c.id] = c));
   const cardColumn: any = {}; list.forEach((c) => (cardColumn[c.id] = "col-brief"));

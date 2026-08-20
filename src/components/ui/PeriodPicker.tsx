@@ -5,7 +5,7 @@ import { Icon } from "./Icon";
 import { ymLabel } from "../../lib/date";
 
 export function periodLabel(value: string) {
-  return value === "month" ? "החודש" : value === "quarter" ? "רבעון (3 חודשים)" : value === "12m" ? "שנה (12 חודשים)" : ymLabel(value);
+  return value === "day" ? "היום" : value === "week" ? "השבוע" : value === "month" ? "החודש" : value === "quarter" ? "רבעון (3 חודשים)" : value === "12m" ? "שנה (12 חודשים)" : ymLabel(value);
 }
 
 export function PeriodPicker({ value, onChange, seq }: { value: string; onChange: (v: string) => void; seq: string[] }) {
@@ -22,6 +22,8 @@ export function PeriodPicker({ value, onChange, seq }: { value: string; onChange
       {open && (<>
         <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpen(false)} />
         <div className="adk-period-menu">
+          <Item v="day" label="היום" />
+          <Item v="week" label="השבוע" />
           <Item v="month" label="החודש" />
           <Item v="quarter" label="רבעון (3 חודשים)" />
           <Item v="12m" label="שנה (12 חודשים)" />

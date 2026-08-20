@@ -3,7 +3,7 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { PeriodPicker } from "../ui/PeriodPicker";
 import { DONUT_COLORS } from "../../lib/constants";
-import { last12Months, ymLabel, ymOf } from "../../lib/date";
+import { last12Months, ymLabel, ymOf, dayRange, rangeDays, billDayMs, dayShort, dayRangeLabel } from "../../lib/date";
 import { fmtModeHours, fmtMoney } from "../../lib/format";
 import { briefGiverOf } from "../../lib/people";
 import { cardSeconds, sumHours, cardHours } from "../../lib/time";
@@ -12,12 +12,15 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const seq = last12Months();
   const curYm = ymOf(now);
   const [period, setPeriod] = useState(initialPeriod || "month");   // default: the current month (or the period carried from the dashboard)
-  // which months this period spans (mirrors the dashboard)
-  const months = period === "quarter" ? seq.slice(-3) : period === "12m" ? seq : period === "month" ? [curYm] : [period];
+  // day-level periods ("היום" / "השבוע") scope by a date RANGE; else by whole months.
+  const range = dayRange(period, now);
+  const dayMode = !!range;
+  // which months this period spans (mirrors the dashboard; empty in day-mode)
+  const months = dayMode ? [] : period === "quarter" ? seq.slice(-3) : period === "12m" ? seq : period === "month" ? [curYm] : [period];
   const scopeSet = new Set(months);
   // billing month follows the DEADLINE (the date the user controls), else creation.
   const billYm = (c: any) => (c.deadline ? String(c.deadline).slice(0, 7) : ymOf(c.createdAt));
-  const inScope = cards.filter((c: any) => scopeSet.has(billYm(c)));
+  const inScope = cards.filter((c: any) => dayMode ? (billDayMs(c) >= range!.fromMs && billDayMs(c) <= range!.toMs) : scopeSet.has(billYm(c)));
   const isBillable = (c) => !c.archived || c.removedBy === "client";
   // hours + revenue follow the system rounding principle (same per-card rule as
   // the board header), so the invoice never disagrees with what the board shows.
@@ -36,21 +39,21 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   // chart buckets mirror the dashboard: a single month → DAYS (a current month shows
   // the elapsed days + 2, e.g. on the 9th → 1..11); else the months in scope. Billed
   // by deadline, so a task re-dated to another day/month moves buckets. Rendered LTR.
-  const single = months.length === 1;
+  const single = !dayMode && months.length === 1;
   const billDay = (c: any) => { const d = c.deadline ? new Date(String(c.deadline) + "T00:00:00") : new Date(c.createdAt); return d.getDate(); };
   const daysInMonth = (ym: string) => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
-  const dayLimit = months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0]);
+  const dayLimit = single ? (months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0])) : 0;
   const monthBuckets = period === "quarter" ? months : seq;
-  const buckets: (number | string)[] = single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : monthBuckets;
+  const buckets: (number | string)[] = dayMode ? rangeDays(range!.fromMs, range!.toMs) : single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : monthBuckets;
   const live = cards.filter((c: any) => !c.archived);
   const bucketData = buckets.map((bk) => {
-    const inB = single ? live.filter((c: any) => billYm(c) === months[0] && billDay(c) === bk) : live.filter((c: any) => billYm(c) === bk);
+    const inB = dayMode ? live.filter((c: any) => billDayMs(c) === bk) : single ? live.filter((c: any) => billYm(c) === months[0] && billDay(c) === bk) : live.filter((c: any) => billYm(c) === bk);
     return { bk, sec: inB.reduce((a: number, c: any) => a + cardSeconds(c, now), 0), hours: sumHours(inB, now, roundMode) };
   });
   const maxM = Math.max(1, ...bucketData.map((m) => m.sec));
   const listed = [...inScope].sort((a, b) => cardSeconds(b, now) - cardSeconds(a, now));
   const statusOf = (c) => c.archived ? (c.removedBy === "client" ? "הוסר ע״י הלקוח" : "נמחק") : (cardColumn[c.id] === "col-done" ? "הושלם" : "פעיל");
-  const rangeLabel = period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
+  const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   return (
     <div className="adk-page">
       <div className="adk-pcard" style={{ display: "flex", flexDirection: "column" }}>
@@ -94,12 +97,12 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
             )}
           </div>
           <div className="adk-panel-block">
-            <p className="adk-block-title">שעות עבודה לפי {single ? "יום" : "חודש"}</p>
+            <p className="adk-block-title">שעות עבודה לפי {dayMode || single ? "יום" : "חודש"}</p>
             <div className="adk-barchart" style={{ direction: "ltr" }}>
               {bucketData.map((m) => (
                 <div className="adk-bc-col" key={String(m.bk)} title={`${fmtModeHours(m.hours, roundMode)} שעות`}>
-                  <div className="adk-bc-track"><div className={"adk-bc-bar" + (single || scopeSet.has(String(m.bk)) ? " hl" : "")} style={{ height: `${(m.sec / maxM) * 100}%` }} /></div>
-                  <div className="adk-bc-x">{single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
+                  <div className="adk-bc-track"><div className={"adk-bc-bar" + (dayMode || single || scopeSet.has(String(m.bk)) ? " hl" : "")} style={{ height: `${(m.sec / maxM) * 100}%` }} /></div>
+                  <div className="adk-bc-x">{dayMode ? dayShort(m.bk as number) : single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
                 </div>
               ))}
             </div>
