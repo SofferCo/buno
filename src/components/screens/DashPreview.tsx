@@ -41,6 +41,7 @@ export function DashPreview() {
     mk("today-air", "air", h(1), todayStr),
     mk("wk-sun-bio", "bio", h(1.5), weekDay(0)),
     mk("wk-tue-codata", "codata", h(3), weekDay(2)),
+    mk("yday-air", "air", h(2.5), (() => { const y = new Date(d); y.setDate(d.getDate() - 1); return `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`; })()),
   ];
   const cards: any = {}; list.forEach((c) => (cards[c.id] = c));
   const cardColumn: any = {}; list.forEach((c) => (cardColumn[c.id] = "col-brief"));

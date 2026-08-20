@@ -63,7 +63,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   });
   const maxB = Math.max(1, ...bucketData.map((b) => b.total));
 
-  const scopeLabel = period === "day" ? "היום" : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
+  const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
   const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   async function onPhoto(e: any) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch { /* ignore */ } }
 

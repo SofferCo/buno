@@ -59,6 +59,7 @@ export function billDayMs(c: any): number {
 export function dayRange(period: string, now: number): { fromMs: number; toMs: number } | null {
   const t = startOfDayMs(now);
   if (period === "day") return { fromMs: t, toMs: t + DAY_MS - 1 };
+  if (period === "yesterday") return { fromMs: t - DAY_MS, toMs: t - 1 };
   if (period === "week") { const from = t - new Date(t).getDay() * DAY_MS; return { fromMs: from, toMs: from + 7 * DAY_MS - 1 }; }
   return null;
 }
@@ -75,5 +76,5 @@ export function dayShort(ms: number): string {
 export function dayRangeLabel(period: string, now: number): string {
   const r = dayRange(period, now); if (!r) return "";
   const fmt = (ms: number) => new Date(ms).toLocaleDateString("he-IL", { day: "numeric", month: "long" });
-  return period === "day" ? new Date(r.fromMs).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `${fmt(r.fromMs)} – ${fmt(r.toMs)}`;
+  return (period === "day" || period === "yesterday") ? new Date(r.fromMs).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `${fmt(r.fromMs)} – ${fmt(r.toMs)}`;
 }
