@@ -36,11 +36,11 @@
    side, never between a control and its row. */
 .adk-tl-row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-radius:11px;cursor:pointer;}
 .adk-tl-row:hover{background:var(--surface-2);}
-/* drag-to-order for flexible (untimed) tasks */
-.adk-tl-row.flexdrag{cursor:grab;}
+/* pointer drag-to-order for flexible (untimed) tasks */
+.adk-tl-row.flexdrag{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;}
 .adk-tl-row.flexdrag:active{cursor:grabbing;}
-.adk-tl-row.dragging{opacity:.45;}
-.adk-tl-row.dragover{box-shadow:inset 0 3px 0 var(--marker);border-radius:11px;}
+.adk-tl-row.dragging{cursor:grabbing;background:var(--surface);box-shadow:0 10px 26px rgba(23,40,47,.16);border-radius:12px;}
+:root[data-theme="dark"] .adk-tl-row.dragging{box-shadow:0 10px 26px rgba(0,0,0,.5);}
 /* rail cell — holds the node, centred; the spine passes through behind it. The
    WHOLE column is the click target (big + forgiving): click an open one to
    complete it, a done one to reopen — no need to open the card first. */

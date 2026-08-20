@@ -28,12 +28,13 @@ function lateLabel(card: any, now: number): string {
 export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, onReorderFlex }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
-  // drag-to-reorder for FLEXIBLE (untimed) tasks — the user arranges their sequence.
-  // dragRef holds the active id synchronously (state lags a tick); dragId/overId are
-  // for the visual states only.
-  const dragRef = useRef<string | null>(null);
+  // pointer-based reorder for FLEXIBLE (untimed) tasks — smooth, no text-selection,
+  // the neighbours slide to make room, the dragged row lifts and follows the finger.
+  const dragRef = useRef<{ id: string; startY: number; startIdx: number; ids: string[]; rowH: number; moved: boolean; cur: number } | null>(null);
+  const justDragged = useRef(false);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [dy, setDy] = useState(0);
+  const [curIdx, setCurIdx] = useState(-1);
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
@@ -111,13 +112,40 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   else if (late && openCount > 0 && productive) briefLines.push(`נשארו ${openCount === 1 ? "עוד דבר קטן אחד" : `${openCount} דברים קטנים`} — אם יש כוח; אחרת, ערב טוב.`);
   else if (late && openCount > 0) briefLines.push(`${openCount} עדיין פתוחות — בלי לחץ, מחר יום חדש.`);
 
-  // reorder the flexible (untimed) tasks: drop `drag` right before `target`.
   const flexAheadIds = () => ahead.filter((x: any) => x.kind === "task" && !x.time).map((x: any) => x.t.card.id);
-  function moveFlexBefore(drag: string, target: string) {
-    const without = flexAheadIds().filter((x: string) => x !== drag);
-    let to = without.indexOf(target); if (to < 0) to = without.length;
-    without.splice(to, 0, drag);
-    onReorderFlex?.(without);
+  function onFlexDown(e: any, id: string) {
+    if (e.button != null && e.button > 0) return;                 // primary / touch only
+    const ids = flexAheadIds(); const startIdx = ids.indexOf(id); if (startIdx < 0) return;
+    const rowH = (e.currentTarget.getBoundingClientRect().height || 60) + 9;   // row + gap
+    dragRef.current = { id, startY: e.clientY, startIdx, ids, rowH, moved: false, cur: startIdx };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
+  }
+  function onFlexMove(e: any) {
+    const s = dragRef.current; if (!s) return;
+    const d = e.clientY - s.startY;
+    if (!s.moved) { if (Math.abs(d) < 5) return; s.moved = true; setDragId(s.id); setCurIdx(s.startIdx); }
+    e.preventDefault();
+    setDy(d);
+    const cur = Math.max(0, Math.min(s.ids.length - 1, s.startIdx + Math.round(d / s.rowH)));
+    if (cur !== s.cur) { s.cur = cur; setCurIdx(cur); }
+  }
+  function onFlexUp() {
+    const s = dragRef.current; dragRef.current = null;
+    if (s && s.moved) {
+      justDragged.current = true; setTimeout(() => { justDragged.current = false; }, 60);
+      if (s.cur !== s.startIdx) { const without = s.ids.filter((x) => x !== s.id); without.splice(s.cur, 0, s.id); onReorderFlex?.(without); }
+    }
+    setDragId(null); setDy(0); setCurIdx(-1);
+  }
+  // the transform for a flexible row while a drag is in progress (dragged row follows
+  // the finger; the ones it crossed slide one slot to open a gap).
+  function flexShift(id: string): number {
+    const s = dragRef.current; if (!s || !dragId) return 0;
+    if (id === dragId) return dy;
+    const i = s.ids.indexOf(id); if (i < 0) return 0;
+    if (s.startIdx < s.cur && i > s.startIdx && i <= s.cur) return -s.rowH;
+    if (s.startIdx > s.cur && i < s.startIdx && i >= s.cur) return s.rowH;
+    return 0;
   }
 
   // ---- rows (each carries a rail node; the spine is a per-row ::before) --------
@@ -138,14 +166,14 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   const TLRow = ({ t, canDrag = false }: any) => {
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
     const flex = canDrag && !timed && !!onReorderFlex;   // only today's untimed tasks are hand-orderable
+    const shift = flex ? flexShift(c.id) : 0;
     return (
-      <div className={"adk-tl-row" + (flex ? " flexdrag" : "") + (dragId === c.id ? " dragging" : "") + (overId === c.id ? " dragover" : "")}
-        draggable={flex}
-        onDragStart={flex ? (e: any) => { dragRef.current = c.id; setDragId(c.id); try { e.dataTransfer.effectAllowed = "move"; } catch {} } : undefined}
-        onDragOver={flex ? (e: any) => { if (dragRef.current && dragRef.current !== c.id) { e.preventDefault(); if (overId !== c.id) setOverId(c.id); } } : undefined}
-        onDrop={flex ? (e: any) => { e.preventDefault(); e.stopPropagation(); const d = dragRef.current; if (d && d !== c.id) moveFlexBefore(d, c.id); dragRef.current = null; setDragId(null); setOverId(null); } : undefined}
-        onDragEnd={flex ? () => { dragRef.current = null; setDragId(null); setOverId(null); } : undefined}
-        onClick={() => onOpenCard(c.id)}>
+      <div className={"adk-tl-row" + (flex ? " flexdrag" : "") + (dragId === c.id ? " dragging" : "")}
+        style={flex ? { transform: shift ? `translateY(${shift}px)` : undefined, transition: dragId === c.id ? "none" : "transform .18s ease", zIndex: dragId === c.id ? 6 : undefined, position: (shift || dragId === c.id) ? "relative" : undefined } : undefined}
+        onPointerDown={flex ? (e: any) => onFlexDown(e, c.id) : undefined}
+        onPointerMove={flex ? onFlexMove : undefined}
+        onPointerUp={flex ? onFlexUp : undefined}
+        onClick={() => { if (justDragged.current) return; onOpenCard(c.id); }}>
         <button className="adk-tl-rail" title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }}><span className={"adk-tl-node" + (over ? " over" : "")} /></button>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>
         <div className="adk-tl-body">
