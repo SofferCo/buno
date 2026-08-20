@@ -28,3 +28,23 @@
 .adk-day-empty{text-align:center;color:var(--faint);font-weight:700;padding:40px 10px;font-size:14px;}
 .adk-cards::-webkit-scrollbar,.adk-board::-webkit-scrollbar,.adk-day-body::-webkit-scrollbar,.adk-panel-body::-webkit-scrollbar{height:9px;width:9px;}
 .adk-cards::-webkit-scrollbar-thumb,.adk-board::-webkit-scrollbar-thumb,.adk-day-body::-webkit-scrollbar-thumb,.adk-panel-body::-webkit-scrollbar-thumb{background:#cfd6d8;border-radius:20px;}
+
+/* ---- meeting reschedule dialog (drag a meeting → propose a new time) -------- */
+.adk-grip{display:inline-block;margin-inline-start:6px;color:var(--faint);font-weight:800;font-size:12px;opacity:.55;vertical-align:middle;}
+.adk-tl-row.flexdrag:hover .adk-grip{opacity:.9;color:var(--accent-d);}
+.adk-modal-scrim{position:fixed;inset:0;z-index:60;background:rgba(23,40,47,.34);backdrop-filter:blur(2px);display:grid;place-items:center;padding:20px;animation:adk-pop .14s ease;}
+:root[data-theme="dark"] .adk-modal-scrim{background:rgba(0,0,0,.55);}
+.adk-resched{width:340px;max-width:calc(100vw - 40px);background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 54px rgba(23,40,47,.24);padding:20px;text-align:start;}
+.adk-resched-ttl{font-weight:800;font-size:16px;color:var(--ink);line-height:1.3;}
+.adk-resched-sub{margin-top:6px;color:var(--muted);font-weight:600;font-size:13.5px;}
+.adk-resched-field{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;font-weight:700;font-size:14px;color:var(--ink);}
+.adk-resched-field input[type="time"]{font-family:inherit;font-size:16px;font-weight:800;color:var(--ink);background:var(--surface-2,var(--accent-soft));border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer;}
+.adk-resched-field input[type="time"]:focus{outline:none;border-color:var(--accent);}
+.adk-resched-err{margin-top:12px;color:var(--rec);font-weight:700;font-size:13px;}
+.adk-resched-actions{display:flex;gap:10px;margin-top:20px;}
+.adk-resched-actions .adk-btn{flex:1;justify-content:center;}
+.adk-btn.ghost{background:transparent;color:var(--muted);border:1.5px solid var(--border);}
+.adk-btn.ghost:hover{background:var(--accent-soft);color:var(--ink);}
+.adk-resched-ok{text-align:center;padding:8px 0;}
+.adk-resched-ok-i{width:46px;height:46px;margin:0 auto 12px;border-radius:50%;background:var(--marker);color:var(--ink);display:grid;place-items:center;font-size:24px;font-weight:900;}
+.adk-resched-ok .adk-resched-sub{text-align:center;}

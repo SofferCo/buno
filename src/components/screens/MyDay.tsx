@@ -25,8 +25,62 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, dayOrder = [], onReorderDay }: any) {
+// dragging a meeting opens this — pick a new time, one tap sends the proposal to the
+// other attendees (wired to the calendar "move", which notifies them). Module-level so
+// its local field state survives MyDay re-renders.
+function RescheduleDialog({ data, now, onCancel, onReschedule }: any) {
+  const [time, setTime] = useState<string>(data.time || "09:00");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [okTime, setOkTime] = useState<string | null>(null);
+  const send = async () => {
+    if (busy) return;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(time || "");
+    if (!m) { setErr("בחר שעה תקינה"); return; }
+    const d = new Date(now); d.setHours(+m[1], +m[2], 0, 0);
+    setBusy(true); setErr(null);
+    try {
+      const r = await onReschedule?.(data.ev?.id, d.toISOString());
+      if (r && r.ok === false) { setErr(r.error || "לא הצלחתי לעדכן את הפגישה"); setBusy(false); return; }
+      setOkTime(time);
+      setTimeout(onCancel, 1200);
+    } catch (e: any) { setErr(e?.message || "שגיאה בשליחה"); setBusy(false); }
+  };
+  const attLbl = data.count === 1 ? "משתתף אחד" : `${data.count} משתתפים`;
+  return (
+    <div className="adk-modal-scrim" onClick={onCancel}>
+      <div className="adk-resched" onClick={(e) => e.stopPropagation()}>
+        {okTime ? (
+          <div className="adk-resched-ok">
+            <div className="adk-resched-ok-i">✓</div>
+            <div className="adk-resched-ttl">נשלחה הצעה ל־{attLbl}</div>
+            <div className="adk-resched-sub">«{data.title}» → {okTime}</div>
+          </div>
+        ) : (<>
+          <div className="adk-resched-ttl">להזיז את «{data.title}»</div>
+          <div className="adk-resched-sub">להציע שעה חדשה ל־{attLbl}?</div>
+          <label className="adk-resched-field">
+            <span>שעה חדשה</span>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} autoFocus />
+          </label>
+          {err && <div className="adk-resched-err">{err}</div>}
+          <div className="adk-resched-actions">
+            <button className="adk-btn ghost" onClick={onCancel} disabled={busy}>ביטול</button>
+            <button className="adk-btn primary" onClick={send} disabled={busy}>{busy ? "שולח…" : "שלח הצעה"}</button>
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, dayOrder = [], onReorderDay, onReschedule }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
+  // a calendar event is a "meeting" (draggable → reschedule dialog) only when it has
+  // OTHER attendees — moving it means proposing a new time to real people. A solo
+  // block / all-day entry has no one to notify, so it isn't drag-to-reschedule.
+  const otherAtt = (ev: any) => (Array.isArray(ev?.attendees) ? ev.attendees.filter((a: any) => !a.self && !a.organizerSelf) : []);
+  const isMeeting = (ev: any) => otherAtt(ev).length > 0;
   const nowRef = useRef<HTMLDivElement>(null);
   // pointer-based reorder for the WHOLE day sequence (timed + flexible) — smooth, no
   // text-selection, the neighbours slide to make room, the dragged row lifts.
@@ -35,6 +89,12 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   const [dragId, setDragId] = useState<string | null>(null);
   const [dy, setDy] = useState(0);
   const [curIdx, setCurIdx] = useState(-1);
+  // dragging a MEETING isn't a reorder — it's the trigger for "propose a new time to
+  // the attendees". A light lift-and-release gesture (no reflow) opens the dialog.
+  const meetRef = useRef<{ id: string; startY: number; moved: boolean; item: any } | null>(null);
+  const [meetDragId, setMeetDragId] = useState<string | null>(null);
+  const [meetDy, setMeetDy] = useState(0);
+  const [reschedule, setReschedule] = useState<any>(null); // { oid, title, ev, count, time }
   useEffect(() => { nowRef.current?.scrollIntoView({ block: "center", behavior: "auto" }); }, []);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
@@ -160,15 +220,46 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   };
   const dragHandlers = (oid: string) => ({ onPointerDown: (e: any) => onDayDown(e, oid), onPointerMove: onDayMove, onPointerUp: onDayUp });
 
+  // --- meeting drag → reschedule dialog (a timed event WITH attendees) -----------
+  function onMeetDown(e: any, item: any) {
+    if (e.button != null && e.button > 0) return;
+    meetRef.current = { id: item.oid, startY: e.clientY, moved: false, item };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
+  }
+  function onMeetMove(e: any) {
+    const s = meetRef.current; if (!s) return;
+    const d = e.clientY - s.startY;
+    if (!s.moved) { if (Math.abs(d) < 5) return; s.moved = true; setMeetDragId(s.id); }
+    e.preventDefault();
+    setMeetDy(d);
+  }
+  function onMeetUp() {
+    const s = meetRef.current; meetRef.current = null;
+    if (s && s.moved) {
+      justDragged.current = true; setTimeout(() => { justDragged.current = false; }, 60);
+      setReschedule({ oid: s.item.oid, title: s.item.title, ev: s.item.ev, count: otherAtt(s.item.ev).length, time: s.item.time || "09:00" });
+    }
+    setMeetDragId(null); setMeetDy(0);
+  }
+  const meetHandlers = (item: any) => ({ onPointerDown: (e: any) => onMeetDown(e, item), onPointerMove: onMeetMove, onPointerUp: onMeetUp });
+  const meetStyle = (oid: string): any => meetDragId === oid
+    ? { transform: `translateY(${meetDy}px)`, transition: "none", zIndex: 6, position: "relative" as const }
+    : undefined;
+
   // ---- rows (each carries a rail node; the spine is a per-row ::before) --------
   const EventRow = ({ e }: any) => {
     const proj = e.projectId ? clientOf(e.projectId) : null;
+    const canResched = !!onReschedule && isMeeting(e.ev);   // meeting with attendees → drag to propose a new time
+    const mh: any = canResched ? meetHandlers(e) : {};
     return (
-      <div className="adk-tl-row" style={rowStyle(e.oid)} onClick={() => onOpenEvent?.(e.raw || e)}>
+      <div className={"adk-tl-row" + (canResched ? " flexdrag" : "") + (meetDragId === e.oid ? " dragging" : "")}
+        style={{ ...rowStyle(e.oid), ...meetStyle(e.oid) }}
+        {...mh}
+        onClick={() => { if (justDragged.current) return; onOpenEvent?.(e.raw || e); }}>
         <span className="adk-tl-rail"><span className="adk-tl-node" /></span>
         <div className={"adk-tl-time" + (e.time ? "" : " flex")}>{e.time || "כל היום"}</div>
         <div className="adk-tl-body">
-          <div className="ttl">{e.title}</div>
+          <div className="ttl">{e.title}{canResched && <span className="adk-grip" title="גרור כדי להציע שעה חדשה למשתתפים">⇅</span>}</div>
           <div className="meta"><span className="bdot" style={{ background: proj?.color || "#C6613F" }} /><span className="cname">{proj ? proj.name : "יומן"}{e.location ? ` · ${e.location}` : ""}</span></div>
         </div>
       </div>
@@ -283,6 +374,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
 
   return (
     <div className="adk-page">
+      {reschedule && <RescheduleDialog data={reschedule} now={now} onCancel={() => setReschedule(null)} onReschedule={onReschedule} />}
       <div className="adk-pcard day">
         <div className="adk-pcard-head">
           <button className="adk-back" onClick={onClose} title="חזרה"><Icon name="arrowR" size={22} /></button>

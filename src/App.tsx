@@ -918,6 +918,7 @@ export default function App() {
           onRitualDone={() => setRitualOrganize(true)} onRitualReopen={() => setRitualOrganize(false)}
           onBriefOpen={() => { setDayOpen(false); setMobileView("chat"); }}
           dayOrder={dayOrder} onReorderDay={reorderDay}
+          onReschedule={async (eventId: string, startISO: string) => { const r = await calendarAction("move", eventId, { startISO }); if (r.ok) await refreshCalendar(); return r; }}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 

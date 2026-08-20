@@ -45,7 +45,10 @@ export function MyDayPreview() {
     { card: { id: "u2", title: "סגירת חודש - אצל כל הספקים", clientId: "c2", deadline: dayStr(5), time: "", priority: "regular" } },
   ];
   const events = { [todayKey]: [
-    { t: "פגישת סנכרון — נועה", time: "15:00", location: "Google Meet", ev: { title: "פגישת סנכרון — נועה" }, projectId: "c2" },
+    { t: "פגישת סנכרון — נועה", time: "15:00", location: "Google Meet", projectId: "c2",
+      ev: { id: "ev-noa", title: "פגישת סנכרון — נועה", attendees: [{ self: true }, { email: "noa@bioharvest.com", displayName: "נועה" }, { email: "yair@bioharvest.com" }] } },
+    { t: "בלוק פוקוס — עיצוב", time: "11:00", location: "", projectId: "c1",
+      ev: { id: "ev-focus", title: "בלוק פוקוס — עיצוב", attendees: [{ self: true }] } }, // solo → NOT drag-to-reschedule
   ] };
 
   return (
@@ -61,6 +64,7 @@ export function MyDayPreview() {
       onRitualDone={() => setOrganizeDone(true)} onRitualReopen={() => setOrganizeDone(false)}
       onBriefOpen={() => alert("פתח את הבריף בצ'אט")}
       dayOrder={dayOrderP} onReorderDay={(ids: string[]) => { console.log("reorder day:", ids); setDayOrderP(ids); }}
+      onReschedule={async (eventId: string, startISO: string) => { console.log("reschedule:", eventId, "→", startISO); await new Promise((r) => setTimeout(r, 600)); return { ok: true, start: startISO }; }}
     />
   );
 }
