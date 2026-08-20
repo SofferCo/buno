@@ -9,6 +9,7 @@ export function MyDayPreview() {
   const now = (() => { const b = new Date(); if (hp !== null) b.setHours(Number(hp), 5, 0, 0); return b.getTime(); })();
   const [doneIds, setDoneIds] = useState<Record<string, number>>({}); // id → completion ms (live toggle to verify mark-done)
   const [organizeDone, setOrganizeDone] = useState(false); // ritual "organize the day" toggle
+  const [dayOrderP, setDayOrderP] = useState<string[]>([]); // manual day order (drag test)
   const d = new Date(now);
   const pad = (n: number) => String(n).padStart(2, "0");
   const dayStr = (off: number) => { const x = new Date(now + off * 864e5); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
@@ -59,7 +60,7 @@ export function MyDayPreview() {
       ritualActive ritualOrganizeDone={organizeDone}
       onRitualDone={() => setOrganizeDone(true)} onRitualReopen={() => setOrganizeDone(false)}
       onBriefOpen={() => alert("פתח את הבריף בצ'אט")}
-      onReorderFlex={(ids: string[]) => console.log("reorder flex:", ids)}
+      dayOrder={dayOrderP} onReorderDay={(ids: string[]) => { console.log("reorder day:", ids); setDayOrderP(ids); }}
     />
   );
 }

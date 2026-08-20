@@ -25,11 +25,11 @@ function lateLabel(card: any, now: number): string {
   return "באיחור";
 }
 
-export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, onReorderFlex }: any) {
+export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, runningCard, pending, events, roundMode = "ceil_hour", capacity = 6, onOpenEvent, onClose, onOpenCard, onToggleTimer, onDone, onDefer, onReopen, linkedEventIds, ritualActive = false, ritualOrganizeDone = false, onRitualDone, onRitualReopen, onBriefOpen, dayOrder = [], onReorderDay }: any) {
   const clientOf = (id: any) => clients.find((c: any) => c.id === id);
   const nowRef = useRef<HTMLDivElement>(null);
-  // pointer-based reorder for FLEXIBLE (untimed) tasks — smooth, no text-selection,
-  // the neighbours slide to make room, the dragged row lifts and follows the finger.
+  // pointer-based reorder for the WHOLE day sequence (timed + flexible) — smooth, no
+  // text-selection, the neighbours slide to make room, the dragged row lifts.
   const dragRef = useRef<{ id: string; startY: number; startIdx: number; ids: string[]; rowH: number; moved: boolean; cur: number } | null>(null);
   const justDragged = useRef(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   // card (a task), not twice — skip its raw calendar entry here.
   const eventItems = ((events && events[todayKey]) || [])
     .filter((e: any) => !(linkedEventIds && e.ev?.id && linkedEventIds.has(e.ev.id)))
-    .map((e: any, i: number) => ({ kind: "event", id: "ev" + i, time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
+    .map((e: any, i: number) => ({ kind: "event", id: "ev" + i, oid: "ev:" + (e.ev?.id || e.t || i), time: e.time || "", title: e.t, location: e.location, ev: e.ev, projectId: e.projectId, raw: e }));
   // "crossed the time" is only meaningful for items that HAVE a time — a flexible
   // task (no clock) can't be late, so it's never overdue and never tagged; it just
   // sinks to the bottom of the day (below).
@@ -56,9 +56,14 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   const isOverdue = (c: any) => isTimed(c) && deadlineInfo(c.deadline)?.tone === "over";
   const overdueTasks = planTasks.filter((t: any) => isOverdue(t.card));
   const planRest = planTasks.filter((t: any) => !isOverdue(t.card));
-  const taskItems = planRest.map((t: any) => ({ kind: "task", id: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
-  // today's open items (tasks + events), chronological — the live "order of the day".
+  const taskItems = planRest.map((t: any) => ({ kind: "task", id: t.card.id, oid: t.card.id, time: (t.card.time && !flexDay(t.card)) ? t.card.time : "", t }));
+  // today's open items (tasks + events). Default order is chronological; but once the
+  // user has hand-arranged the day, THEIR order (dayOrder) wins — a manual sequence
+  // implies the intended time. Items not yet placed fall back to time, after placed ones.
+  const ord = (oid: string) => dayOrder.indexOf(oid);
   const ahead = [...taskItems, ...eventItems].sort((a: any, b: any) => {
+    const ia = ord(a.oid), ib = ord(b.oid);
+    if (ia >= 0 || ib >= 0) { if (ia < 0) return 1; if (ib < 0) return -1; return ia - ib; }
     const ta = a.time || "", tb = b.time || "";
     if (ta && tb) return ta.localeCompare(tb);
     if (ta) return -1; if (tb) return 1; return 0;
@@ -112,15 +117,15 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   else if (late && openCount > 0 && productive) briefLines.push(`נשארו ${openCount === 1 ? "עוד דבר קטן אחד" : `${openCount} דברים קטנים`} — אם יש כוח; אחרת, ערב טוב.`);
   else if (late && openCount > 0) briefLines.push(`${openCount} עדיין פתוחות — בלי לחץ, מחר יום חדש.`);
 
-  const flexAheadIds = () => ahead.filter((x: any) => x.kind === "task" && !x.time).map((x: any) => x.t.card.id);
-  function onFlexDown(e: any, id: string) {
+  const aheadOids = () => ahead.map((x: any) => x.oid);
+  function onDayDown(e: any, oid: string) {
     if (e.button != null && e.button > 0) return;                 // primary / touch only
-    const ids = flexAheadIds(); const startIdx = ids.indexOf(id); if (startIdx < 0) return;
+    const ids = aheadOids(); const startIdx = ids.indexOf(oid); if (startIdx < 0) return;
     const rowH = (e.currentTarget.getBoundingClientRect().height || 60) + 9;   // row + gap
-    dragRef.current = { id, startY: e.clientY, startIdx, ids, rowH, moved: false, cur: startIdx };
+    dragRef.current = { id: oid, startY: e.clientY, startIdx, ids, rowH, moved: false, cur: startIdx };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
   }
-  function onFlexMove(e: any) {
+  function onDayMove(e: any) {
     const s = dragRef.current; if (!s) return;
     const d = e.clientY - s.startY;
     if (!s.moved) { if (Math.abs(d) < 5) return; s.moved = true; setDragId(s.id); setCurIdx(s.startIdx); }
@@ -129,30 +134,37 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
     const cur = Math.max(0, Math.min(s.ids.length - 1, s.startIdx + Math.round(d / s.rowH)));
     if (cur !== s.cur) { s.cur = cur; setCurIdx(cur); }
   }
-  function onFlexUp() {
+  function onDayUp() {
     const s = dragRef.current; dragRef.current = null;
     if (s && s.moved) {
       justDragged.current = true; setTimeout(() => { justDragged.current = false; }, 60);
-      if (s.cur !== s.startIdx) { const without = s.ids.filter((x) => x !== s.id); without.splice(s.cur, 0, s.id); onReorderFlex?.(without); }
+      if (s.cur !== s.startIdx) { const without = s.ids.filter((x) => x !== s.id); without.splice(s.cur, 0, s.id); onReorderDay?.(without); }
     }
     setDragId(null); setDy(0); setCurIdx(-1);
   }
-  // the transform for a flexible row while a drag is in progress (dragged row follows
-  // the finger; the ones it crossed slide one slot to open a gap).
-  function flexShift(id: string): number {
+  // the transform for a row while a drag is in progress (dragged row follows the
+  // finger; the ones it crossed slide one slot to open a gap).
+  function rowShift(oid: string): number {
     const s = dragRef.current; if (!s || !dragId) return 0;
-    if (id === dragId) return dy;
-    const i = s.ids.indexOf(id); if (i < 0) return 0;
+    if (oid === dragId) return dy;
+    const i = s.ids.indexOf(oid); if (i < 0) return 0;
     if (s.startIdx < s.cur && i > s.startIdx && i <= s.cur) return -s.rowH;
     if (s.startIdx > s.cur && i < s.startIdx && i >= s.cur) return s.rowH;
     return 0;
   }
+  // EVERY ahead row slides (to open a gap) during a drag — even the timed anchors,
+  // so the reflow reads right — but only a FLEXIBLE task can be grabbed to drag.
+  const rowStyle = (oid: string): any => {
+    const shift = rowShift(oid);
+    return { transform: shift ? `translateY(${shift}px)` : undefined, transition: dragId === oid ? "none" : "transform .18s ease", zIndex: dragId === oid ? 6 : undefined, position: (shift || dragId === oid) ? "relative" as const : undefined };
+  };
+  const dragHandlers = (oid: string) => ({ onPointerDown: (e: any) => onDayDown(e, oid), onPointerMove: onDayMove, onPointerUp: onDayUp });
 
   // ---- rows (each carries a rail node; the spine is a per-row ::before) --------
   const EventRow = ({ e }: any) => {
     const proj = e.projectId ? clientOf(e.projectId) : null;
     return (
-      <div className="adk-tl-row" onClick={() => onOpenEvent?.(e.raw || e)}>
+      <div className="adk-tl-row" style={rowStyle(e.oid)} onClick={() => onOpenEvent?.(e.raw || e)}>
         <span className="adk-tl-rail"><span className="adk-tl-node" /></span>
         <div className={"adk-tl-time" + (e.time ? "" : " flex")}>{e.time || "כל היום"}</div>
         <div className="adk-tl-body">
@@ -165,14 +177,12 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
 
   const TLRow = ({ t, canDrag = false }: any) => {
     const c = t.card, cl = clientOf(c.clientId), pri = PRIORITY[c.priority], over = isOverdue(c), isRun = !!c.timerStart, timed = isTimed(c);
-    const flex = canDrag && !timed && !!onReorderFlex;   // only today's untimed tasks are hand-orderable
-    const shift = flex ? flexShift(c.id) : 0;
+    const canReorder = canDrag && !timed && !!onReorderDay;   // timed tasks are anchors — only flexible can be grabbed
+    const dh: any = canReorder ? dragHandlers(c.id) : {};
     return (
-      <div className={"adk-tl-row" + (flex ? " flexdrag" : "") + (dragId === c.id ? " dragging" : "")}
-        style={flex ? { transform: shift ? `translateY(${shift}px)` : undefined, transition: dragId === c.id ? "none" : "transform .18s ease", zIndex: dragId === c.id ? 6 : undefined, position: (shift || dragId === c.id) ? "relative" : undefined } : undefined}
-        onPointerDown={flex ? (e: any) => onFlexDown(e, c.id) : undefined}
-        onPointerMove={flex ? onFlexMove : undefined}
-        onPointerUp={flex ? onFlexUp : undefined}
+      <div className={"adk-tl-row" + (canReorder ? " flexdrag" : "") + (dragId === c.id ? " dragging" : "")}
+        style={canDrag ? rowStyle(c.id) : undefined}
+        {...dh}
         onClick={() => { if (justDragged.current) return; onOpenCard(c.id); }}>
         <button className="adk-tl-rail" title="סמן כבוצע" onClick={(e) => { e.stopPropagation(); onDone?.(c.id); }}><span className={"adk-tl-node" + (over ? " over" : "")} /></button>
         <div className={"adk-tl-time" + (timed ? "" : " flex")}>{timed ? c.time : "גמיש"}</div>

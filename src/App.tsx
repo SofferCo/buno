@@ -57,12 +57,11 @@ export default function App() {
   const [dayOpen, setDayOpen] = useState(true); // default landing = "היום שלי" (board is one click away)
   // morning-brief ritual (My-Day only, per-day, virtual — never a real board card)
   const [ritual, setRitual] = useState<{ date: string; organizeDone: boolean } | null>(null);
-  // manual order for FLEXIBLE (untimed) My-Day tasks — the user drags to arrange
-  // them; a clock-anchored task keeps its time. Local (no migration): a list of
-  // card ids; a task's index is its sort key among the flexible ones.
-  const [flexOrder, setFlexOrder] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("buno_flex_order") || "[]"); } catch { return []; } });
-  const flexIdx = (id: string) => { const i = flexOrder.indexOf(id); return i < 0 ? 1e9 : i; };
-  const reorderFlex = (orderedIds: string[]) => setFlexOrder((prev) => { const set = new Set(orderedIds); const next = [...orderedIds, ...prev.filter((x) => !set.has(x))]; try { localStorage.setItem("buno_flex_order", JSON.stringify(next)); } catch { /* optional */ } return next; });
+  // manual order for the WHOLE My-Day sequence — the user drags ANY item (timed or
+  // flexible) to arrange the day; the order they set IS the sequence (a manual order
+  // implies the intended time). Local, no migration: a list of item ids.
+  const [dayOrder, setDayOrder] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("buno_day_order") || "[]"); } catch { return []; } });
+  const reorderDay = (orderedIds: string[]) => setDayOrder(() => { try { localStorage.setItem("buno_day_order", JSON.stringify(orderedIds)); } catch { /* optional */ } return orderedIds; });
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportPeriod, setReportPeriod] = useState<string | null>(null); // when opened from the dashboard, carry its period
@@ -706,7 +705,7 @@ export default function App() {
   const planWindow = (c) => c.routine === "monthly" ? 31 : 7;
   const inPlan = (t) => { if (t.d === null) return false; if (flexDay(t.card)) return t.d <= planWindow(t.card); return t.d <= 0; };
   const byTime = (a, b) => { const ta = a.card.time || "99:99", tb = b.card.time || "99:99"; return ta < tb ? -1 : ta > tb ? 1 : 0; };
-  const planTasks = dayTasks.filter(inPlan).sort((a, b) => byTime(a, b) || (flexIdx(a.card.id) - flexIdx(b.card.id)) || (PRI_ORDER[a.card.priority] - PRI_ORDER[b.card.priority]) || ((a.d ?? 99) - (b.d ?? 99)));
+  const planTasks = dayTasks.filter(inPlan).sort((a, b) => byTime(a, b) || (PRI_ORDER[a.card.priority] - PRI_ORDER[b.card.priority]) || ((a.d ?? 99) - (b.d ?? 99)));
   const upcoming = dayTasks.filter((t) => !inPlan(t) && t.d !== null && t.d >= 1 && t.d <= 7).sort((a, b) => a.d - b.d);
   // "היום שלי" as a living timeline: what closed today (above the now-line, dimmed),
   // and today's no-deadline additions (so a day with actions never looks empty).
@@ -918,7 +917,7 @@ export default function App() {
           ritualActive={!!ritual} ritualOrganizeDone={!!ritual?.organizeDone}
           onRitualDone={() => setRitualOrganize(true)} onRitualReopen={() => setRitualOrganize(false)}
           onBriefOpen={() => { setDayOpen(false); setMobileView("chat"); }}
-          onReorderFlex={reorderFlex}
+          dayOrder={dayOrder} onReorderDay={reorderDay}
           onDefer={(id) => updateCard(id, { deadline: new Date(Date.now() + 864e5).toISOString().slice(0, 10) })} />
       )}
 
