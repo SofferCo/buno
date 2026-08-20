@@ -12,6 +12,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
 import { summarizeBoard } from "./boardContext.ts";
 import { computeDayFacts, renderDayFacts } from "./dayFacts.ts";
+import { mergeCards } from "./review.ts";
 import { CORE_TOOLS, matchCard } from "./tools.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
@@ -231,6 +232,14 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     if (!c) return `לא מצאתי כרטיס בשם "${input?.card}".`;
     return `הנה הקישור ל"${c.title}": https://buno.io/?card=${c.id}`;
   }
+  async function doMergeCards(input: any): Promise<string> {
+    const keep = findCard(input?.keep); const dup = findCard(input?.duplicate);
+    if (!keep) return `לא מצאתי כרטיס פעיל בשם "${input?.keep}".`;
+    if (!dup) return `לא מצאתי כרטיס פעיל בשם "${input?.duplicate}".`;
+    if (keep.id === dup.id) return "אלה אותו כרטיס.";
+    try { await mergeCards(admin, keep.id, dup.id); changed.push(keep.id, dup.id); return `מיזגתי את "${dup.title}" לתוך "${keep.title}".`; }
+    catch (e: any) { return "לא הצלחתי למזג: " + (e?.message || e); }
+  }
 
   // shared thread + recent history
   let threadId: string | undefined;
@@ -376,6 +385,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
         else if (tu.name === "move_card") out = await doMoveCard(tu.input);
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
+        else if (tu.name === "merge_cards") out = await doMergeCards(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });

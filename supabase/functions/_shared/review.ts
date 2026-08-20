@@ -16,7 +16,7 @@ export type Action = { id: string; label: string; url?: string };
 // can paint it as a colored chip (WhatsApp just reads it off the text line).
 // `pending`/`started` describe the live session so the chat can show the right
 // continuity chip on open (pending & !started = a snapshot queue not yet begun).
-export type Render = { text: string; actions: Action[]; done?: boolean; project?: string; pending?: number; started?: boolean };
+export type Render = { text: string; actions: Action[]; done?: boolean; project?: string; pending?: number; started?: boolean; cards?: { id: string; title: string; project?: string }[] };
 
 // ---- session store ---------------------------------------------------------
 export async function setSession(admin: SupabaseClient, userId: string, queue: ReviewItem[], cursor: number) {
@@ -44,17 +44,17 @@ function renderItem(item: ReviewItem, _idx: number, _total: number): Render {
     return { text: `התקבלה הזמנה מ־${item.from} ל"${item.title}"${item.when ? ` · ${item.when}` : ""}.`, actions: [{ id: "rv:open_cal", label: "פתח ביומן", url: item.url }, { id: "rv:skip", label: "הבא ›" }] };
   }
   if (item.kind === "draft") {
-    return { text: `הצעה: ${item.title}${item.project ? `\n${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }], project: item.project || undefined };
+    return { text: `הצעה: ${item.title}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }], project: item.project || undefined, cards: [{ id: item.cardId, title: item.title, project: item.project || undefined }] };
   }
   if (item.kind === "merge") {
-    return { text: `נראה שאלה אותה עבודה:\n• "${item.keepTitle}"\n• "${item.mergeTitle}"\nלמזג לכרטיס אחד?`, actions: [{ id: "rv:merge", label: "מזג" }, { id: "rv:skip", label: "השאר בנפרד" }] };
+    return { text: `נראה שאלה אותה עבודה — למזג לכרטיס אחד?`, actions: [{ id: "rv:merge", label: "מזג" }, { id: "rv:skip", label: "השאר בנפרד" }], cards: [{ id: item.keepId, title: item.keepTitle }, { id: item.mergeId, title: item.mergeTitle }] };
   }
   // B2 — a reply that reads as "done" (approval arrived / request answered) leads
   // with a close suggestion instead of the neutral update actions.
   if (item.closes) {
-    return { text: `נראה שנסגר: "${item.cardTitle}" — ${item.from}: ${item.summary}. לסגור את הכרטיס?`, actions: [{ id: "rv:close", label: "סגור כרטיס" }, { id: "rv:update", label: "רק עדכן" }, { id: "rv:skip", label: "השאר פתוח" }] };
+    return { text: `נראה שנסגר — ${item.from}: ${item.summary}. לסגור את הכרטיס?`, actions: [{ id: "rv:close", label: "סגור כרטיס" }, { id: "rv:update", label: "רק עדכן" }, { id: "rv:skip", label: "השאר פתוח" }], cards: [{ id: item.cardId, title: item.cardTitle }] };
   }
-  return { text: `עדכון על "${item.cardTitle}" — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }] };
+  return { text: `עדכון — ${item.from}: ${item.summary}`, actions: [{ id: "rv:update", label: "עדכן כרטיס" }, { id: "rv:close", label: "סגור כרטיס" }, { id: "rv:new", label: "פתח חדשה" }, { id: "rv:skip", label: "דלג" }], cards: [{ id: item.cardId, title: item.cardTitle }] };
 }
 // immediate opening for a multi-draft walk (3+): preamble + the first item.
 export function draftsOpening(queue: ReviewItem[]): Render {
@@ -196,7 +196,8 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
 // #2 — merge a duplicate INTO the keeper: re-parent its content (comments,
 // attachments, subtasks, thread-updates) onto the keeper, leave a note, then
 // ARCHIVE the shell (reversible — never hard-deleted). Data is preserved, moved.
-async function mergeCards(admin: SupabaseClient, keepId: string, mergeId: string) {
+// Exported so the chat/WhatsApp doors can offer a MANUAL "merge X into Y" too.
+export async function mergeCards(admin: SupabaseClient, keepId: string, mergeId: string) {
   if (!keepId || !mergeId || keepId === mergeId) return;
   for (const table of ["comment", "attachment", "subtask", "card_thread_update"]) {
     try { await admin.from(table).update({ card_id: keepId }).eq("card_id", mergeId); } catch { /* table may not exist pre-migration */ }

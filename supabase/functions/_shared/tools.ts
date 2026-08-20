@@ -110,6 +110,18 @@ export const SHOW_CARDS_TOOL = {
   }, required: ["filter"] },
 };
 
-export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL];
+// Merge two cards that are the SAME work (a duplicate the user points out, or two
+// signals of one task). Use on an explicit request ("מזג את X ל-Y", "אלה אותה
+// משימה"). Content of the duplicate moves onto the keeper; the duplicate is archived.
+export const MERGE_CARDS_TOOL = {
+  name: "merge_cards",
+  description: "Merge one card INTO another when they are the same work — on the user's explicit request ('מזג את X ל-Y', 'אלה אותה משימה', 'תאחד'). The duplicate's content (comments, attachments, subtasks) moves to the keeper and the duplicate is archived (reversible). Identify both by title.",
+  input_schema: { type: "object", properties: {
+    keep: { type: "string", description: "Title of the card to KEEP (the primary/keeper)." },
+    duplicate: { type: "string", description: "Title of the duplicate card to merge INTO keep and archive." },
+  }, required: ["keep", "duplicate"] },
+};
+
+export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL, MERGE_CARDS_TOOL];
 // the web /chat set adds calendar management
 export const WEB_TOOLS = [...CORE_TOOLS, MANAGE_EVENT_TOOL, SHOW_CARDS_TOOL];

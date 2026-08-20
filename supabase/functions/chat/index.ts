@@ -17,7 +17,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
-import { handleAction, setSession, draftsOpening } from "../_shared/review.ts";
+import { handleAction, setSession, draftsOpening, mergeCards } from "../_shared/review.ts";
 import { summarizeBoard } from "../_shared/boardContext.ts";
 import { computeDayFacts, renderDayFacts } from "../_shared/dayFacts.ts";
 import { WEB_TOOLS, matchCard } from "../_shared/tools.ts";
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
         if (th?.id) await admin.from("assistant_message").insert({ thread_id: th.id, role: "assistant", door: "web", content: r.text, meta: null });
       } catch { /* best-effort persistence */ }
     }
-    return json({ reply: r.text, actions: r.actions, reviewDone: !!r.done, review: r.project ? { project: r.project } : undefined, pending: r.pending ?? 0, started: !!r.started });
+    return json({ reply: r.text, actions: r.actions, cards: r.cards || undefined, reviewDone: !!r.done, review: r.project ? { project: r.project } : undefined, pending: r.pending ?? 0, started: !!r.started });
   }
 
   if (!userMessage) return json({ error: "empty message" }, 400);
@@ -270,6 +270,15 @@ Deno.serve(async (req) => {
   const changed: string[] = [];
   const activeCards = () => (cards.data || []).filter((c: any) => !c.archived);
   const findCard = (q: string): any | null => matchCard(activeCards(), q);
+  // merge_cards — fold a duplicate into a keeper on the user's explicit request.
+  async function doMergeCards(input: any): Promise<string> {
+    const keep = findCard(input?.keep); const dup = findCard(input?.duplicate);
+    if (!keep) return `לא מצאתי כרטיס פעיל בשם "${input?.keep}".`;
+    if (!dup) return `לא מצאתי כרטיס פעיל בשם "${input?.duplicate}".`;
+    if (keep.id === dup.id) return "אלה אותו כרטיס.";
+    try { await mergeCards(supabase as any, keep.id, dup.id); changed.push(keep.id, dup.id); return `מיזגתי את "${dup.title}" לתוך "${keep.title}" — התוכן עבר, הכפילות בארכיון.`; }
+    catch (e: any) { return "לא הצלחתי למזג: " + (e?.message || e); }
+  }
   // show_cards — surface a set of cards as clickable chips (never prose).
   function doShowCards(input: any): string {
     const doneIds = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
@@ -549,6 +558,7 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
         else if (tu.name === "manage_event") out = await doManageEvent(tu.input);
         else if (tu.name === "show_cards") out = doShowCards(tu.input);
+        else if (tu.name === "merge_cards") out = await doMergeCards(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });

@@ -198,7 +198,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     try {
       const r = await onReviewAction(id);
       setSessionState(r?.pending && r.pending > 0 ? { pending: r.pending, started: !!r.started } : null);
-      if (r?.reply) setMsgs((m) => [...m, { by: "twin", text: r.reply, at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
+      if (r?.reply) setMsgs((m) => [...m, { by: "twin", text: r.reply, at: Date.now(), actions: r?.reviewDone ? undefined : r?.actions, cards: r?.cards || undefined, review: r?.reviewDone ? undefined : (r?.review || undefined) }]);
       // finishing the guided walk IS "organizing the day" — auto-complete that ritual.
       if (r?.reviewDone) onReviewComplete?.();
     } catch { setMsgs((m) => [...m, { by: "twin", text: "לא הצלחתי כרגע.", at: Date.now() }]); }
