@@ -97,6 +97,19 @@ export function matchCard(list: any[], q: string): any | null {
 }
 
 // the canonical WhatsApp/core tool set (everything except calendar management)
+// Show a SET of cards as clickable chips (each opens the card; drafts get inline
+// approve/reject) INSTEAD of listing them as prose. Use whenever the user asks to
+// see / go through / list drafts, open tasks, waiting items, or a project's cards —
+// never dump them as a text list.
+export const SHOW_CARDS_TOOL = {
+  name: "show_cards",
+  description: "Render a set of the user's cards as clickable chips instead of describing them in text. ALWAYS use this when asked to show / list / go through drafts, open tasks, waiting items, or a project's cards. After calling it, add at most one short sentence — never re-list the cards in prose.",
+  input_schema: { type: "object", properties: {
+    filter: { type: "string", enum: ["drafts", "open", "waiting", "overdue", "all"], description: "Which cards: drafts (pending approval) · open (active, not done) · waiting · overdue · all." },
+    project_id: { type: "string", description: "Optional — limit to this project's id (verbatim from the projects list)." },
+  }, required: ["filter"] },
+};
+
 export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL];
 // the web /chat set adds calendar management
-export const WEB_TOOLS = [...CORE_TOOLS, MANAGE_EVENT_TOOL];
+export const WEB_TOOLS = [...CORE_TOOLS, MANAGE_EVENT_TOOL, SHOW_CARDS_TOOL];

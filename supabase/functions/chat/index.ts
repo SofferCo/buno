@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
 
   // ---- server-side card creation (the enforcement point) --------------------
   const created: { id: string; title: string; project: string; level: string }[] = [];
+  const shown: { id: string; title: string; project: string; level: string }[] = [];   // show_cards → clickable chips
   let boardChanged = false; // a new project/board was opened → the client should refresh
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim();
@@ -269,6 +270,21 @@ Deno.serve(async (req) => {
   const changed: string[] = [];
   const activeCards = () => (cards.data || []).filter((c: any) => !c.archived);
   const findCard = (q: string): any | null => matchCard(activeCards(), q);
+  // show_cards — surface a set of cards as clickable chips (never prose).
+  function doShowCards(input: any): string {
+    const doneIds = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
+    const isDone = (c: any) => doneIds.has(c.column_id);
+    const pid = String(input?.project_id || "").trim();
+    const f = String(input?.filter || "open");
+    let list = activeCards().filter((c: any) => String(c.title || "").trim() && (!pid || pid === "unassigned" || c.project_id === pid));
+    if (f === "drafts") list = list.filter((c: any) => c.draft);
+    else if (f === "waiting") list = list.filter((c: any) => c.card_type === "waiting" && !isDone(c));
+    else if (f === "overdue") list = list.filter((c: any) => c.deadline && c.deadline < todayStr2 && !isDone(c));
+    else if (f === "open") list = list.filter((c: any) => !isDone(c) && !c.draft);
+    const projName = (id: string) => projects.find((p: any) => p.id === id)?.name || "";
+    for (const c of list.slice(0, 20)) shown.push({ id: c.id, title: c.title, project: projName(c.project_id), level: c.draft ? (c.draft.level || "draft") : "act" });
+    return shown.length ? `מציג ${shown.length} כרטיסים.` : "לא נמצאו כרטיסים תואמים.";
+  }
   async function moveTo(card: any, col: any, verb: string): Promise<string> {
     const { error } = await supabase.from("card").update({ column_id: col.id, active_column_key: col.key }).eq("id", card.id);
     if (error) return `לא הצלחתי ${verb} (שגיאה): ${error.message}`;
@@ -434,7 +450,7 @@ Deno.serve(async (req) => {
 5. סגנון: עברית טבעית. תשובה קצרה/רגילה — טקסט רגיל בלי עיצוב. אבל כשאתה נותן בריף בוקר או סיכום רב-נושאי: מותר ורצוי **טקסט מודגש** (כוכבית כפולה) ללייבל של כל נושא ("**אל תפספס:**", "**ממתינים לתשובתך:**") ושורה ריקה בין נושאים — כדי שיהיה נעים לקריאה. בלי כותרות # ובלי כוכבית בודדת (*). תבליט • קצר רק אם חייבים רשימה.
 6. עדיפות: כשנשאל "מה הכי דחוף/חשוב" — קריטי ראשון, אחריו חשוב, ורק אז דדליין (בעקביות עם "היום שלי").
 7. החלטה = הודעה משלה: אל תבלע שאלת כן/לא בתוך פסקת טקסט (למשל "רוצה שאתעד את X כהושלם?"). אם המשתמש לא ביקש פעולה — אל תבצע ואל תשאל בפרוזה; דווח קצר מה עשית ותעצור. הבקשה של המשתמש היא הטריגר, לא ניחוש שלך.
-8. יצירת כרטיס = שורת אישור אחת בלבד: כשאתה מוסיף משימה, ענה במשפט קצר על מה שביקשו בלבד (למשל "צירפתי להיום את 'לסדר משימות'"). הכרטיס עצמו כבר מוצג על המסך עם הפרויקט וכפתורי אישור — אל תחזור עליו. אסור: לסקור את היומן, למנות משימות/פגישות אחרות שלא התבקשו, או "לתקן" משהו שאמרת קודם. רק מה שביקשו.
+8. יצירת כרטיס = שורת אישור אחת בלבד: כשאתה מוסיף משימה, ענה במשפט קצר על מה שביקשו בלבד (למשל "צירפתי להיום את 'לסדר משימות'"). הכרטיס עצמו כבר מוצג על המסך עם הפרויקט וכפתורי אישור — אל תחזור עליו. אסור: לסקור את היומן, למנות משימות/פגישות אחרות שלא התבקשו, או "לתקן" משהו שאמרת קודם. רק מה שביקשו. וכשמבקשים לראות/לעבור על סט כרטיסים (טיוטות, פתוחות, של פרויקט) — הפעל show_cards (צ'יפים לחיצים), אל תדקלם רשימת פרוזה.
 9. נאמנות לבקשה: כשבקשת יצירה כוללת פרטים — פרויקט (project_id), אנשים ("עם נמרוד עוז" → people), פירוט (description), חלוקה לשלבים (checklist), נותן-בריף (brief_from) — כל אחד מהם חייב להיכנס לשדה המתאים בכלי. אל תשמיט פרט שנאמר. באישור הקצר ציין מה נכנס, ואם משהו מהבקשה לא מומש — אמור זאת במפורש. קבצים: אם ההודעה כוללת "(מצורף קובץ ...)" — קובץ הועלה בצ'אט והאפליקציה תצרף אותו אוטומטית לכרטיס שתיצור, אז פשוט צור את הכרטיס כרגיל (אל תיצור כרטיס נפרד לקובץ). אם המשתמש מזכיר קובץ שאין לגביו רמז כזה — אמור בכנות "אין לי את הקובץ כאן — צרף אותו מהכרטיס עצמו", אל תעמיד פנים.
 
 Today is ${today}. When the user gives a relative date ("מחר", "יום ראשון"), convert it to a real YYYY-MM-DD for the deadline; if no real date is given, omit it.
@@ -532,6 +548,7 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
         else if (tu.name === "complete_card") out = await doCompleteCard(tu.input);
         else if (tu.name === "archive_card") out = await doArchiveCard(tu.input);
         else if (tu.name === "manage_event") out = await doManageEvent(tu.input);
+        else if (tu.name === "show_cards") out = doShowCards(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });
@@ -631,6 +648,9 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
       reply = opening.text; reviewActions = opening.actions; reviewProject = opening.project; showCards = []; // the walk replaces the chip dump
     } catch { /* fall back to chips */ }
   }
+  // show_cards chips always render (they're what the user asked to SEE) — appended
+  // after the create/walk logic, deduped against anything already shown.
+  if (shown.length) { const have = new Set(showCards.map((c: any) => c.id)); showCards = [...showCards, ...shown.filter((c) => !have.has(c.id))]; }
 
   const lint = voiceLint(reply);
   try {
