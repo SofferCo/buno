@@ -273,7 +273,7 @@ const BRIEF_EMAIL_TOOL = {
 export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
 export type EmailAwaiting = { from: string; gist: string; threadId?: string };
 export type MeetingPrep = { title: string; time: string; project: string; openCards: number };
-export type ReviewBreakdown = { drafts: number; updates: number; invites: number };
+export type ReviewBreakdown = { drafts: number; updates: number; invites: number; merges: number };
 // a clickable row rendered under the brief text in the chat (open the email, etc.)
 export type BriefItem = { title: string; sub?: string; url?: string; avatar?: string; color?: string; cta?: string };
 export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewBreakdown: ReviewBreakdown; reviewOpening: Render | null; waChannelDown: boolean; draftsWalked: boolean; emailsAwaiting: EmailAwaiting[]; emailMustNotMiss: { from: string; why: string } | null; meetingPrep: MeetingPrep | null; briefItems: BriefItem[]; maybeEmails: number };
@@ -285,7 +285,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   // the user's projects (owner/member only — where a card may be created)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
   const writeIds = (mem || []).filter((m: any) => m.role !== "viewer").map((m: any) => m.project_id);
-  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewBreakdown: { drafts: 0, updates: 0, invites: 0 }, reviewOpening: null, waChannelDown: false, draftsWalked: false, emailsAwaiting: [], emailMustNotMiss: null, meetingPrep: null, briefItems: [], maybeEmails: 0 };
+  if (!writeIds.length) return { created: [], considered: 0, events: [], profileName: "", nudges: [], threadUpdates: [], reviewCount: 0, reviewBreakdown: { drafts: 0, updates: 0, invites: 0, merges: 0 }, reviewOpening: null, waChannelDown: false, draftsWalked: false, emailsAwaiting: [], emailMustNotMiss: null, meetingPrep: null, briefItems: [], maybeEmails: 0 };
   // WhatsApp channel health — 3+ consecutive send failures ⇒ warn (likely token)
   let waChannelDown = false;
   try { const { data: waLink } = await admin.from("whatsapp_link").select("wa_fail_streak,verified").eq("user_id", userId).maybeSingle(); if (waLink?.verified && (Number(waLink.wa_fail_streak) || 0) >= 3) waChannelDown = true; } catch { /* pre-0016 */ }
@@ -485,6 +485,34 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     } catch { /* brief-intelligence best-effort — never block the sweep */ }
   }
 
+  // ---- #2 duplicate detection: two live cards that are the SAME work → offer to
+  // merge (never auto). Cleans the duplicates that already exist (match-before-create
+  // only prevents NEW ones). One model pass over the board; each pair → a walk item.
+  if (boardCards.length >= 2) {
+    try {
+      const listed = boardCards.slice(0, 60).map((c) => `${c.id} = ${c.title}${c.project ? ` · ${c.project}` : ""}`).join("\n");
+      const DUP_TOOL = { name: "find_duplicates", description: "Find PAIRS of cards that are clearly the SAME work (same client + same deliverable, created twice via different channels/manually). Only genuine duplicates — NOT merely related or sequential tasks. Empty if none.", input_schema: { type: "object", properties: { pairs: { type: "array", items: { type: "object", properties: { keep_id: { type: "string", description: "id to KEEP (the more complete/earlier), verbatim from the list" }, merge_id: { type: "string", description: "the duplicate id to merge INTO keep, verbatim" } }, required: ["keep_id", "merge_id"] } } }, required: ["pairs"] } };
+      const resD: any = await anthropic.messages.create({
+        model: "claude-sonnet-5", max_tokens: 800, output_config: { effort: "low" },
+        system: `כרטיסים על הבורד (id = כותרת · פרויקט). מצא זוגות שהם אותה עבודה בדיוק (אותו לקוח + אותו deliverable) — כפילויות אמיתיות בלבד, לא משימות קשורות/עוקבות. החזר זוגות id, או ריק.\n\n${listed}`,
+        tools: [DUP_TOOL], tool_choice: { type: "tool", name: "find_duplicates" },
+        messages: [{ role: "user", content: "Find duplicate cards." }],
+      });
+      const tuD = resD.content.find((b: any) => b.type === "tool_use");
+      const pairs = Array.isArray(tuD?.input?.pairs) ? tuD.input.pairs : [];
+      const seen = new Set<string>();
+      for (const pr of pairs.slice(0, 5)) {
+        const keepId = String(pr?.keep_id || ""); const mergeId = String(pr?.merge_id || "");
+        if (!aliveCardIds.has(keepId) || !aliveCardIds.has(mergeId) || keepId === mergeId) continue;
+        if (seen.has(keepId) || seen.has(mergeId)) continue;   // each card in at most one merge offer
+        seen.add(keepId); seen.add(mergeId);
+        const kt = boardCards.find((b) => b.id === keepId)?.title || "משימה";
+        const mt = boardCards.find((b) => b.id === mergeId)?.title || "משימה";
+        reviewQueue.push({ kind: "merge", keepId, keepTitle: kt, mergeId, mergeTitle: mt });
+      }
+    } catch { /* dup-detection best-effort */ }
+  }
+
   // ---- proactive nudges (P1.5): run the rule engine over the live board ------
   let nudges: string[] = [];
   let meetingPrep: MeetingPrep | null = null;
@@ -559,6 +587,7 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
     drafts: reviewQueue.filter((i) => i.kind === "draft").length,
     updates: reviewQueue.filter((i) => i.kind === "update").length,
     invites: reviewQueue.filter((i) => i.kind === "invite").length,
+    merges: reviewQueue.filter((i) => i.kind === "merge").length,
   };
   return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewBreakdown, reviewOpening, waChannelDown, draftsWalked, emailsAwaiting, emailMustNotMiss, meetingPrep, briefItems, maybeEmails };
 }
@@ -613,6 +642,7 @@ export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): stri
     bd.drafts ? (bd.drafts === 1 ? "טיוטה אחת" : `${bd.drafts} טיוטות`) : "",
     bd.updates ? (bd.updates === 1 ? "עדכון אחד" : `${bd.updates} עדכונים`) : "",
     bd.invites ? (bd.invites === 1 ? "הזמנה אחת" : `${bd.invites} הזמנות`) : "",
+    bd.merges ? (bd.merges === 1 ? "כפילות אחת למיזוג" : `${bd.merges} כפילויות למיזוג`) : "",
   ].filter(Boolean).join(", ");
   const offer = r.reviewCount ? `${b("נעבור על התיבה?")} ${r.reviewCount} ${r.reviewCount === 1 ? "דבר" : "דברים"}${bdParts ? ` — ${bdParts}` : ""}.` : "";
   const waWarn = r.waChannelDown ? "שים לב: ערוץ הוואטסאפ לא מצליח לשלוח — ייתכן שהטוקן פג." : "";

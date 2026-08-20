@@ -8,7 +8,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 export type ReviewItem =
   | { kind: "update"; updateId: string; cardId: string; cardTitle: string; from: string; summary: string; closes?: boolean }
   | { kind: "invite"; title: string; from: string; when: string; url: string }
-  | { kind: "draft"; cardId: string; title: string; project: string };
+  | { kind: "draft"; cardId: string; title: string; project: string }
+  | { kind: "merge"; keepId: string; keepTitle: string; mergeId: string; mergeTitle: string };
 
 export type Action = { id: string; label: string; url?: string };
 // `project` is the current item's board name — carried structured so the web door
@@ -44,6 +45,9 @@ function renderItem(item: ReviewItem, _idx: number, _total: number): Render {
   }
   if (item.kind === "draft") {
     return { text: `הצעה: ${item.title}${item.project ? `\n${item.project}` : ""}`, actions: [{ id: "rv:approve", label: "אשר" }, { id: "rv:reject", label: "דחה" }], project: item.project || undefined };
+  }
+  if (item.kind === "merge") {
+    return { text: `נראה שאלה אותה עבודה:\n• "${item.keepTitle}"\n• "${item.mergeTitle}"\nלמזג לכרטיס אחד?`, actions: [{ id: "rv:merge", label: "מזג" }, { id: "rv:skip", label: "השאר בנפרד" }] };
   }
   // B2 — a reply that reads as "done" (approval arrived / request answered) leads
   // with a close suggestion instead of the neutral update actions.
@@ -85,6 +89,14 @@ async function hydrate(admin: SupabaseClient, item: ReviewItem): Promise<ReviewI
     const { data: c } = await admin.from("card").select("title,archived").eq("id", item.cardId).maybeSingle();
     if (!c || c.archived) return null;
     return { ...item, cardTitle: String(c.title || item.cardTitle) };
+  }
+  if (item.kind === "merge") {
+    const [{ data: k }, { data: g }] = await Promise.all([
+      admin.from("card").select("title,archived").eq("id", item.keepId).maybeSingle(),
+      admin.from("card").select("title,archived").eq("id", item.mergeId).maybeSingle(),
+    ]);
+    if (!k || (k as any).archived || !g || (g as any).archived) return null;  // one already gone/merged → skip
+    return { ...item, keepTitle: String((k as any).title || item.keepTitle), mergeTitle: String((g as any).title || item.mergeTitle) };
   }
   return item; // invite — no card to hydrate
 }
@@ -158,6 +170,9 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
       }
       else if (actionId === "rv:reject") { await admin.from("card").update({ archived: true, archived_at: new Date().toISOString(), removed_by: "assistant" }).eq("id", item.cardId); ack = "נדחה ✓"; }
       else ack = "";
+    } else if (item.kind === "merge") {
+      if (actionId === "rv:merge") { await mergeCards(admin, item.keepId, item.mergeId); ack = `מוזג ✓`; }
+      else ack = "";
     } else {
       ack = actionId === "rv:skip" ? "" : "";
     }
@@ -176,6 +191,22 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
   if (p) parts.push(p);
   parts.push(r.text);
   return { ...r, text: parts.join("\n"), pending: s.queue.length - nc, started: true };
+}
+
+// #2 — merge a duplicate INTO the keeper: re-parent its content (comments,
+// attachments, subtasks, thread-updates) onto the keeper, leave a note, then
+// ARCHIVE the shell (reversible — never hard-deleted). Data is preserved, moved.
+async function mergeCards(admin: SupabaseClient, keepId: string, mergeId: string) {
+  if (!keepId || !mergeId || keepId === mergeId) return;
+  for (const table of ["comment", "attachment", "subtask", "card_thread_update"]) {
+    try { await admin.from(table).update({ card_id: keepId }).eq("card_id", mergeId); } catch { /* table may not exist pre-migration */ }
+  }
+  try {
+    const { data: dup } = await admin.from("card").select("title,description").eq("id", mergeId).maybeSingle();
+    const note = `מוזג מ"${dup?.title || "כפילות"}"${dup?.description ? `: ${String(dup.description).slice(0, 300)}` : ""}`;
+    await admin.from("comment").insert({ card_id: keepId, by_name: "buno", text: note });
+  } catch { /* note best-effort */ }
+  try { await admin.from("card").update({ archived: true, archived_at: new Date().toISOString(), removed_by: "assistant" }).eq("id", mergeId); } catch { /* archive best-effort */ }
 }
 
 async function cardProject(admin: SupabaseClient, cardId: string): Promise<string> {

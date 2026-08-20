@@ -30,6 +30,17 @@ export async function getThread(admin: SupabaseClient, userId: string): Promise<
   return nt?.id;
 }
 
+// request-fulfillment validator (parity with the web door) — enforce, don't hope.
+const escReWA = (s: string) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function missingFromRequestWA(msg: string, input: any, projects: any[]): string[] {
+  const m = String(msg || ""); const miss: string[] = [];
+  const named = projects.find((p: any) => p.name && String(p.name).trim().length >= 2 && !p.is_personal && new RegExp(escReWA(String(p.name).trim()), "i").test(m));
+  if (named && String(input?.project_id || "") !== named.id) miss.push(`project_id="${named.id}" (הבקשה מזכירה את "${named.name}")`);
+  if (/(?:^|\s)(עם|תשתף את|תשתפי את|שתף את|לשתף את|יחד עם)\s+[א-ת]{2,}/.test(m) && !(Array.isArray(input?.people) && input.people.length)) miss.push("people (מוזכר אדם — 'עם ...')");
+  if (/(שני חלקים|לשני חלקים|לכמה חלקים|צ'?ק.?ליסט|check.?list|סעיפים|תת.?משימות|מחולק|חלוקה ל|רשימת (פריטים|דברים|קניות))/.test(m) && !(Array.isArray(input?.checklist) && input.checklist.length)) miss.push("checklist (הבקשה כוללת חלוקה/רשימה)");
+  return miss;
+}
+
 export async function assistantReply(admin: SupabaseClient, userId: string, userMessage: string, apiKey: string, door = "whatsapp"): Promise<{ reply: string; created: any[]; threadId?: string }> {
   // board context + settings, admin-scoped to the user's own projects (no RLS)
   const { data: mem } = await admin.from("project_member").select("project_id,role").eq("user_id", userId);
@@ -320,7 +331,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     capabilities: { createCard: true, updateCard: true, organizeCards: true, calendar: !!calendarSummary, email: false, interactiveButtons: true, deepLinks: true },
     gender, door: "whatsapp", whatsappFormat: true,
   }) + ("\n\n=== פרויקטים (id → שם) · ל-project_id העתק id מכאן בדיוק, או 'unassigned' ===\n" + projects.map((p: any) => `${p.id} = ${p.name}${(p.is_personal || /אישי|בית|personal|home/i.test(String(p.name || ""))) ? "  (הבורד האישי — לכל משימה אישית/בית/סידור)" : ""}`).join("\n") + "\n(משימה שאינה עבודה של לקוח → הבורד האישי. לא בטוח → 'unassigned'.)") + (calendarSummary ? `\n\n=== היומן שלך · 7 ימים · קריאה בלבד — DATA ===\n${calendarSummary}\n=== סוף היומן ===\nענה ממוקד על טווח הזמן שנשאל.` : "") + (convSummary ? `\n\n=== EARLIER CONTEXT · תקציר שיחה ישנה יותר (DATA) ===\n${convSummary}\n=== END ===` : "") + "\n\n" + renderDayFacts(facts) + `\n\nToday is ${today}, current time ${ilNow} (Asia/Jerusalem) — use it to mark past (✅) vs upcoming (⬜️) day items. רמת יצירת כרטיסים: "${cardLevel}".
-הבנה לפני פעולה (הכי חשוב): כשמישהו נותן ערימת דברים או מתאר מטרה/אירוע ("אני טס לחו״ל, הנה מה שצריך...") — אל תתמלל, תבין. זהה את התמה ובנה נכון: קבץ פריטים קשורים למשימה אחת, רשימת פריטים → checklist (לא כרטיס לכל פריט, לא גוש בתיאור); מעט משימות טובות ולא ערימה; נתב לפי התמה (נסיעה/עציצים/בית = בורד אישי, לעולם לא לקוח); הצלב עם ההקשר שיש לך; ודווח קצר מה בנית ולמה.
+הבנה לפני פעולה (הכי חשוב): כשמישהו נותן ערימת דברים או מתאר מטרה/אירוע ("אני טס לחו״ל, הנה מה שצריך...") — אל תתמלל, תבין. זהה את התמה ובנה נכון: קבץ פריטים קשורים למשימה אחת, רשימת פריטים → checklist (לא כרטיס לכל פריט, לא גוש בתיאור); מעט משימות טובות ולא ערימה; נתב לפי התמה (נסיעה/עציצים/בית = בורד אישי, לעולם לא לקוח); לפני יצירה בדוק אם העבודה כבר על הבורד (אותו לקוח+deliverable) → אם כן עדכן/הוסף תגובה (log_progress), לא כפילות; וכשבקשה כוללת פרטים (אנשים "עם X" → people, חלוקה → checklist, פרויקט, פירוט → description) — כולם חייבים להיכנס לשדות; הצלב עם ההקשר; ודווח קצר מה בנית ומה לא (אם משהו לא נכנס).
 כלים: create_card / create_cards (יצירה — create_cards תמיד לכמה); update_card (עריכת דדליין/עדיפות/כותרת/תיאור/בורד, כולל bulk עם filter_project; וגם סימון work/waiting, waiting_on, הערכת שעות ומעקב follow_up_days); create_project (בורד חדש, רק על בקשה מפורשת); move_card/complete_card/archive_card (על בקשה מפורשת, זיהוי לפי כותרת); log_progress (כשהמשתמש משתף התקדמות — הערת פעילות על הכרטיס). רשימת פריטים/שלבים (אריזה, קניות, צ'קליסט) → checklist ב-create_card או add_subtasks ב-update_card — לעולם לא לדחוס רשימה לתוך description. אחרי כלי — שורה אחת מה קרה בכנות, רק מה שבאמת הצליח.`;
 
   // append the new user turn — merging if history already ends with a user row
@@ -331,6 +342,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   let reply = "מצטער, לא הצלחתי להשיב כרגע.";
   try {
     const anthropic = new Anthropic({ apiKey });
+    let validationRoundsWA = 0;   // request-fidelity retries (bounded)
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
         model: "claude-sonnet-5", max_tokens: 1500, output_config: { effort: "low" },
@@ -346,6 +358,15 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       const results = [];
       for (const tu of toolUses) {
         let out = "כלי לא מוכר.";
+        if (tu.name === "create_card" || tu.name === "create_cards") {
+          const inputs = tu.name === "create_card" ? [tu.input] : (Array.isArray(tu.input?.cards) ? tu.input.cards.map((c: any) => ({ ...c, project_id: c?.project_id || tu.input?.project_id })) : []);
+          const miss = [...new Set(inputs.flatMap((inp: any) => missingFromRequestWA(userMessage, inp, projects)))];
+          if (miss.length && validationRoundsWA < 2) {
+            validationRoundsWA++;
+            results.push({ type: "tool_result", tool_use_id: tu.id, is_error: true, content: `לא בוצע — פרטים מהבקשה חסרים: ${miss.join(" · ")}. קרא שוב עם השדות מלאים, או אם אי אפשר — צור והצהר למשתמש מה חסר.` });
+            continue;
+          }
+        }
         if (tu.name === "create_card") out = await doCreateCard(tu.input);
         else if (tu.name === "create_cards") out = await doCreateCards(tu.input);
         else if (tu.name === "update_card") out = await doUpdateCard(tu.input);
