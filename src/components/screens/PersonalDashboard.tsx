@@ -54,6 +54,10 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   const dayLimit = single ? (months[0] === curYm ? Math.min(daysInMonth(months[0]), new Date(now).getDate() + 2) : daysInMonth(months[0])) : 0;
   // buckets: day-timestamps in day-mode, days-of-month for a single month, else months.
   const buckets: (number | string)[] = dayMode ? rangeDays(range!.fromMs, range!.toMs) : single ? Array.from({ length: dayLimit }, (_, i) => i + 1) : months;
+  // a SINGLE-day view (היום / אתמול) → a lone vertical bar says nothing; show instead
+  // which projects were worked that day and how many hours each took (horizontal bars).
+  const singleDay = dayMode && buckets.length === 1;
+  const maxDaySec = byHours[0]?.sec || 1;
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const showTip = (e: any, text: string) => setTip({ x: e.clientX, y: e.clientY, text });
   const bucketData = buckets.map((bk) => {
@@ -127,22 +131,36 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
               )}
             </div>
             <div className="adk-panel-block">
-              <p className="adk-block-title">שעות עבודה לפי {dayMode || single ? "יום" : "חודש"} · צבע לפי פרוייקט</p>
-              <div className="adk-barchart" style={{ direction: "ltr" }}>
-                {bucketData.map((m) => (
-                  <div className="adk-bc-col" key={String(m.bk)}>
-                    <div className="adk-bc-track">
-                      <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
-                        {m.segs.map((s: any) => (
-                          <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%`, cursor: "pointer" }}
-                            onMouseMove={(e) => showTip(e, `${s.cl.name} · ${fmtHours(s.sec)} שע׳`)} onMouseLeave={() => setTip(null)} />
-                        ))}
+              <p className="adk-block-title">{singleDay ? `שעות לפי פרוייקט · ${scopeLabel}` : `שעות עבודה לפי ${dayMode || single ? "יום" : "חודש"} · צבע לפי פרוייקט`}</p>
+              {singleDay ? (
+                byHours.length === 0 ? <div className="adk-arch-empty">אין עבודה רשומה {scopeLabel}</div> : (
+                  <div className="adk-daybreak">
+                    {byHours.map((p) => (
+                      <div className="adk-daybreak-row" key={p.cl.id}>
+                        <span className="nm"><span className="sw" style={{ background: p.cl.color }} />{p.cl.name}</span>
+                        <span className="track"><span className="fill" style={{ width: `${(p.sec / maxDaySec) * 100}%`, background: p.cl.color }} /></span>
+                        <span className="hrs">{fmtHours(p.sec)} שע׳</span>
                       </div>
-                    </div>
-                    <div className="adk-bc-x">{dayMode ? dayShort(m.bk as number) : single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )
+              ) : (
+                <div className="adk-barchart" style={{ direction: "ltr" }}>
+                  {bucketData.map((m) => (
+                    <div className="adk-bc-col" key={String(m.bk)}>
+                      <div className="adk-bc-track">
+                        <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
+                          {m.segs.map((s: any) => (
+                            <div key={s.cl.id} style={{ background: s.cl.color, height: `${(s.sec / (m.total || 1)) * 100}%`, cursor: "pointer" }}
+                              onMouseMove={(e) => showTip(e, `${s.cl.name} · ${fmtHours(s.sec)} שע׳`)} onMouseLeave={() => setTip(null)} />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="adk-bc-x">{dayMode ? dayShort(m.bk as number) : single ? m.bk : `${String(m.bk).slice(5)}/${String(m.bk).slice(2, 4)}`}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

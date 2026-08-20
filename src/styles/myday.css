@@ -48,3 +48,12 @@
 .adk-resched-ok{text-align:center;padding:8px 0;}
 .adk-resched-ok-i{width:46px;height:46px;margin:0 auto 12px;border-radius:50%;background:var(--marker);color:var(--ink);display:grid;place-items:center;font-size:24px;font-weight:900;}
 .adk-resched-ok .adk-resched-sub{text-align:center;}
+
+/* ---- dashboard single-day breakdown (projects worked that day) ------------- */
+.adk-daybreak{display:flex;flex-direction:column;gap:12px;padding:4px 0;}
+.adk-daybreak-row{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;align-items:center;gap:12px;}
+.adk-daybreak-row .nm{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.adk-daybreak-row .nm .sw{width:10px;height:10px;border-radius:3px;flex:none;}
+.adk-daybreak-row .track{height:14px;background:var(--surface-2,var(--accent-soft));border-radius:7px;overflow:hidden;}
+.adk-daybreak-row .fill{display:block;height:100%;border-radius:7px;min-width:3px;transition:width .3s ease;}
+.adk-daybreak-row .hrs{font-weight:800;font-size:13px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;}
