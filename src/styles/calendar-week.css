@@ -119,3 +119,5 @@
 .adk-pcard.cal .adk-cal.g{flex:1;min-height:0;display:flex;flex-direction:column;}
 .adk-pcard.cal .adk-cal-grid.g{flex:1;min-height:0;}
 .adk-pcard.cal .adk-cal-cell.g{min-height:0;overflow:hidden;}
+.adk-bc-col.clickable{cursor:pointer;border-radius:8px;transition:background .12s ease;}
+.adk-bc-col.clickable:hover{background:var(--accent-soft);}

@@ -67,7 +67,15 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   });
   const maxB = Math.max(1, ...bucketData.map((b) => b.total));
 
-  const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
+  const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period.startsWith("d:") ? `ב־${new Date(period.slice(2) + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "long" })}` : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
+  // clicking a bar drills one level down: a day-bar (week) or day-of-month (single
+  // month) → that specific day; a month-bar (quarter/12m) → that month.
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const drillTo = (bk: number | string) => {
+    if (dayMode) { const dt = new Date(bk as number); setPeriod(`d:${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`); }
+    else if (single) { setPeriod(`d:${months[0]}-${pad(Number(bk))}`); }
+    else { setPeriod(String(bk)); }
+  };
   const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   async function onPhoto(e: any) { const f = e.target.files?.[0]; if (!f) return; try { const d = await resizeImage(f, 256, "image/jpeg", 0.8); onSetPhoto(d); } catch { /* ignore */ } }
 
@@ -147,7 +155,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
               ) : (
                 <div className="adk-barchart" style={{ direction: "ltr" }}>
                   {bucketData.map((m) => (
-                    <div className="adk-bc-col" key={String(m.bk)}>
+                    <div className="adk-bc-col clickable" key={String(m.bk)} onClick={() => drillTo(m.bk)} title={dayMode || single ? "פתח את היום" : "פתח את החודש"}>
                       <div className="adk-bc-track">
                         <div className="adk-bc-stack" style={{ height: `${(m.total / maxB) * 100}%` }}>
                           {m.segs.map((s: any) => (

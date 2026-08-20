@@ -61,6 +61,8 @@ export function dayRange(period: string, now: number): { fromMs: number; toMs: n
   if (period === "day") return { fromMs: t, toMs: t + DAY_MS - 1 };
   if (period === "yesterday") return { fromMs: t - DAY_MS, toMs: t - 1 };
   if (period === "week") { const from = t - new Date(t).getDay() * DAY_MS; return { fromMs: from, toMs: from + 7 * DAY_MS - 1 }; }
+  // a specific calendar day, "d:YYYY-MM-DD" (drilled into from a bar-chart column).
+  if (period.startsWith("d:")) { const ms = startOfDayMs(Date.parse(period.slice(2) + "T00:00:00")); return { fromMs: ms, toMs: ms + DAY_MS - 1 }; }
   return null;
 }
 // the day-midnight timestamps inside a range, oldest → newest (bar-chart buckets).
@@ -75,6 +77,7 @@ export function dayShort(ms: number): string {
 // header range label for a day period.
 export function dayRangeLabel(period: string, now: number): string {
   const r = dayRange(period, now); if (!r) return "";
+  const oneDay = (r.toMs - r.fromMs) < DAY_MS;   // today / yesterday / a specific day
   const fmt = (ms: number) => new Date(ms).toLocaleDateString("he-IL", { day: "numeric", month: "long" });
-  return (period === "day" || period === "yesterday") ? new Date(r.fromMs).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `${fmt(r.fromMs)} – ${fmt(r.toMs)}`;
+  return oneDay ? new Date(r.fromMs).toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `${fmt(r.fromMs)} – ${fmt(r.toMs)}`;
 }

@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 import { ymLabel } from "../../lib/date";
 
 export function periodLabel(value: string) {
+  if (value.startsWith("d:")) return new Date(value.slice(2) + "T00:00:00").toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
   return value === "day" ? "היום" : value === "yesterday" ? "אתמול" : value === "week" ? "השבוע" : value === "month" ? "החודש" : value === "quarter" ? "רבעון (3 חודשים)" : value === "12m" ? "שנה (12 חודשים)" : ymLabel(value);
 }
 
