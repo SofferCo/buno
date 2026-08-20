@@ -326,6 +326,9 @@ export function CardPanel({ card, now, assets, client, projects, onMoveProject, 
           </>)}
         </div>
         <div style={{ marginInlineStart: "auto", display: "flex", gap: 8 }}>
+          {/* a draft (e.g. an email/Figma-born card) is a full task — approve it right
+              here so it becomes workable & completable, not a stuck "email record". */}
+          {!viewer && card.draft && <button className="adk-btn done" onClick={() => onChange({ draft: null })}>✓ אשר משימה</button>}
           {!viewer && onComplete && card.activeColumn !== "col-done" && !card.draft && <button className="adk-btn done" onClick={onComplete}>✓ סיימתי</button>}
           <button className="adk-btn primary" onClick={onClose}>שמור וסגור</button>
         </div>

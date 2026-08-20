@@ -24,7 +24,7 @@ const SUBMIT_TOOL = {
           type: "object",
           properties: {
             title: { type: "string", description: "Hebrew, ≤10 words, verb-first." },
-            context: { type: "string", description: "One Hebrew sentence naming the source (who/what)." },
+            context: { type: "string", description: "One Hebrew sentence naming the source (who/what). Precise verbs: someone who @-mentioned / tagged you in Figma or a comment → 'תייג' (NOT 'ציין'); a request → 'ביקש'; an approval → 'אישר'." },
             project_id: { type: "string", description: "The id of the matching project — copied verbatim from the 'פרויקטים (id → שם)' list in the system prompt, or 'unassigned' if none fits. NEVER a name, NEVER invented. A personal/home/errand email → the personal board's id, never a client's." },
             orgName: { type: "string", description: "If the sender is from a real company/organization (a business, client, or brand) and NO existing project fits, put the organization's display name here so buno can open a board for it. Empty for personal contacts, or when 'project' already matches." },
             threadId: { type: "string", description: "Copy the threadId verbatim." },
@@ -222,7 +222,7 @@ const SUBMIT_UPDATES_TOOL = {
             substantive: { type: "boolean", description: "true if there is a real update; false ONLY when both the reply AND its quoted content have nothing new (pure thank-you/ack)." },
             closes: { type: "boolean", description: "true if this update means the card's work is essentially DONE — e.g. the awaited approval arrived, the request was answered/fulfilled, the deliverable was accepted. Default false." },
             from: { type: "string", description: "Sender display name." },
-            summary: { type: "string", description: "One short Hebrew sentence: what's new." },
+            summary: { type: "string", description: "One short Hebrew sentence: what's new. Precise verbs — tagged/@-mentioned = 'תייג' (not 'ציין'); requested = 'ביקש'; approved = 'אישר'." },
           },
           required: ["threadId", "substantive"],
         },
