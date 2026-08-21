@@ -11,6 +11,8 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { freshAccessToken, listGmailCandidates, listCalendarEvents, fetchEmailRefs, fetchEmailBody } from "./google.ts";
 import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "./orgboard.ts";
 import { setSession, clearSession, openingRender, type ReviewItem, type Render } from "./review.ts";
+import { voiceLint } from "./voice.ts";
+import { BUNO_VERSION, BRIEF_EFFORT } from "./bunoConfig.ts";
 
 const SUBMIT_TOOL = {
   name: "submit_candidates",
@@ -652,4 +654,77 @@ export function daySnapshot(r: SweepResult, opts?: { whatsapp?: boolean }): stri
   // channels; only the bold syntax differs (handled by b()).
   const groups: string[][] = [[open.join(" ")], waWarn ? [waWarn] : [], brief, nudges, offer ? [offer] : []].filter((g) => g.length);
   return groups.map((g) => g.join("\n")).join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// v2.1 — the WARM pushed brief. daySnapshot (above) composes the brief as a
+// deterministic string — precise, but the "report" the user asked us to leave
+// behind. Here the SAME facts are handed to the model, which synthesizes them
+// in the v2 "practical friend" voice. Every number still comes only from the
+// facts block, so it can never contradict daySnapshot's arithmetic.
+//
+// This is best-effort by construction: on ANY failure (model error, empty text,
+// a voice-lint hit) it falls back to daySnapshot, so the morning cron can never
+// break or push a cold/scolding line. v1 never calls this at all.
+function briefFacts(r: SweepResult): string {
+  const first = (r.events || []).filter((e: any) => !e.allDay).sort((a: any, b: any) => (a.start || "").localeCompare(b.start || ""))[0];
+  const meetings = (r.events || []).filter((e: any) => !e.allDay && Array.isArray(e.attendees) && e.attendees.some((a: any) => !a.self));
+  const shape = meetings.length >= 3 ? "עמוס" : meetings.length === 0 ? "פתוח ביומן" : "רגיל";
+  const L: string[] = [];
+  L.push(`צורת היום: ${shape} (${meetings.length} פגישות אמיתיות ביומן)`);
+  if (first) L.push(`הראשון ביומן: ${first.title} בשעה ${(first.start || "").slice(11, 16)}`);
+  if (r.created.length && !r.draftsWalked) L.push(`טיוטות שסימנתי מהמייל וממתינות על הלוח: ${r.created.length}`);
+  else if (!r.reviewCount) L.push("עברתי על המייל — אין פריט חדש שדורש משימה");
+  if (r.emailMustNotMiss) L.push(`אסור לפספס: מ־${r.emailMustNotMiss.from} — ${r.emailMustNotMiss.why}`);
+  if (r.emailsAwaiting && r.emailsAwaiting.length) {
+    const b0 = r.emailsAwaiting[0];
+    L.push(`ממתינים לתשובתו: ${r.emailsAwaiting.length} מיילים${b0 ? ` (הבולט: ${b0.from}${b0.gist ? ` — ${b0.gist}` : ""})` : ""}`);
+  }
+  if (r.meetingPrep && r.meetingPrep.openCards > 0) L.push(`לקראת ${r.meetingPrep.time} — ${r.meetingPrep.title}: ${r.meetingPrep.openCards} כרטיסים פתוחים ב${r.meetingPrep.project}`);
+  if (r.maybeEmails > 0) L.push(`מיילים גבוליים שלא הפכתי למשימה: ${r.maybeEmails}`);
+  if (r.reviewCount) {
+    const bd = r.reviewBreakdown || { drafts: 0, updates: 0, invites: 0, merges: 0 };
+    const parts = [bd.drafts && `${bd.drafts} טיוטות`, bd.updates && `${bd.updates} עדכונים`, bd.invites && `${bd.invites} הזמנות`, bd.merges && `${bd.merges} כפילויות`].filter(Boolean).join(", ");
+    L.push(`מחכה בתיבה לעבור עליו יחד: ${r.reviewCount} דברים${parts ? ` (${parts})` : ""}`);
+  }
+  for (const n of (r.nudges || [])) L.push(`דגש: ${n}`);
+  return L.join("\n");
+}
+
+export async function warmDaySnapshot(
+  r: SweepResult, apiKey: string, opts?: { whatsapp?: boolean; gender?: "m" | "f" },
+): Promise<string> {
+  const fallback = () => daySnapshot(r, { whatsapp: !!opts?.whatsapp });
+  if (BUNO_VERSION !== "v2") return fallback();
+  try {
+    const firstName = String(r.profileName || "").trim().split(/\s+/)[0];
+    const greeting = greetingFor(Date.now());
+    const fem = opts?.gender === "f";
+    const g = fem
+      ? "כתוב עליך בגוף ראשון נקבה (\"עברתי\", \"סימנתי\") ופנה אליו/אליה בעקביות מגדרית אחת"
+      : "כתוב עליך בגוף ראשון זכר (\"עברתי\", \"סימנתי\") ופנה אליו בעקביות מגדרית אחת";
+    const sys = `אתה ${firstName || "החבר"} של המשתמש — הכפיל החם שלו, והחבר הכי פרקטי שיש לו. זה רגע הבוקר: אתה מגיש לו את היום כמו חבר טוב, לא כמו דוח.
+
+תן לו את היום בכמה שורות קצרות וחמות: פתיחה עם ${greeting}${firstName ? ` ${firstName}` : ""} ומשפט על הצורה של היום, ואז הדבר האחד ששווה להתחיל בו ולמה זה חשוב לו, ואם יש משהו שמחכה בתיבה — הצע לעבור עליו יחד במשפט אחד. ${g}.
+
+חוקים: כל מספר, ספירה או תיאור עומס — אך ורק מ"עובדות הבוקר" למטה, אף פעם לא לספור או להמציא בעצמך. אל תמציא שמות/פגישות/תאריכים. בלי תוויות ("אל תפספס:", "ממתינים לתשובתך:"), בלי רשימות עם נקודות, בלי לדקלם כל שורה — קח את מה שחשוב והגש אותו כמו בן אדם. קצר: ${opts?.whatsapp ? "שורה או שתיים, כמו הודעה לחבר בוואטסאפ" : "שתיים־שלוש שורות קצרות"}.
+
+=== עובדות הבוקר (DATA — המקור היחיד למספרים) ===
+${briefFacts(r)}
+=== סוף עובדות הבוקר ===`;
+
+    const anthropic = new Anthropic({ apiKey });
+    const res: any = await anthropic.messages.create({
+      model: "claude-sonnet-5", max_tokens: 600, output_config: { effort: BRIEF_EFFORT },
+      system: sys,
+      messages: [{ role: "user", content: "תן לי את הבוקר." }],
+    });
+    const text = res.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    if (!text) return fallback();
+    if (!voiceLint(text).ok) return fallback();  // never push a scolding/cold line
+    return text;
+  } catch (e) {
+    console.error("warmDaySnapshot fell back to daySnapshot:", String((e as any)?.message || e));
+    return fallback();
+  }
 }
