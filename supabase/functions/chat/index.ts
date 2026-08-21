@@ -15,6 +15,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
+import { CHAT_EFFORT } from "../_shared/bunoConfig.ts";
 import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening, mergeCards } from "../_shared/review.ts";
@@ -533,7 +534,7 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
       const res: any = await anthropic.messages.create({
         model: "claude-sonnet-5",
         max_tokens: 2048,
-        output_config: { effort: "low" },
+        output_config: { effort: CHAT_EFFORT }, // v2: "high" (was "low" in v1 — see bunoConfig)
         // cache the tools+system prefix: reused across the 2–6 tool-loop hops of a
         // single turn, and across turns while the board is unchanged (~0.1× reads).
         system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
