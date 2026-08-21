@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { systemPrompt } from "./voice.ts";
+import { CHAT_EFFORT } from "./bunoConfig.ts";
 import { summarizeBoard } from "./boardContext.ts";
 import { computeDayFacts, renderDayFacts } from "./dayFacts.ts";
 import { mergeCards } from "./review.ts";
@@ -91,7 +92,13 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
   const created: any[] = [];
   const changed: string[] = [];
   const doneColIds = new Set(cols.filter((c: any) => c.is_done).map((c: any) => c.id));
-  const findCard = (q: string) => matchCard(cards.filter((c: any) => !c.archived && !doneColIds.has(c.column_id)), q);
+  // WhatsApp runs entirely as service_role (RLS bypassed), so the DB viewer
+  // guard (0006) never fires here. findCard backs ONLY mutating tools (move /
+  // complete / archive / update / log_progress / merge), so restrict its
+  // candidates to projects where the user has a write role — a viewer can read
+  // the board but can't mutate a shared project's cards through the twin.
+  const writeIdSet = new Set(writeIds);
+  const findCard = (q: string) => matchCard(cards.filter((c: any) => !c.archived && !doneColIds.has(c.column_id) && writeIdSet.has(c.project_id)), q);
   async function doCreateCard(input: any): Promise<string> {
     const title = String(input?.title || "").trim(); if (!title) return "לא נוצר: חסרה כותרת.";
     // 🔴2 — assign by EXACT project_id from the enum; unassigned/invalid → the
@@ -354,7 +361,7 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
     let validationRoundsWA = 0;   // request-fidelity retries (bounded)
     for (let hop = 0; hop < 6; hop++) {
       const res: any = await anthropic.messages.create({
-        model: "claude-sonnet-5", max_tokens: 1500, output_config: { effort: "low" },
+        model: "claude-sonnet-5", max_tokens: 1500, output_config: { effort: CHAT_EFFORT }, // v2: "high" (was "low")
         // cache the tools+system prefix (reused across tool-loop hops + stable turns).
         system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }], tools: CORE_TOOLS, messages,
       });

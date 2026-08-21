@@ -28,6 +28,16 @@ Deno.serve(async (req) => {
   const link = String(body?.link || "").trim();
   const role = String(body?.role || "member");
   if (!to || !link) return json({ error: "missing to/link" }, 400);
+  // the link is put into a button sent from buno's verified domain — so it must
+  // be a buno URL, never an attacker-supplied destination. Without this an
+  // authenticated free account could mass-mail phishing links with buno's
+  // sender reputation. Allowed hosts are the app origins (override via
+  // INVITE_ALLOWED_ORIGINS, comma-separated, if the app moves).
+  const allowedOrigins = (Deno.env.get("INVITE_ALLOWED_ORIGINS") || "https://www.buno.io,https://buno.io")
+    .split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+  let linkOk = false;
+  try { const u = new URL(link); linkOk = allowedOrigins.includes(`${u.protocol}//${u.host}`); } catch { linkOk = false; }
+  if (!linkOk) return json({ error: "invalid link host" }, 400);
 
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return json({ sent: false, reason: "no_resend_key" }); // inert until configured — the copy-link still works

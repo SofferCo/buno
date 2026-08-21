@@ -10,6 +10,8 @@
 // chat doors already load (cards, cols, today's events) — nothing here needs a
 // new query, so no number can ever contradict the board. Richer signals that
 // need extra data (per-client hours, almost-closed, awaited replies) are Wave B.
+import { BUNO_VERSION } from "./bunoConfig.ts";
+
 const DAY_MS = 864e5;
 
 export type CoreTask = { title: string; reason: string };
@@ -174,8 +176,13 @@ export function renderDayFacts(f: DayFacts): string {
   if (f.topClient) L.push(`הלקוח עם הכי הרבה זמן שנצבר לאחרונה: ${f.topClient}`);
   if (f.openByProject.length) L.push(`משימות פתוחות לפי פרויקט: ${f.openByProject.map((p) => `${p.name} ${p.open}`).join(" · ")}`);
   if (load) L.push(`עומס היום: ${load}`);
-  return `=== עובדות היום · מחושב בקוד · המקור היחיד למספרים, לליבה ולתיאור העומס (DATA) ===
+  const facts = `=== עובדות היום · מחושב בקוד · המקור היחיד למספרים, לליבה ולתיאור העומס (DATA) ===
 ${L.join("\n")}
-=== סוף עובדות היום ===
-כל מספר, ספירה, "הליבה של היום", או תיאור עומס (עמוס/רגיל/פנוי) בתשובה — אך ורק מהשדות שכאן. אל תספור את הלוח בעצמך, אל תעריך, ואל תשחזר פורמט של בריף עם מספרים שאינם כאן. שורה שנשענת על שדה שלא קיים למעלה — לא נכתבת. מותר ורצוי לפרש עובדה שכן קיימת בחום אנושי ("פגישה אחת — הבוקר פנוי לעבודה עמוקה").`;
+=== סוף עובדות היום ===`;
+  // v2: the facts are the FLOOR for any number, but the model synthesizes the
+  // brief warmly like a friend — not a recital. v1: strict "recite only".
+  const closing = BUNO_VERSION === "v2"
+    ? `אלה העובדות שלך — כל מספר, ספירה, "הליבה" או תיאור עומס נשען אך ורק עליהן (אל תספור את הלוח בעצמך, אל תמציא מספרים או תאריכים). אבל אל תדקלם אותן: קח אותן ותגיש לו את היום כמו חבר — שורה על הצורה של היום, הדבר האחד ששווה להתחיל בו ולמה זה חשוב לו, ואז שחרר אותו. חם, קצר, בלי תוויות ("עומס: פנוי") ובלי רשימה של הכל.`
+    : `כל מספר, ספירה, "הליבה של היום", או תיאור עומס (עמוס/רגיל/פנוי) בתשובה — אך ורק מהשדות שכאן. אל תספור את הלוח בעצמך, אל תעריך, ואל תשחזר פורמט של בריף עם מספרים שאינם כאן. שורה שנשענת על שדה שלא קיים למעלה — לא נכתבת. מותר ורצוי לפרש עובדה שכן קיימת בחום אנושי ("פגישה אחת — הבוקר פנוי לעבודה עמוקה").`;
+  return `${facts}\n${closing}`;
 }
