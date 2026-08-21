@@ -7,7 +7,8 @@
 // snapshot is a private chat message, gathered content is DATA.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
-import { sweepUser, daySnapshot } from "../_shared/sweep.ts";
+import { sweepUser, daySnapshot, warmDaySnapshot } from "../_shared/sweep.ts";
+import { BUNO_VERSION } from "../_shared/bunoConfig.ts";
 import { sendWhatsApp, sendRender, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
 
 // item 9 — fold older conversation into a rolling per-user summary (updated nightly).
@@ -69,7 +70,15 @@ Deno.serve(async (req) => {
         const { data: t } = await admin.from("assistant_thread").insert({ user_id: userId }).select("id").single();
         threadId = t?.id;
       }
-      const snapshot = daySnapshot(r);
+      // v2 hands the SAME facts to the model to synthesize a warm brief (one call,
+      // reused for both channels); v1 keeps the deterministic daySnapshot. warm*
+      // falls back to daySnapshot internally, so this never breaks the cron.
+      let gender: "m" | "f" | undefined;
+      if (BUNO_VERSION === "v2") {
+        const { data: st } = await admin.from("assistant_settings").select("gender").eq("user_id", userId).maybeSingle();
+        gender = st?.gender === "f" ? "f" : st?.gender === "m" ? "m" : undefined;
+      }
+      const snapshot = BUNO_VERSION === "v2" ? await warmDaySnapshot(r, apiKey, { gender }) : daySnapshot(r);
       if (threadId) {
         await admin.from("assistant_message").insert({
           thread_id: threadId, role: "assistant", door: "sweep",
@@ -85,7 +94,10 @@ Deno.serve(async (req) => {
           // item 14 — ONE morning message: the snapshot text (which already carries
           // the single offer line) + one button. No separate second "shall we?" ask.
           // WhatsApp gets the formatted variant (*bold* labels + blank lines).
-          const open = { text: daySnapshot(r, { whatsapp: true }), actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
+          // v2: reuse the warm brief already synthesized above (short prose reads
+          // fine on WhatsApp) — no second model call. v1: the formatted variant.
+          const waText = BUNO_VERSION === "v2" ? snapshot : daySnapshot(r, { whatsapp: true });
+          const open = { text: waText, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
           const s = await sendRender(link.phone, open); waSent = s.ok;
           const streak = await noteWaSend(admin, userId, s);
           if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waErrorReason(s), "streak", streak);

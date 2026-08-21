@@ -17,7 +17,8 @@ BUNO_VERSION = "v1" | "v2"     # unset / anything-but-"v1" → v2 (default)
 | Voice | Precise but cold — "a report, not a friend". Prohibition-heavy prompt (`systemPromptV1`). | Warm "practical friend" twin (`systemPromptV2`) — hands you the day like a friend who's incredibly organized. |
 | Live-chat effort (`CHAT_EFFORT`) | `low` | `high` |
 | Brief effort (`BRIEF_EFFORT`) | `low` | `high` |
-| Morning brief (`dayFacts.ts`) | Recite the computed facts only — no synthesis. | Facts are the FLOOR for every number, but the brief is *synthesized* warmly — shape of the day, the one first move, then set him loose. |
+| On-demand brief (`dayFacts.ts`, via chat/WhatsApp) | Recite the computed facts only — no synthesis. | Facts are the FLOOR for every number, but the brief is *synthesized* warmly — shape of the day, the one first move, then set him loose. |
+| Pushed morning brief (7am cron, `sweep.ts`) | `daySnapshot()` — a deterministic string ("יום עמוס. הראשון ביומן: … אל תפספס: …"). The classic report. | `warmDaySnapshot()` — the SAME facts handed to the model to synthesize in the friend voice. Falls back to `daySnapshot()` on any error/lint-hit, so the cron never breaks. |
 
 ### Why v2
 
@@ -44,11 +45,13 @@ Both voices are selected through `BUNO_VERSION`; no caller hard-codes a version.
 - `bunoConfig.ts` — the switch + `CHAT_EFFORT` / `BRIEF_EFFORT`.
 - `chat/index.ts`, `assistantCore.ts` (WhatsApp door) — model effort reads
   `CHAT_EFFORT`.
-- `dayFacts.ts` — the morning-brief closing instruction is version-aware.
-- `sweep.ts` is intentionally **not** versioned: its model calls are backend
-  triage/classification (email→card matching, dedup) that emit structured data
-  via forced tool-use, not the user-facing voice. Their effort is tuned for
-  that job and is independent of the voice version.
+- `dayFacts.ts` — the on-demand-brief closing instruction is version-aware.
+- `sweep.ts` — `warmDaySnapshot()` (v2.1) synthesizes the **pushed** 7am brief
+  via the model at `BRIEF_EFFORT`, with `daySnapshot()` as the v1 voice and the
+  universal fallback. `morning-sweep` calls one or the other on `BUNO_VERSION`.
+  The sweep's OTHER model calls stay unversioned: they're backend
+  triage/classification (email→card matching, dedup) via forced tool-use, not
+  the user-facing voice.
 
 ## Deploy v2 (default)
 
