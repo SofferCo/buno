@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     supabase.from("card").select("*"),                       // '*' tolerates pre-migration schema (card_type, waiting_on)
     supabase.from("board_column").select("id,project_id,key,title,position"),
     supabase.from("profile").select("name").eq("id", user.id).maybeSingle(),
-    supabase.from("assistant_settings").select("cards,gender").eq("user_id", user.id).maybeSingle(),
+    supabase.from("assistant_settings").select("cards,calendar,gender").eq("user_id", user.id).maybeSingle(),
     supabase.from("comment").select("card_id,by_name,text,created_at"),
     supabase.from("attachment").select("card_id,type,name"),
   ]);
@@ -116,6 +116,10 @@ Deno.serve(async (req) => {
   const attachByCard = new Map<string, any[]>();
   for (const a of att.data || []) (attachByCard.get(a.card_id) || attachByCard.set(a.card_id, []).get(a.card_id))!.push(a);
   const cardLevel = (asst.data?.cards || "draft") as "suggest" | "draft" | "act"; // server-side matrix
+  // calendar writes are irreversible AND visible to attendees (iron rule #3):
+  // enforce the calendar matrix level in CODE, not just the prompt. Only "act"
+  // executes; otherwise buno proposes and waits for the user to confirm.
+  const calLevel = (asst.data?.calendar || "draft") as "suggest" | "draft" | "act";
   // item 11 — persisted gender (masculine default). Auto-switch silently to match
   // how the user ACTUALLY addresses buno — BIDIRECTIONAL, so a wrong guess self-heals
   // on the next clearly-gendered message. Only UNAMBIGUOUS markers count: feminine =
@@ -498,6 +502,14 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
       if (cands.length > 1) return `יש כמה פגישות שמתאימות ל"${input.match}": ${cands.slice(0, 4).map((c: any) => c.title).join(", ")} — תגיד לי איזו במדויק.`;
       const ev = cands[0];
       const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+      // GATE (iron rule #3): a calendar write notifies attendees and can't be
+      // undone. Below "act" buno never fires it automatically — it names the
+      // exact change and its attendee-visible effect, and stops. The user
+      // raises the calendar level to "act" (Settings) to allow direct action.
+      if (calLevel !== "act") {
+        const what = action === "cancel" ? `לבטל את "${ev.title}"` : action === "move" ? `להעביר את "${ev.title}"` : `לדחות את "${ev.title}"`;
+        return `${what}? זו פעולה ביומן שתשלח עדכון לכל המשתתפים — אני לא מבצע אותה לבד. אשר לי כאן ואני מטפל, או שנה את רמת ההרשאה ליומן ל"פועל" בהגדרות.`;
+      }
       if (action === "postpone") { const r = await shiftCalendarEvent(access, ev.id, Number(input?.minutes) || 30); if (!r.ok) return "לא הצלחתי לדחות: " + r.error; calendarChanged = true; return `דחיתי את "${ev.title}" ל-${hhmm(r.start!)} — המשתתפים עודכנו.`; }
       if (action === "move") { if (!input?.start_iso) return "כדי לתזמן מחדש אני צריך שעה חדשה — מתי?"; const r = await moveCalendarEvent(access, ev.id, String(input.start_iso)); if (!r.ok) return "לא הצלחתי לתזמן מחדש: " + r.error; calendarChanged = true; return `העברתי את "${ev.title}" ל-${new Date(r.start!).toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })} — המשתתפים עודכנו.`; }
       if (action === "cancel") { const r = await deleteCalendarEvent(access, ev.id); if (!r.ok) return "לא הצלחתי לבטל: " + r.error; calendarChanged = true; return `ביטלתי את "${ev.title}" — המשתתפים קיבלו עדכון.`; }
