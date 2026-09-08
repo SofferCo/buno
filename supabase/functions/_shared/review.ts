@@ -31,6 +31,28 @@ export async function getSession(admin: SupabaseClient, userId: string): Promise
 }
 export async function clearSession(admin: SupabaseClient, userId: string) { try { await admin.from("review_session").delete().eq("user_id", userId); } catch { /* ok */ } }
 
+// ---- declined merges (0027) --------------------------------------------------
+// a pair the user chose to keep apart, normalized a<b so A/B == B/A.
+export function pairKey(a: string, b: string): string { return a < b ? `${a}|${b}` : `${b}|${a}`; }
+export async function declineMerge(admin: SupabaseClient, userId: string, a: string, b: string) {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  try { await admin.from("merge_declined").upsert({ user_id: userId, card_a: x, card_b: y }, { onConflict: "user_id,card_a,card_b" }); } catch { /* pre-0027 */ }
+}
+export async function declinedPairs(admin: SupabaseClient, userId: string): Promise<Set<string>> {
+  try {
+    const { data } = await admin.from("merge_declined").select("card_a,card_b").eq("user_id", userId);
+    return new Set((data || []).map((r: any) => pairKey(String(r.card_a), String(r.card_b))));
+  } catch { return new Set(); }
+}
+// a stable identity per walk item — used to fold a fresh scan into an in-progress
+// walk without re-offering what's already queued.
+export function itemKey(it: ReviewItem): string {
+  if (it.kind === "merge") return "merge:" + pairKey(it.keepId, it.mergeId);
+  if (it.kind === "draft") return "draft:" + it.cardId;
+  if (it.kind === "update") return "update:" + (it.updateId || it.cardId + ":" + it.summary.slice(0, 40));
+  return "invite:" + it.url;
+}
+
 // ---- rendering -------------------------------------------------------------
 // the "2 מתוך 4" progress line (only when there's more than one item to walk).
 function progressLine(idx: number, total: number): string {
@@ -172,6 +194,9 @@ export async function handleAction(admin: SupabaseClient, userId: string, action
       else ack = "";
     } else if (item.kind === "merge") {
       if (actionId === "rv:merge") { await mergeCards(admin, item.keepId, item.mergeId); ack = `מוזג ✓`; }
+      // "השאר בנפרד" is a decision, not a skip: remember the pair so no future
+      // sweep re-offers it (detection re-runs over the whole board every time).
+      else if (actionId === "rv:skip") { await declineMerge(admin, userId, item.keepId, item.mergeId); ack = ""; }
       else ack = "";
     } else {
       ack = actionId === "rv:skip" ? "" : "";

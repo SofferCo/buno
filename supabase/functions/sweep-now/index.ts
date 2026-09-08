@@ -5,7 +5,7 @@
 // 10 minutes so it can't be hammered. Uses the service role only to run the
 // shared sweepUser under the authenticated user's id.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sweepUser } from "../_shared/sweep.ts";
+import { sweepUser, logSweepRun } from "../_shared/sweep.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -48,8 +48,11 @@ Deno.serve(async (req) => {
     }
   }
 
-  const r = await sweepUser(admin, user.id, apiKey);
-  if (!r) return json({ ok: false, connected: false, message: "היומן/מייל לא מחוברים — אפשר לחבר בהגדרות." });
+  let r: Awaited<ReturnType<typeof sweepUser>>;
+  try { r = await sweepUser(admin, user.id, apiKey); }
+  catch (e) { await logSweepRun(admin, { user_id: user.id, source: "now", ok: false, error: String((e as any)?.message || e) }); throw e; }
+  if (!r) { await logSweepRun(admin, { user_id: user.id, source: "now", ok: false, skipped: "not_connected" }); return json({ ok: false, connected: false, message: "היומן/מייל לא מחוברים — אפשר לחבר בהגדרות." }); }
+  await logSweepRun(admin, { user_id: user.id, source: "now", ok: true, created: r.created.length, considered: r.considered, review: r.reviewCount });
 
   if (!threadId) {
     const { data: t } = await admin.from("assistant_thread").insert({ user_id: user.id }).select("id").single();

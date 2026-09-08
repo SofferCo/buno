@@ -10,7 +10,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { freshAccessToken, listGmailCandidates, listCalendarEvents, fetchEmailRefs, fetchEmailBody } from "./google.ts";
 import { ensureOrgBoard, domainOf, isPersonalDomain, matchOrgProject } from "./orgboard.ts";
-import { setSession, clearSession, openingRender, type ReviewItem, type Render } from "./review.ts";
+import { setSession, getSession, clearSession, openingRender, declinedPairs, pairKey, itemKey, type ReviewItem, type Render } from "./review.ts";
 import { voiceLint } from "./voice.ts";
 import { BUNO_VERSION, BRIEF_EFFORT } from "./bunoConfig.ts";
 
@@ -276,6 +276,22 @@ export type ThreadUpdate = { cardTitle: string; from: string; summary: string };
 export type EmailAwaiting = { from: string; gist: string; threadId?: string };
 export type MeetingPrep = { title: string; time: string; project: string; openCards: number };
 export type ReviewBreakdown = { drafts: number; updates: number; invites: number; merges: number };
+
+// 0027 — one row per sweep attempt (cron / on-demand), skips and failures included.
+// A failed morning brief used to be a silent lost day; now it's a queryable record.
+export async function logSweepRun(admin: any, row: { user_id: string | null; source: "cron" | "now"; ok: boolean; skipped?: string | null; error?: string | null; created?: number; considered?: number; review?: number; wa_sent?: boolean | null; wa_error?: string | null }) {
+  try { await admin.from("sweep_run").insert({ ...row, error: row.error ? String(row.error).slice(0, 1000) : null }); } catch (e) { console.error("sweep_run log failed", String((e as any)?.message || e)); }
+}
+
+// the start of TODAY in Israel as a UTC instant — the "already swept today" guard
+// must follow the user's day, not the UTC day (a 03:30 IL scan is still "today").
+export function startOfIsraelDayISO(now = new Date()): string {
+  const p: Record<string, string> = {};
+  for (const x of new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(now)) p[x.type] = x.value;
+  const wallAsUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  const offsetMs = wallAsUtc - now.getTime();
+  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day) - offsetMs).toISOString();
+}
 // a clickable row rendered under the brief text in the chat (open the email, etc.)
 export type BriefItem = { title: string; sub?: string; url?: string; avatar?: string; color?: string; cta?: string };
 export type SweepResult = { created: { id: string; title: string; project: string }[]; considered: number; events: any[]; profileName: string; nudges: string[]; threadUpdates: ThreadUpdate[]; reviewCount: number; reviewBreakdown: ReviewBreakdown; reviewOpening: Render | null; waChannelDown: boolean; draftsWalked: boolean; emailsAwaiting: EmailAwaiting[]; emailMustNotMiss: { from: string; why: string } | null; meetingPrep: MeetingPrep | null; briefItems: BriefItem[]; maybeEmails: number };
@@ -319,14 +335,14 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
   const cardByThread = new Map<string, { id: string; title: string }>();
   // #1 Match-before-Create — the live board, so an incoming email about work that
   // ALREADY exists becomes an update on that card, not a duplicate (the poster case).
-  const boardCards: { id: string; title: string; project: string }[] = [];
+  const boardCards: { id: string; title: string; project: string; projectId: string }[] = [];
   const aliveCardIds = new Set<string>();
   const projNameById = new Map<string, string>(projList.map((p: any) => [p.id, String(p.name || "")]));
   try {
     const { data: existing } = await admin.from("card").select("id,title,origin,project_id,archived,draft").in("project_id", writeIds);
     for (const c of existing || []) {
       const ref = (c as any).origin?.ref; if (ref && (c as any).origin?.type === "email") cardByThread.set(String(ref), { id: c.id, title: c.title });
-      if (!(c as any).archived && String(c.title || "").trim()) { aliveCardIds.add(c.id); boardCards.push({ id: c.id, title: String(c.title), project: projNameById.get((c as any).project_id) || "" }); }
+      if (!(c as any).archived && String(c.title || "").trim()) { aliveCardIds.add(c.id); boardCards.push({ id: c.id, title: String(c.title), project: projNameById.get((c as any).project_id) || "", projectId: String((c as any).project_id || "") }); }
     }
   } catch { /* origin lookup best-effort */ }
   const freshCands = candidates.filter((c) => !cardByThread.has(c.threadId));
@@ -502,15 +518,20 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
       });
       const tuD = resD.content.find((b: any) => b.type === "tool_use");
       const pairs = Array.isArray(tuD?.input?.pairs) ? tuD.input.pairs : [];
+      // enforced in the PIPELINE, not the prompt: (a) a pair the user already chose
+      // to keep apart is never re-offered; (b) two cards on DIFFERENT boards are
+      // never "the same work" — the model only sees titles and got this wrong.
+      const declined = await declinedPairs(admin, userId);
       const seen = new Set<string>();
       for (const pr of pairs.slice(0, 5)) {
         const keepId = String(pr?.keep_id || ""); const mergeId = String(pr?.merge_id || "");
         if (!aliveCardIds.has(keepId) || !aliveCardIds.has(mergeId) || keepId === mergeId) continue;
+        if (declined.has(pairKey(keepId, mergeId))) continue;
+        const kc = boardCards.find((b) => b.id === keepId), mc = boardCards.find((b) => b.id === mergeId);
+        if (!kc || !mc || kc.projectId !== mc.projectId) continue;
         if (seen.has(keepId) || seen.has(mergeId)) continue;   // each card in at most one merge offer
         seen.add(keepId); seen.add(mergeId);
-        const kt = boardCards.find((b) => b.id === keepId)?.title || "משימה";
-        const mt = boardCards.find((b) => b.id === mergeId)?.title || "משימה";
-        reviewQueue.push({ kind: "merge", keepId, keepTitle: kt, mergeId, mergeTitle: mt });
+        reviewQueue.push({ kind: "merge", keepId, keepTitle: kc.title || "משימה", mergeId, mergeTitle: mc.title || "משימה" });
       }
     } catch { /* dup-detection best-effort */ }
   }
@@ -578,20 +599,28 @@ export async function sweepUser(admin: SupabaseClient, userId: string, apiKey: s
       reviewQueue.push({ kind: "invite", title: e.title, from: e.organizerName || e.organizer || "מארגן", when: String(e.start || "").replace("T", " ").slice(0, 16), url: e.htmlLink || "" });
     }
   }
-  // store the guided-review session (or clear a stale one) and prep the opening
+  // store the guided-review session and prep the opening. A fresh scan FOLDS INTO
+  // an in-progress walk — the items the user hasn't reached yet are kept, new ones
+  // are appended (deduped by identity) — instead of wiping the walk and re-offering
+  // everything from the top, which is what made the same merge come back twice.
   let reviewOpening: Render | null = null;
+  let finalQueue: ReviewItem[] = reviewQueue;
   try {
-    if (reviewQueue.length) { await setSession(admin, userId, reviewQueue, 0); reviewOpening = openingRender(reviewQueue); }
+    const prev = await getSession(admin, userId);
+    const pending = prev ? prev.queue.slice(prev.cursor) : [];
+    const have = new Set(pending.map(itemKey));
+    finalQueue = [...pending, ...reviewQueue.filter((it) => !have.has(itemKey(it)))];
+    if (finalQueue.length) { await setSession(admin, userId, finalQueue, 0); reviewOpening = openingRender(finalQueue); }
     else await clearSession(admin, userId);
   } catch { /* review_session may not exist before 0015 — degrade */ }
 
   const reviewBreakdown: ReviewBreakdown = {
-    drafts: reviewQueue.filter((i) => i.kind === "draft").length,
-    updates: reviewQueue.filter((i) => i.kind === "update").length,
-    invites: reviewQueue.filter((i) => i.kind === "invite").length,
-    merges: reviewQueue.filter((i) => i.kind === "merge").length,
+    drafts: finalQueue.filter((i) => i.kind === "draft").length,
+    updates: finalQueue.filter((i) => i.kind === "update").length,
+    invites: finalQueue.filter((i) => i.kind === "invite").length,
+    merges: finalQueue.filter((i) => i.kind === "merge").length,
   };
-  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: reviewQueue.length, reviewBreakdown, reviewOpening, waChannelDown, draftsWalked, emailsAwaiting, emailMustNotMiss, meetingPrep, briefItems, maybeEmails };
+  return { created, considered: candidates.length, events, profileName: prof?.name || "", nudges, threadUpdates, reviewCount: finalQueue.length, reviewBreakdown, reviewOpening, waChannelDown, draftsWalked, emailsAwaiting, emailMustNotMiss, meetingPrep, briefItems, maybeEmails };
 }
 
 // Greeting keyed to the ACTUAL write time (IL) — a run at 20:00 must not say

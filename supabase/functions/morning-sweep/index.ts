@@ -7,7 +7,7 @@
 // snapshot is a private chat message, gathered content is DATA.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
-import { sweepUser, daySnapshot, warmDaySnapshot } from "../_shared/sweep.ts";
+import { sweepUser, daySnapshot, warmDaySnapshot, logSweepRun, startOfIsraelDayISO } from "../_shared/sweep.ts";
 import { BUNO_VERSION } from "../_shared/bunoConfig.ts";
 import { sendWhatsApp, sendRender, noteWaSend, waErrorReason } from "../_shared/whatsapp.ts";
 
@@ -49,22 +49,25 @@ Deno.serve(async (req) => {
   const { data: integ } = await admin.from("integration").select("user_id").eq("kind", "gcal").eq("status", "connected");
   const userIds = [...new Set((integ || []).map((i: any) => i.user_id))].filter((u) => !onlyUser || u === onlyUser);
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+  // "today" = the user's day (Israel), not the UTC day (0027 — the UTC guard let a
+  // 03:30 IL on-demand scan silently cancel the 07:00 brief).
+  const dayStart = startOfIsraelDayISO();
   const results: any[] = [];
   for (const userId of userIds) {
+    let threadId: string | undefined;
     try {
       // one snapshot per user per day — skip if we already wrote today
       const { data: thread } = await admin.from("assistant_thread").select("id").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      let threadId = thread?.id;
+      threadId = thread?.id;
       if (threadId) {
         const { data: recent } = await admin.from("assistant_message")
           .select("created_at,door").eq("thread_id", threadId).eq("door", "sweep")
-          .gte("created_at", todayKey + "T00:00:00").limit(1);
-        if (recent && recent.length) { results.push({ userId, skipped: "already_swept_today" }); continue; }
+          .gte("created_at", dayStart).limit(1);
+        if (recent && recent.length) { results.push({ userId, skipped: "already_swept_today" }); await logSweepRun(admin, { user_id: userId, source: "cron", ok: true, skipped: "already_swept_today" }); continue; }
       }
 
       const r = await sweepUser(admin, userId, apiKey);
-      if (!r) { results.push({ userId, skipped: "not_connected" }); continue; }
+      if (!r) { results.push({ userId, skipped: "not_connected" }); await logSweepRun(admin, { user_id: userId, source: "cron", ok: false, skipped: "not_connected" }); continue; }
 
       if (!threadId) {
         const { data: t } = await admin.from("assistant_thread").insert({ user_id: userId }).select("id").single();
@@ -87,7 +90,7 @@ Deno.serve(async (req) => {
         });
       }
       // also push the morning brief over WhatsApp, if the user linked & verified a number
-      let waSent = false;
+      let waSent: boolean | null = null, waError: string | null = null;
       try {
         const { data: link } = await admin.from("whatsapp_link").select("phone,verified").eq("user_id", userId).maybeSingle();
         if (link?.verified && link.phone) {
@@ -98,15 +101,21 @@ Deno.serve(async (req) => {
           // fine on WhatsApp) — no second model call. v1: the formatted variant.
           const waText = BUNO_VERSION === "v2" ? snapshot : daySnapshot(r, { whatsapp: true });
           const open = { text: waText, actions: r.reviewCount ? [{ id: "rv:start", label: "בוא נעבור" }] : [] };
-          const s = await sendRender(link.phone, open); waSent = s.ok;
+          const s = await sendRender(link.phone, open); waSent = s.ok; waError = waErrorReason(s);
           const streak = await noteWaSend(admin, userId, s);
-          if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waErrorReason(s), "streak", streak);
+          if (!s.ok) console.error("wa: morning SEND FAILED", s.status, waError, "streak", streak);
         }
-      } catch { /* whatsapp push best-effort */ }
+      } catch (e) { waError = String((e as any)?.message || e); }
       await updateSummary(admin, userId, apiKey); // item 9 — refresh the rolling memory summary
       results.push({ userId, created: r.created.length, considered: r.considered, waSent });
+      await logSweepRun(admin, { user_id: userId, source: "cron", ok: true, created: r.created.length, considered: r.considered, review: r.reviewCount, wa_sent: waSent, wa_error: waError });
     } catch (e) {
-      results.push({ userId, error: String(e) });
+      const err = String((e as any)?.message || e);
+      results.push({ userId, error: err });
+      await logSweepRun(admin, { user_id: userId, source: "cron", ok: false, error: err });
+      // never a silent day: leave a visible note in the chat so the user knows the
+      // brief didn't run and can "סרוק עכשיו".
+      try { if (threadId) await admin.from("assistant_message").insert({ thread_id: threadId, role: "assistant", door: "sweep", content: `הבריף של הבוקר לא הצליח לרוץ (${err.slice(0, 120)}). אפשר לבקש "סרוק עכשיו" ואנסה שוב.` }); } catch { /* best-effort */ }
     }
   }
 

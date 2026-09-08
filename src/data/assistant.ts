@@ -62,9 +62,12 @@ export async function loadAssistantThread(): Promise<{ threadId?: string; messag
   if (!supabase) return { messages: [] };
   const { data: t } = await supabase.from("assistant_thread").select("id").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!t) return { messages: [] };
-  const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at");
+  // the NEWEST 200 — never an unbounded ascending read: PostgREST caps a query at
+  // 1000 rows, so past that the client silently got the OLDEST 1000 and every
+  // message since was cut off ("the chat is stuck on 23.8").
+  const { data: m } = await supabase.from("assistant_message").select("role,content,meta,created_at").eq("thread_id", t.id).order("created_at", { ascending: false }).limit(200);
   return {
     threadId: t.id,
-    messages: (m || []).map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined, review: x.meta?.review || undefined, waFailed: x.meta?.waSendFailed || undefined })),
+    messages: [...(m || [])].reverse().map((x: any) => ({ by: x.role === "user" ? "me" : "twin", text: x.content, at: x.created_at ? new Date(x.created_at).getTime() : undefined, cards: x.meta?.created || undefined, events: x.meta?.events || undefined, actions: x.meta?.actions || undefined, review: x.meta?.review || undefined, waFailed: x.meta?.waSendFailed || undefined })),
   };
 }

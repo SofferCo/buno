@@ -114,7 +114,7 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
       if (live && ask) {
         setTyping(true);
         try {
-          const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
+          const history = msgs.slice(-12).map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
           const res = await ask(`${text}\n(מצורף קובץ "${file.name}" — קשר אותו לכרטיס שאתה יוצר מהבקשה)`, history, threadRef.current);
           if (res?.threadId) threadRef.current = res.threadId;
           setMsgs((m) => [...m, { by: "twin", text: res?.reply || "לא הצלחתי כרגע.", at: Date.now(), cards: res?.created?.length ? res.created : undefined, actions: res?.actions?.length ? res.actions : undefined, review: res?.review || undefined }]);
@@ -139,7 +139,9 @@ export function ChatPanel({ onClose, answer, onAction, asstLevel, seed, onSeedUs
     if (!text) return;
     // LIVE assistant (Stage 3a: conversation over the real board via Claude)
     if (live && ask) {
-      const history = msgs.map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
+      // only the tail — the edge uses the last 12 anyway; shipping the whole thread
+      // (1000+ rows) in every request was what made the chat feel stuck.
+      const history = msgs.slice(-12).map((m: any) => ({ role: m.by === "me" ? "user" : "assistant", content: m.text }));
       setMsgs((m) => [...m, { by: "me", text, at: Date.now() }]); setInput(""); setTyping(true);
       try {
         const res = await ask(text, history, threadRef.current);
