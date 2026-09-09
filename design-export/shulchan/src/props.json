@@ -1,0 +1,8 @@
+{
+  "showBirthdays": {
+    "editor": "boolean",
+    "default": true,
+    "tsType": "boolean",
+    "section": "לוח"
+  }
+}
