@@ -122,6 +122,16 @@ export const MERGE_CARDS_TOOL = {
   }, required: ["keep", "duplicate"] },
 };
 
-export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL, MERGE_CARDS_TOOL];
+export const MOVE_UPDATE_TOOL = {
+  name: "move_update",
+  description: "Fix a mis-filed update: when the user says a comment/update buno attached to a card is WRONG or belongs elsewhere ('זה לא קשור ל-X', 'העבר את העדכון ל-Y', 'תוריד את זה מהכרטיס'). Removes buno's most recent matching update from the `from` card and, if `to` is given, files it on that card instead. Never tell the user to 'just ignore' a wrong update — move or remove it.",
+  input_schema: { type: "object", properties: {
+    from: { type: "string", description: "Title of the card that got the wrong update." },
+    to: { type: "string", description: "Title of the card it should be on. Omit to just remove it." },
+    text: { type: "string", description: "A few words from the update's text, to pick the right one when there are several." },
+  }, required: ["from"] },
+};
+
+export const CORE_TOOLS = [CREATE_CARD_TOOL, CREATE_CARDS_TOOL, UPDATE_CARD_TOOL, LOG_PROGRESS_TOOL, GET_CARD_LINK_TOOL, CREATE_PROJECT_TOOL, MOVE_CARD_TOOL, COMPLETE_CARD_TOOL, ARCHIVE_CARD_TOOL, MERGE_CARDS_TOOL, MOVE_UPDATE_TOOL];
 // the web /chat set adds calendar management
 export const WEB_TOOLS = [...CORE_TOOLS, MANAGE_EVENT_TOOL, SHOW_CARDS_TOOL];

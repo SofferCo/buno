@@ -284,6 +284,24 @@ Deno.serve(async (req) => {
     try { await mergeCards(supabase as any, keep.id, dup.id); changed.push(keep.id, dup.id); return `מיזגתי את "${dup.title}" לתוך "${keep.title}" — התוכן עבר, הכפילות בארכיון.`; }
     catch (e: any) { return "לא הצלחתי למזג: " + (e?.message || e); }
   }
+  // move_update — undo a mis-filed update: buno's latest matching comment leaves
+  // the wrong card and (optionally) lands on the right one. The repair path for
+  // a wrong match-before-create — never "just ignore it".
+  async function doMoveUpdate(input: any): Promise<string> {
+    const from = findCard(input?.from); if (!from) return `לא מצאתי כרטיס פעיל בשם "${input?.from}".`;
+    const to = input?.to ? findCard(input.to) : null; if (input?.to && !to) return `לא מצאתי כרטיס פעיל בשם "${input?.to}".`;
+    try {
+      const { data: cs } = await supabase.from("comment").select("id,text,created_at").eq("card_id", from.id).eq("by_name", "buno").order("created_at", { ascending: false }).limit(10);
+      const needle = String(input?.text || "").trim().toLowerCase();
+      const pick = (cs || []).find((c: any) => !needle || String(c.text || "").toLowerCase().includes(needle)) || (cs || [])[0];
+      if (!pick) return `לא מצאתי עדכון של buno על "${from.title}".`;
+      await supabase.from("comment").delete().eq("id", pick.id);
+      changed.push(from.id);
+      if (to) { await supabase.from("comment").insert({ card_id: to.id, by_name: "buno", text: pick.text }); changed.push(to.id); return `העברתי את העדכון מ"${from.title}" ל"${to.title}".`; }
+      return `הסרתי את העדכון מ"${from.title}".`;
+    } catch (e: any) { return "לא הצלחתי להעביר את העדכון: " + (e?.message || e); }
+  }
+
   // show_cards — surface a set of cards as clickable chips (never prose).
   function doShowCards(input: any): string {
     const doneIds = new Set((cols.data || []).filter((c: any) => c.key === "col-done").map((c: any) => c.id));
@@ -572,6 +590,7 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
         else if (tu.name === "manage_event") out = await doManageEvent(tu.input);
         else if (tu.name === "show_cards") out = doShowCards(tu.input);
         else if (tu.name === "merge_cards") out = await doMergeCards(tu.input);
+        else if (tu.name === "move_update") out = await doMoveUpdate(tu.input);
         results.push({ type: "tool_result", tool_use_id: tu.id, content: out });
       }
       messages.push({ role: "user", content: results });

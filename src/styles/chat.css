@@ -99,7 +99,8 @@ html[dir="ltr"] .adk-brand-wm{right:auto;left:-18.8px;transform:scaleX(-1);}
 .adk-chat-input{position:absolute;bottom:0;inset-inline:0;z-index:3;display:flex;align-items:center;gap:2px;min-height:52px;margin:12px 14px;padding:0 8px 0 12px;border:1px solid var(--border);border-radius:28px;background:var(--surface-2);box-shadow:0 6px 24px rgba(0,0,0,.10);}
 .adk-chat-input:focus-within{border-color:var(--ink);}
 .adk-chat-input input,.adk-chat-input textarea{flex:1;min-width:0;border:none;background:transparent;padding:8px 8px;font-size:14px;font-family:inherit;color:var(--ink);}
-.adk-chat-input textarea{resize:none;line-height:1.45;max-height:120px;overflow-y:auto;display:block;}
+.adk-chat-input textarea{resize:none;line-height:1.45;max-height:120px;overflow-y:auto;display:block;scrollbar-width:none;}
+.adk-chat-input textarea::-webkit-scrollbar{display:none;}
 .adk-chat-input input::placeholder,.adk-chat-input textarea::placeholder{color:var(--faint);}
 .adk-chat-input input:focus,.adk-chat-input textarea:focus{outline:none;}
 .adk-chat-input .adk-plus{flex:none;}
@@ -109,7 +110,9 @@ html[dir="ltr"] .adk-brand-wm{right:auto;left:-18.8px;transform:scaleX(-1);}
 /* send = the primary action. Empty: overlay circle, muted arrow (present but idle).
    Ready: filled --ink circle, --canvas arrow — the value inversion, like the user bubble. */
 .adk-chat-input .adk-cmt-send{width:40px;height:40px;flex:none;border:none;background:var(--overlay);color:var(--muted);display:grid;place-items:center;cursor:pointer;border-radius:50%;transition:background .12s,color .12s;}
-.adk-chat-input .adk-cmt-send.ready{background:var(--overlay);color:#fff;}
+/* typed something → solid ink circle, arrow in the surface color (white on light,
+   dark on dark). The old overlay+white arrow made the arrow vanish while typing. */
+.adk-chat-input .adk-cmt-send.ready{background:var(--ink);color:var(--surface);}
 .adk-chat-input .adk-cmt-send:hover{filter:brightness(1.08);}
 .adk-mic{width:34px;height:34px;flex:none;border:none;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;border-radius:50%;font-family:inherit;}
 .adk-mic:hover{background:var(--overlay);color:var(--ink);}
