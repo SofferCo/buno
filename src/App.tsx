@@ -28,7 +28,7 @@ import { uploadAsset, removeAsset, signMissingAssets } from "./data/assets";
 import { buildManifest, pushImport } from "./data/importer";
 import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant, sendReviewAction } from "./data/assistant";
-import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction } from "./data/integrations";
+import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction, connectGoogle } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
 import { upsertContact } from "./data/contacts";
 import { EventPanel } from "./components/screens/EventPanel";
@@ -791,6 +791,14 @@ export default function App() {
           <Icon name="bell" size={19} />{unreadCount > 0 && <span className="ic-badge">{unreadCount}</span>}
         </button>
         {syncErr && <div className="adk-sync-err">הסנכרון לענן נתקל בשגיאה: {syncErr} · השינויים שמורים מקומית וינסו שוב</div>}
+        {/* a dead Google link used to be visible only deep in Settings — meanwhile the
+            morning brief silently stopped. Surface it where the user actually is. */}
+        {gcalInteg?.status === "error" && (
+          <div className="adk-sync-err" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
+            <span>החיבור ל-Google פג — הבריף של הבוקר וזיהוי המשימות מהמייל מושבתים עד שתתחבר מחדש.</span>
+            <button className="adk-btn primary" style={{ padding: "5px 12px", fontSize: 13 }} onClick={() => { connectGoogle().catch(() => {}); }}>התחבר מחדש</button>
+          </div>
+        )}
         {connectToast && <div className="adk-connect-toast">{connectToast}</div>}
         {notifOpen && (<>
           <div className="adk-notif-scrim" onClick={() => setNotifOpen(false)} />

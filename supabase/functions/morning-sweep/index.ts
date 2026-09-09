@@ -46,8 +46,12 @@ Deno.serve(async (req) => {
   let onlyUser: string | null = null;
   try { onlyUser = (await req.json())?.userId || null; } catch { /* no body */ }
 
-  const { data: integ } = await admin.from("integration").select("user_id").eq("kind", "gcal").eq("status", "connected");
-  const userIds = [...new Set((integ || []).map((i: any) => i.user_id))].filter((u) => !onlyUser || u === onlyUser);
+  // connected users get the sweep; users whose Google link DIED (status=error —
+  // a refresh-token 400/401) get told, once a day. Until now they were silently
+  // filtered out here and never learned why the brief stopped.
+  const { data: integ } = await admin.from("integration").select("user_id,status").eq("kind", "gcal").in("status", ["connected", "error"]);
+  const statusOf = new Map<string, string>((integ || []).map((i: any) => [i.user_id, i.status]));
+  const userIds = [...statusOf.keys()].filter((u) => !onlyUser || u === onlyUser);
 
   // "today" = the user's day (Israel), not the UTC day (0027 — the UTC guard let a
   // 03:30 IL on-demand scan silently cancel the 07:00 brief).
@@ -66,8 +70,18 @@ Deno.serve(async (req) => {
         if (recent && recent.length) { results.push({ userId, skipped: "already_swept_today" }); await logSweepRun(admin, { user_id: userId, source: "cron", ok: true, skipped: "already_swept_today" }); continue; }
       }
 
-      const r = await sweepUser(admin, userId, apiKey);
-      if (!r) { results.push({ userId, skipped: "not_connected" }); await logSweepRun(admin, { user_id: userId, source: "cron", ok: false, skipped: "not_connected" }); continue; }
+      const r = statusOf.get(userId) === "connected" ? await sweepUser(admin, userId, apiKey) : null;
+      if (!r) {
+        const why = statusOf.get(userId) === "error" ? "gcal_error" : "not_connected";
+        results.push({ userId, skipped: why });
+        await logSweepRun(admin, { user_id: userId, source: "cron", ok: false, skipped: why, error: `integration.gcal.status=${statusOf.get(userId) || "missing"}` });
+        // never a silent day: say it in the chat (door=sweep → once per day) and,
+        // best-effort, on WhatsApp — this is the user's morning channel.
+        const note = "הבריף של הבוקר לא רץ — החיבור ל-Google פג ואני לא מצליח לקרוא את היומן והמייל. חיבור מחדש בהגדרות (Google → התחבר מחדש) ואני ממשיך מאותה נקודה.";
+        try { if (threadId) await admin.from("assistant_message").insert({ thread_id: threadId, role: "assistant", door: "sweep", content: note }); } catch { /* best-effort */ }
+        try { const { data: link } = await admin.from("whatsapp_link").select("phone,verified").eq("user_id", userId).maybeSingle(); if (link?.verified && link.phone) await sendWhatsApp(link.phone, note); } catch { /* best-effort */ }
+        continue;
+      }
 
       if (!threadId) {
         const { data: t } = await admin.from("assistant_thread").insert({ user_id: userId }).select("id").single();
