@@ -14,6 +14,7 @@ import { CHAT_EFFORT } from "./bunoConfig.ts";
 import { summarizeBoard } from "./boardContext.ts";
 import { computeDayFacts, renderDayFacts } from "./dayFacts.ts";
 import { mergeCards } from "./review.ts";
+import { describeModelError } from "./modelError.ts";
 import { CORE_TOOLS, matchCard } from "./tools.ts";
 import { ensureOrgBoard } from "./orgboard.ts";
 import { freshAccessToken, listCalendarEvents } from "./google.ts";
@@ -416,7 +417,11 @@ export async function assistantReply(admin: SupabaseClient, userId: string, user
       }
       messages.push({ role: "user", content: results });
     }
-  } catch (e) { console.error("wa: model call failed", String((e as any)?.message || e)); reply = created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך?` : reply; }
+  } catch (e) {
+    const why = describeModelError(e);
+    console.error("wa: model call failed", why.code, String((e as any)?.message || e).slice(0, 300));
+    reply = created.length ? `נתקעתי אחרי ${created.length} כרטיסים — ${why.text}` : (reply || why.text);
+  }
   if (!reply.trim()) reply = (created.length || changed.length) ? `בוצע — ${created.length} כרטיסים${changed.length ? `, ${changed.length} עדכונים` : ""}.` : "לא הצלחתי להשלים — נסה שוב.";
 
   // persist the USER message now; the caller persists the assistant message AFTER

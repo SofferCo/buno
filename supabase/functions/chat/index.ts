@@ -16,6 +16,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.68.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { systemPrompt, voiceLint } from "../_shared/voice.ts";
 import { CHAT_EFFORT } from "../_shared/bunoConfig.ts";
+import { describeModelError } from "../_shared/modelError.ts";
 import { freshAccessToken, listCalendarEvents, shiftCalendarEvent, moveCalendarEvent, deleteCalendarEvent } from "../_shared/google.ts";
 import { ensureOrgBoard } from "../_shared/orgboard.ts";
 import { handleAction, setSession, draftsOpening, mergeCards } from "../_shared/review.ts";
@@ -596,9 +597,12 @@ key = קטגוריה סמנטית (ללמידה): complete_next (סמן/סיים
       messages.push({ role: "user", content: results });
     }
   } catch (e) {
-    // NEVER an empty bubble: report honestly what got done before the failure.
-    console.error("chat: loop error", String((e as any)?.message || e));
-    reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — רוצה שאמשיך מהמקום שעצרתי?` : "נתקלתי בתקלה זמנית — נסה שוב בעוד רגע.");
+    // NEVER an empty bubble, and NEVER "temporary" when it isn't: say what actually
+    // failed (credits / key / rate limit / overload / too long) — the generic line
+    // hid an exhausted API balance behind 13 "try again in a moment"s.
+    const why = describeModelError(e);
+    console.error("chat: loop error", why.code, String((e as any)?.message || e).slice(0, 300));
+    reply = reply || (created.length ? `נתקעתי אחרי ${created.length} כרטיסים — ${why.text}` : why.text);
   }
   // Dynamic suggestion chips (step 1): the model appends a <<SUGGEST>>[…] tail block.
   // Strip EVERYTHING from the first marker so it can never leak into the visible reply,
