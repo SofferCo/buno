@@ -3,6 +3,7 @@ import { Icon } from "../ui/Icon";
 import { PeriodPicker } from "../ui/PeriodPicker";
 import { last12Months, ymLabel, ymOf, dayRange, rangeDays, billDayMs, dayShort, dayRangeLabel } from "../../lib/date";
 import { fmtHours, fmtMoney } from "../../lib/format";
+import { monthWorkdays } from "../../lib/workdays";
 import { resizeImage } from "../../lib/image";
 import { initials, nameColor } from "../../lib/people";
 import { cardSeconds } from "../../lib/time";
@@ -71,8 +72,9 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   // workdays in the month. Workdays = Sun–Thu (Fri/Sat off). Compared with LAST
   // month's actual revenue. VAT (18%) is shown on hover, never baked in.
   const VAT = 0.18;
-  const isWorkday = (d: Date) => d.getDay() !== 5 && d.getDay() !== 6;
-  const workdays = (ym: string, upToDay?: number) => { const [y, m] = ym.split("-").map(Number); const last = upToDay ?? new Date(y, m, 0).getDate(); let n = 0; for (let d = 1; d <= last; d++) if (isWorkday(new Date(y, m - 1, d))) n++; return n; };
+  // real calendar: the month's actual length, Fri/Sat off, Israeli holidays off
+  // (found on the Hebrew calendar — see lib/workdays.ts).
+  const workdays = (ym: string, upToDay?: number) => monthWorkdays(ym, upToDay).count;
   const revenueFor = (ym: string) => live.filter((c: any) => billYm(c) === ym).reduce((a: number, c: any) => a + (cardSeconds(c, now) / 3600) * (Number(clients.find((cl: any) => cl.id === c.clientId)?.rate) || 0), 0);
   const prevYm = (() => { const d = new Date(now); return ymOf(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime()); })();
   const showPace = period === "month" && totalRev > 0;
@@ -82,10 +84,13 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   const prevRev = showPace ? revenueFor(prevYm) : 0;
   const paceDelta = prevRev > 0 ? (pace - prevRev) / prevRev : null;
   const gross = (n: number) => fmtMoney(n * (1 + VAT));
+  const perDay = showPace ? totalRev / wdElapsed : 0;           // "an average workday is worth…"
+  const monthHolidays = showPace ? monthWorkdays(curYm).holidays : [];
   const paceTip = [
     `קצב החודש: ${fmtMoney(pace)} · כולל מע״מ 18%: ${gross(pace)}`,
     prevRev > 0 ? `חודש שעבר: ${fmtMoney(prevRev)} · כולל מע״מ: ${gross(prevRev)}` : "חודש שעבר: אין נתונים",
-    `${wdElapsed} מתוך ${wdTotal} ימי עבודה חלפו (א׳–ה׳)`,
+    `יום עבודה ממוצע: ${fmtMoney(perDay)} · כולל מע״מ: ${gross(perDay)}`,
+    `${wdElapsed} מתוך ${wdTotal} ימי עבודה חלפו (א׳–ה׳${monthHolidays.length ? `, בלי ${monthHolidays.map((h) => `${h.name} ${h.day}/${curYm.slice(5)}`).join(", ")}` : ", אין חגים החודש"})`,
   ].join("\n");
   const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period.startsWith("d:") ? `ב־${new Date(period.slice(2) + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "long" })}` : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
   // clicking a bar drills one level down: a day-bar (week) or day-of-month (single
@@ -127,6 +132,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
                 קצב חודשי משוער
                 {paceDelta !== null && <em className={"adk-delta " + (paceDelta >= 0 ? "up" : "down")}>{paceDelta >= 0 ? "▲" : "▼"} {Math.abs(Math.round(paceDelta * 100))}% מחודש שעבר</em>}
                 {paceDelta === null && <em className="adk-delta">אין נתוני חודש שעבר</em>}
+                <small className="adk-perday">יום עבודה ממוצע ≈ {fmtMoney(perDay)}</small>
               </span>
             </div>
           )}
