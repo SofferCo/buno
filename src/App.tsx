@@ -31,10 +31,11 @@ import { askAssistant, sendReviewAction } from "./data/assistant";
 import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction, connectGoogle } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
 import { upsertContact, listContacts } from "./data/contacts";
+import { extractPeople } from "./data/people";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
-import { initials, nameColor, peopleOf, inferGiverFromTitle } from "./lib/people";
+import { initials, nameColor, peopleOf, inferGiversFromTitle } from "./lib/people";
 import { cardSeconds, sumHours } from "./lib/time";
 
 export default function App() {
@@ -489,10 +490,39 @@ export default function App() {
     if (!patch || typeof patch.title !== "string") return patch;
     const cur = String(card?.creator || "").trim();
     if (cur && cur !== selfName && cur !== "אני") return patch;
-    const g = inferGiverFromTitle(patch.title, knownPeople, selfName);
-    return g ? { ...patch, creator: g, cc: Array.from(new Set([...(card?.cc || []), ...(cur ? [cur] : [])])).filter((n) => n !== g) } : patch;
+    const gs = inferGiversFromTitle(patch.title, knownPeople, selfName);
+    if (!gs.length) return patch;
+    const [g, ...rest] = gs;   // first-mentioned = giver; the others join the people list
+    return { ...patch, creator: g, cc: Array.from(new Set([...rest, ...(card?.cc || []), ...(cur ? [cur] : [])])).filter((n) => n !== g) };
   }, [knownPeople, selfName]);
   const updateCard = useCallback((id, patch) => setCards((p) => ({ ...p, [id]: { ...p[id], ...withGiverFromTitle(p[id], patch) } })), [withGiverFromTitle]);
+  // zero-friction: when the user stops typing a title (1.2s) and the card is still
+  // stamped with themself, buno READS the names off the title in the background —
+  // even people it doesn't know yet — and files them (creator = first, rest → cc).
+  // Each title is analyzed once; the result is applied only if the title is unchanged.
+  const analyzedTitle = useRef<Record<string, string>>({});
+  const editingTitle = editing ? String(cards[editing]?.title || "") : "";
+  useEffect(() => {
+    if (!cloud || !editing || roleViewer) return;
+    const id = editing; const title = editingTitle.trim();
+    if (title.length < 3 || analyzedTitle.current[id] === title) return;
+    const card = cards[id]; const cur = String(card?.creator || "").trim();
+    if (cur && cur !== selfName && cur !== "אני") return;            // already has a real giver
+    if (inferGiversFromTitle(title, knownPeople, selfName).length) return; // the local pass already caught it
+    const t = setTimeout(async () => {
+      analyzedTitle.current[id] = title;
+      const people = await extractPeople(title, String(card?.description || ""), knownPeople, selfName);
+      if (!people.length) return;
+      setContactNames((prev) => Array.from(new Set([...prev, ...people])));
+      setCards((p) => {
+        const c = p[id]; if (!c || String(c.title || "").trim() !== title) return p;
+        const curNow = String(c.creator || "").trim(); if (curNow && curNow !== selfName && curNow !== "אני") return p;
+        const [g, ...rest] = people;
+        return { ...p, [id]: { ...c, creator: g, cc: Array.from(new Set([...rest, ...(c.cc || []), ...(curNow ? [curNow] : [])])).filter((n) => n !== g) } };
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [cloud, editing, editingTitle, roleViewer, knownPeople, selfName]);
   // every assistant-initiated action passes through here; the app (not the prompt) enforces the matrix
   function assistantAction(kind: string, payload: any = {}) {
     const cat = /event|calendar/.test(kind) ? "calendar" : (/send|email|outbound/.test(kind) ? "outbound" : "cards");

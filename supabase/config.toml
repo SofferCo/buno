@@ -36,3 +36,7 @@ verify_jwt = true
 # the OTP delivery to WhatsApp (Authentication template) instead of SMS.
 [functions.wa-otp-hook]
 verify_jwt = false
+
+# reads PERSON names off a hand-typed card title (zero-friction brief-giver) — JWT-gated.
+[functions.extract-people]
+verify_jwt = true

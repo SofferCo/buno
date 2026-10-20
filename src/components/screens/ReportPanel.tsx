@@ -5,14 +5,21 @@ import { PeriodPicker } from "../ui/PeriodPicker";
 import { DONUT_COLORS } from "../../lib/constants";
 import { last12Months, ymLabel, ymOf, dayRange, rangeDays, billDayMs, dayShort, dayRangeLabel } from "../../lib/date";
 import { fmtModeHours, fmtMoney } from "../../lib/format";
-import { briefGiverOf, inferGiverFromTitle } from "../../lib/people";
+import { briefGiverOf, inferGiversFromTitle } from "../../lib/people";
 import { cardSeconds, sumHours, cardHours } from "../../lib/time";
 
 export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_hour", initialPeriod = null, onClose, onOpen, knownPeople = [], selfName = "" }) {
   // brief-giver for the report: the card's giver, unless it's the user themself (or
   // empty) and the TITLE names a known person — then that person. Covers cards
   // created before titles were read for a giver, without rewriting them.
-  const giverOf = (c: any): string => { const g = briefGiverOf(c); if (g && g !== selfName) return g; return inferGiverFromTitle(c.title, knownPeople, selfName) || g; };
+  // ALL the people a title names count as givers ("מתן, לורן, מאור"); a card's own
+  // giver (when it's a real person) leads the list.
+  const giversOf = (c: any): string[] => {
+    const g = briefGiverOf(c); const named = inferGiversFromTitle(c.title, knownPeople, selfName);
+    const list = (g && g !== selfName) ? [g, ...named.filter((n) => n !== g)] : (named.length ? named : (g ? [g] : []));
+    return list;
+  };
+  const giverOf = (c: any): string => giversOf(c).join(" · ");
   const seq = last12Months();
   const curYm = ymOf(now);
   const [period, setPeriod] = useState(initialPeriod || "month");   // default: the current month (or the period carried from the dashboard)
@@ -34,7 +41,8 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const revenue = billableHours * rate;
   const byGiver: Record<string, any> = {};
   // buno is a tool, never a brief-giver: a buno/unattributed card is "ללא שיוך", not buno.
-  inScope.filter((c) => !c.archived).forEach((c) => { const g = giverOf(c) || "ללא שיוך"; (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += cardSeconds(c, now); });
+  // a multi-giver card splits its hours evenly between them for the breakdown
+  inScope.filter((c) => !c.archived).forEach((c) => { const gs = giversOf(c); const list = gs.length ? gs : ["ללא שיוך"]; const share = cardSeconds(c, now) / list.length; for (const g of list) { (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += share; } });
   const givers = Object.entries(byGiver).map(([k, v]) => ({ name: k, ...v })).sort((a, b) => b.sec - a.sec);
   const distinctGivers = givers.filter((g) => g.name !== "ללא שיוך").length;
   const gDenom = givers.reduce((a, g) => a + g.sec, 0) || 1;
