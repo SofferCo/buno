@@ -81,7 +81,12 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   const pace = showPace ? (totalRev / wdElapsed) * wdTotal : 0;
   const prevRev = showPace ? revenueFor(prevYm) : 0;
   const paceDelta = prevRev > 0 ? (pace - prevRev) / prevRev : null;
-  const paceTip = `כולל מע״מ 18%: ${fmtMoney(pace * (1 + VAT))} · חודש שעבר: ${prevRev > 0 ? fmtMoney(prevRev) : "—"} · ${wdElapsed} מתוך ${wdTotal} ימי עבודה (א׳–ה׳)`;
+  const gross = (n: number) => fmtMoney(n * (1 + VAT));
+  const paceTip = [
+    `קצב החודש: ${fmtMoney(pace)} · כולל מע״מ 18%: ${gross(pace)}`,
+    prevRev > 0 ? `חודש שעבר: ${fmtMoney(prevRev)} · כולל מע״מ: ${gross(prevRev)}` : "חודש שעבר: אין נתונים",
+    `${wdElapsed} מתוך ${wdTotal} ימי עבודה חלפו (א׳–ה׳)`,
+  ].join("\n");
   const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period.startsWith("d:") ? `ב־${new Date(period.slice(2) + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "long" })}` : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
   // clicking a bar drills one level down: a day-bar (week) or day-of-month (single
   // month) → that specific day; a month-bar (quarter/12m) → that month.
@@ -215,7 +220,7 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           </div>
         </div>
       </div>
-      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "var(--canvas)", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "nowrap", direction: "ltr", boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
+      {tip && <div style={{ position: "fixed", left: tip.x + 12, top: tip.y + 12, zIndex: 80, background: "var(--ink)", color: "var(--canvas)", fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-line", direction: "rtl", textAlign: "start", lineHeight: 1.5, maxWidth: 320, boxShadow: "0 6px 18px rgba(0,0,0,.25)" }}>{tip.text}</div>}
     </div>
   );
 }
