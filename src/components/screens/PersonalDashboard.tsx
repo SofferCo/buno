@@ -67,6 +67,21 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
   });
   const maxB = Math.max(1, ...bucketData.map((b) => b.total));
 
+  // ---- monthly PACE (current-month view): revenue so far ÷ workdays elapsed ×
+  // workdays in the month. Workdays = Sun–Thu (Fri/Sat off). Compared with LAST
+  // month's actual revenue. VAT (18%) is shown on hover, never baked in.
+  const VAT = 0.18;
+  const isWorkday = (d: Date) => d.getDay() !== 5 && d.getDay() !== 6;
+  const workdays = (ym: string, upToDay?: number) => { const [y, m] = ym.split("-").map(Number); const last = upToDay ?? new Date(y, m, 0).getDate(); let n = 0; for (let d = 1; d <= last; d++) if (isWorkday(new Date(y, m - 1, d))) n++; return n; };
+  const revenueFor = (ym: string) => live.filter((c: any) => billYm(c) === ym).reduce((a: number, c: any) => a + (cardSeconds(c, now) / 3600) * (Number(clients.find((cl: any) => cl.id === c.clientId)?.rate) || 0), 0);
+  const prevYm = (() => { const d = new Date(now); return ymOf(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime()); })();
+  const showPace = period === "month" && totalRev > 0;
+  const wdElapsed = Math.max(1, workdays(curYm, new Date(now).getDate()));
+  const wdTotal = workdays(curYm);
+  const pace = showPace ? (totalRev / wdElapsed) * wdTotal : 0;
+  const prevRev = showPace ? revenueFor(prevYm) : 0;
+  const paceDelta = prevRev > 0 ? (pace - prevRev) / prevRev : null;
+  const paceTip = `כולל מע״מ 18%: ${fmtMoney(pace * (1 + VAT))} · חודש שעבר: ${prevRev > 0 ? fmtMoney(prevRev) : "—"} · ${wdElapsed} מתוך ${wdTotal} ימי עבודה (א׳–ה׳)`;
   const scopeLabel = period === "day" ? "היום" : period === "yesterday" ? "אתמול" : period.startsWith("d:") ? `ב־${new Date(period.slice(2) + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "long" })}` : period === "week" ? "השבוע" : period === "month" ? "החודש" : period === "quarter" ? "ברבעון האחרון" : period === "12m" ? "ב־12 החודשים האחרונים" : `ב${ymLabel(period)}`;
   // clicking a bar drills one level down: a day-bar (week) or day-of-month (single
   // month) → that specific day; a month-bar (quarter/12m) → that month.
@@ -100,6 +115,16 @@ export function PersonalDashboard({ clients, cards, cardColumn, now, profile, on
           <div className="adk-kcell"><b>{fmtHours(totalSec)}<small>שע׳</small></b><span>שעות סה״כ</span></div>
           <div className="adk-kcell"><b>{per.length}</b><span>פרוייקטים פעילים</span></div>
           {totalRev > 0 && <div className="adk-kcell"><b>{fmtMoney(totalRev)}</b><span>הכנסה משוערת</span></div>}
+          {showPace && (
+            <div className="adk-kcell">
+              <b>{fmtMoney(pace)}<i className="adk-info" onMouseMove={(e) => showTip(e, paceTip)} onMouseLeave={() => setTip(null)}>i</i></b>
+              <span>
+                קצב חודשי משוער
+                {paceDelta !== null && <em className={"adk-delta " + (paceDelta >= 0 ? "up" : "down")}>{paceDelta >= 0 ? "▲" : "▼"} {Math.abs(Math.round(paceDelta * 100))}% מחודש שעבר</em>}
+                {paceDelta === null && <em className="adk-delta">אין נתוני חודש שעבר</em>}
+              </span>
+            </div>
+          )}
           <div className="adk-kcell"><b style={{ fontSize: 20 }}>{mostBusy?.cl.name || "—"}</b><span>הכי הרבה עבודה</span></div>
         </div>
 
