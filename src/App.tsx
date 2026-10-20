@@ -31,7 +31,7 @@ import { askAssistant, sendReviewAction } from "./data/assistant";
 import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction, connectGoogle } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
 import { upsertContact, listContacts } from "./data/contacts";
-import { extractPeople } from "./data/people";
+import { extractPeople, extractPeopleBatch } from "./data/people";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
@@ -523,6 +523,46 @@ export default function App() {
     }, 1200);
     return () => clearTimeout(t);
   }, [cloud, editing, editingTitle, roleViewer, knownPeople, selfName]);
+  // RETROACTIVE pass (once per card, remembered locally): every live card still
+  // stamped with the user whose title the local pass can't attribute goes to the
+  // batch extractor; people found are filed exactly like a fresh title. Runs once
+  // after the board loads, 40 titles per call.
+  const backfillRan = useRef(false);
+  useEffect(() => {
+    if (!cloud || !loaded || backfillRan.current || roleViewer) return;
+    backfillRan.current = true;
+    const KEY = "buno_people_backfill_v1";
+    let done: Record<string, 1> = {}; try { done = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { /* fresh */ }
+    const todo = (Object.values(cards) as any[]).filter((c) => {
+      if (!c || c.archived || done[c.id]) return false;
+      const cur = String(c.creator || "").trim(); const title = String(c.title || "").trim();
+      if (title.length < 3) return false;
+      if (cur && cur !== selfName && cur !== "אני") return false;
+      return inferGiversFromTitle(title, knownPeople, selfName).length === 0;
+    });
+    if (!todo.length) return;
+    (async () => {
+      for (let i = 0; i < todo.length; i += 40) {
+        const chunk = todo.slice(i, i + 40);
+        const res = await extractPeopleBatch(chunk.map((c) => ({ id: c.id, title: String(c.title || ""), description: String(c.description || "").slice(0, 300) })), knownPeople, selfName);
+        const found = Object.values(res).flat();
+        if (found.length) setContactNames((prev) => Array.from(new Set([...prev, ...found])));
+        setCards((p) => {
+          const n = { ...p };
+          for (const c of chunk) {
+            const people = res[c.id]; if (!people || !people.length) continue;
+            const live = n[c.id]; if (!live) continue;
+            const curNow = String(live.creator || "").trim(); if (curNow && curNow !== selfName && curNow !== "אני") continue;
+            const [g, ...rest] = people;
+            n[c.id] = { ...live, creator: g, cc: Array.from(new Set([...rest, ...(live.cc || []), ...(curNow ? [curNow] : [])])).filter((x) => x !== g) };
+          }
+          return n;
+        });
+        for (const c of chunk) done[c.id] = 1;
+        try { localStorage.setItem(KEY, JSON.stringify(done)); } catch { /* ok */ }
+      }
+    })();
+  }, [cloud, loaded, roleViewer, knownPeople, selfName]);
   // every assistant-initiated action passes through here; the app (not the prompt) enforces the matrix
   function assistantAction(kind: string, payload: any = {}) {
     const cat = /event|calendar/.test(kind) ? "calendar" : (/send|email|outbound/.test(kind) ? "outbound" : "cards");
