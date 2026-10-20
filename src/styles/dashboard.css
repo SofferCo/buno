@@ -7,3 +7,8 @@
 .ic-badge{position:absolute;top:-5px;inset-inline-start:-5px;min-width:16px;height:16px;padding:0 4px;background:var(--muted);color:var(--canvas);font-size:10px;font-weight:800;border-radius:9px;display:grid;place-items:center;border:2px solid var(--surface);}
 
 .adk-reptable td.num{font-variant-numeric:tabular-nums;white-space:nowrap;direction:ltr;text-align:end;color:var(--muted);}
+
+.adk-reptable th.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+.adk-reptable th.sortable:hover{color:var(--ink);}
+.adk-reptable th.sortable.on{color:var(--ink);}
+.adk-reptable th .arrow{font-size:9px;margin-inline-start:4px;}

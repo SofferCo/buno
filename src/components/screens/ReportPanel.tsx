@@ -63,12 +63,32 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
     return { bk, sec: inB.reduce((a: number, c: any) => a + cardSeconds(c, now), 0), hours: sumHours(inB, now, roundMode) };
   });
   const maxM = Math.max(1, ...bucketData.map((m) => m.sec));
-  const listed = [...inScope].sort((a, b) => cardSeconds(b, now) - cardSeconds(a, now));
   const statusOf = (c) => c.archived ? (c.removedBy === "client" ? "הוסר ע״י הלקוח" : "נמחק") : (cardColumn[c.id] === "col-done" ? "הושלם" : "פעיל");
   // received = creation; done = the last column move while the card sits in "done"
   // (columnChangedAt is the done time only for col-done — a card still open has none).
   const fmtD = (ms?: number) => ms ? new Date(ms).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" }) : "—";
   const doneAt = (c) => (!c.archived && cardColumn[c.id] === "col-done" && c.columnChangedAt) ? c.columnChangedAt : undefined;
+  // click a column header to sort (click again to flip). Default: hours, most first.
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: "hours", dir: -1 });
+  const sortBy = (key: string) => setSort((s) => s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === "title" || key === "giver" || key === "status" ? 1 : -1 });
+  const sortVal = (c: any): string | number => {
+    switch (sort.key) {
+      case "title": return String(c.title || "");
+      case "giver": return giverOf(c) || "\uffff";            // unattributed last
+      case "received": return Number(c.createdAt) || 0;
+      case "done": return Number(doneAt(c)) || 0;             // open cards (no date) last
+      case "status": return statusOf(c);
+      default: return cardSeconds(c, now);
+    }
+  };
+  const listed = [...inScope].sort((a, b) => {
+    const va = sortVal(a), vb = sortVal(b);
+    const r = typeof va === "string" && typeof vb === "string" ? va.localeCompare(vb, "he") : (Number(va) - Number(vb));
+    return r * sort.dir || cardSeconds(b, now) - cardSeconds(a, now);
+  });
+  const Th = ({ k, label }: { k: string; label: string }) => (
+    <th className={"sortable" + (sort.key === k ? " on" : "")} onClick={() => sortBy(k)} title="מיון">{label}{sort.key === k && <span className="arrow">{sort.dir === 1 ? "▲" : "▼"}</span>}</th>
+  );
   const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   return (
     <div className="adk-page">
@@ -129,7 +149,7 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
           <p className="adk-block-title">כל המשימות בתקופה</p>
           <div style={{ overflowY: "auto", minHeight: 0 }}>
           <table className="adk-reptable">
-            <thead><tr><th>משימה</th><th>נותן בריף</th><th>התקבל</th><th>בוצע</th><th>סטטוס</th><th>שעות</th></tr></thead>
+            <thead><tr><Th k="title" label="משימה" /><Th k="giver" label="נותן בריף" /><Th k="received" label="התקבל" /><Th k="done" label="בוצע" /><Th k="status" label="סטטוס" /><Th k="hours" label="שעות" /></tr></thead>
             <tbody>
               {listed.map((c) => (
                 <tr key={c.id} onClick={() => onOpen(c.id)}>

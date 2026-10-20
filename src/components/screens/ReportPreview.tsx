@@ -23,6 +23,8 @@ export function ReportPreview() {
     mk("לורן - תיקונים לקאברים", h(2), curDay(12), { creator: "טל סופר" }),
     // three people in one title → all three are givers, hours split evenly
     mk("יום עבודה - תמונות למאור, מתן, 2 משימות לורן", h(3), curDay(13), { creator: "טל סופר" }),
+    // already stamped with a REAL giver (מאור) — the other named people must still show
+    mk("יום עבודה 13/10 - תמונות למאור, מתן, 2 משימות לורן", h(10), curDay(14), { creator: "מאור" }),
     mk("ניוזלטר", h(3), curDay(20), { creator: "buno" }),
     // created last month but re-dated into this month → should bill THIS month
     mk("ריטיינר", h(2), curDay(6), { createdAt: prev.getTime(), creator: "דנה כהן" }),
