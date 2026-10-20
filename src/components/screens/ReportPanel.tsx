@@ -53,6 +53,10 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const maxM = Math.max(1, ...bucketData.map((m) => m.sec));
   const listed = [...inScope].sort((a, b) => cardSeconds(b, now) - cardSeconds(a, now));
   const statusOf = (c) => c.archived ? (c.removedBy === "client" ? "הוסר ע״י הלקוח" : "נמחק") : (cardColumn[c.id] === "col-done" ? "הושלם" : "פעיל");
+  // received = creation; done = the last column move while the card sits in "done"
+  // (columnChangedAt is the done time only for col-done — a card still open has none).
+  const fmtD = (ms?: number) => ms ? new Date(ms).toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" }) : "—";
+  const doneAt = (c) => (!c.archived && cardColumn[c.id] === "col-done" && c.columnChangedAt) ? c.columnChangedAt : undefined;
   const rangeLabel = dayMode ? dayRangeLabel(period, now) : period === "month" ? ymLabel(curYm) : period === "quarter" ? `${ymLabel(months[0])} – ${ymLabel(months[2])}` : period === "12m" ? `${ymLabel(seq[0])} – ${ymLabel(seq[11])}` : ymLabel(period);
   return (
     <div className="adk-page">
@@ -113,14 +117,14 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
           <p className="adk-block-title">כל המשימות בתקופה</p>
           <div style={{ overflowY: "auto", minHeight: 0 }}>
           <table className="adk-reptable">
-            <thead><tr><th>משימה</th><th>נותן בריף</th><th>סטטוס</th><th>שעות</th></tr></thead>
+            <thead><tr><th>משימה</th><th>נותן בריף</th><th>התקבל</th><th>בוצע</th><th>סטטוס</th><th>שעות</th></tr></thead>
             <tbody>
               {listed.map((c) => (
                 <tr key={c.id} onClick={() => onOpen(c.id)}>
-                  <td>{c.title || "ללא כותרת"}</td><td>{briefGiverOf(c) || "ללא שיוך"}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
+                  <td>{c.title || "ללא כותרת"}</td><td>{briefGiverOf(c) || "ללא שיוך"}</td><td className="num">{fmtD(c.createdAt)}</td><td className="num">{fmtD(doneAt(c))}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
                 </tr>
               ))}
-              {listed.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין משימות בתקופה זו</td></tr>}
+              {listed.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין משימות בתקופה זו</td></tr>}
             </tbody>
           </table>
           </div>

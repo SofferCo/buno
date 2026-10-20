@@ -15,7 +15,8 @@ export function ReportPreview() {
     ({ id, clientId: client.id, title: id, timeSpent, timerStart: null, createdAt: now, deadline, archived: false, subtasks: [], comments: [], attachments: [], ...extra });
 
   const list = [
-    mk("קמפיין קיץ", h(4), curDay(4), { creator: "דנה כהן" }),
+    // done 3 days after it came in → the report's "התקבל"/"בוצע" columns
+    mk("קמפיין קיץ", h(4), curDay(4), { creator: "דנה כהן", createdAt: now - 5 * 864e5, columnChangedAt: now - 2 * 864e5 }),
     mk("עיצוב לנדינג", h(2), curDay(9), { creator: "דנה כהן" }),
     mk("באנרים", h(1.5), curDay(11), { creator: "יוסי לוי" }),
     mk("ניוזלטר", h(3), curDay(20), { creator: "buno" }),
@@ -31,7 +32,7 @@ export function ReportPreview() {
   return (
     <div className="adk" style={{ minHeight: "100vh" }}>
     <ReportPanel
-      client={client} cards={list} cardColumn={{}} now={now} roundMode="ceil_hour"
+      client={client} cards={list} cardColumn={{ "קמפיין קיץ": "col-done" }} now={now} roundMode="ceil_hour"
       onClose={() => { location.search = ""; }} onOpen={(id: string) => alert("פתיחת משימה: " + id)}
     />
     </div>
