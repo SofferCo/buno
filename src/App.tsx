@@ -30,11 +30,11 @@ import { peekInvite, acceptInvite } from "./data/invites";
 import { askAssistant, sendReviewAction } from "./data/assistant";
 import { fetchCalendar, listIntegrations, hasGmailScope, sweepNow, calendarAction, connectGoogle } from "./data/integrations";
 import { inferEventProjectId, eventDomains } from "./lib/inferProject";
-import { upsertContact } from "./data/contacts";
+import { upsertContact, listContacts } from "./data/contacts";
 import { EventPanel } from "./components/screens/EventPanel";
 import { ImportScreen } from "./components/screens/ImportScreen";
 import { readDataURL, resizeImage } from "./lib/image";
-import { initials, nameColor, peopleOf } from "./lib/people";
+import { initials, nameColor, peopleOf, inferGiverFromTitle } from "./lib/people";
 import { cardSeconds, sumHours } from "./lib/time";
 
 export default function App() {
@@ -473,7 +473,26 @@ export default function App() {
   const running = Object.values(cards).some((c) => c.timerStart);
   useEffect(() => { if (!running) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [running]);
 
-  const updateCard = useCallback((id, patch) => setCards((p) => ({ ...p, [id]: { ...p[id], ...patch } })), []);
+  // every person buno knows by name — contacts (calendar/email/chat), board
+  // members, and names already on cards. Used to read the brief-giver off a title.
+  const [contactNames, setContactNames] = useState<string[]>([]);
+  useEffect(() => { if (!cloud || !loaded) return; listContacts().then((l) => setContactNames((l || []).map((c: any) => String(c.name || "")))).catch(() => {}); }, [cloud, loaded]);
+  const knownPeople = useMemo(() => Array.from(new Set([
+    ...contactNames,
+    ...clients.flatMap((c) => c.members || []),
+    ...Object.values(cards).flatMap((c: any) => peopleOf(c)),
+  ].map((s) => String(s || "").trim()).filter(Boolean))), [contactNames, clients, cards]);
+  const selfName = profile.name || identity?.name || "אני";
+  // a title that names a known person makes them the brief-giver — but only when the
+  // card is still stamped with the user themself (never overrides a real giver).
+  const withGiverFromTitle = useCallback((card, patch) => {
+    if (!patch || typeof patch.title !== "string") return patch;
+    const cur = String(card?.creator || "").trim();
+    if (cur && cur !== selfName && cur !== "אני") return patch;
+    const g = inferGiverFromTitle(patch.title, knownPeople, selfName);
+    return g ? { ...patch, creator: g, cc: Array.from(new Set([...(card?.cc || []), ...(cur ? [cur] : [])])).filter((n) => n !== g) } : patch;
+  }, [knownPeople, selfName]);
+  const updateCard = useCallback((id, patch) => setCards((p) => ({ ...p, [id]: { ...p[id], ...withGiverFromTitle(p[id], patch) } })), [withGiverFromTitle]);
   // every assistant-initiated action passes through here; the app (not the prompt) enforces the matrix
   function assistantAction(kind: string, payload: any = {}) {
     const cat = /event|calendar/.test(kind) ? "calendar" : (/send|email|outbound/.test(kind) ? "outbound" : "cards");
@@ -940,7 +959,7 @@ export default function App() {
       </>)}
 
       {reportOpen && (
-        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} roundMode={roundMode} initialPeriod={reportPeriod} onClose={() => { setReportOpen(false); if (reportFromDash) { setReportFromDash(false); setDashOpen(true); } }} onOpen={(id) => setEditing(id)} />
+        <ReportPanel client={current} cards={curCards} cardColumn={cardColumn} now={now} knownPeople={knownPeople} selfName={selfName} roundMode={roundMode} initialPeriod={reportPeriod} onClose={() => { setReportOpen(false); if (reportFromDash) { setReportFromDash(false); setDashOpen(true); } }} onOpen={(id) => setEditing(id)} />
       )}
 
 

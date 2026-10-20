@@ -5,10 +5,14 @@ import { PeriodPicker } from "../ui/PeriodPicker";
 import { DONUT_COLORS } from "../../lib/constants";
 import { last12Months, ymLabel, ymOf, dayRange, rangeDays, billDayMs, dayShort, dayRangeLabel } from "../../lib/date";
 import { fmtModeHours, fmtMoney } from "../../lib/format";
-import { briefGiverOf } from "../../lib/people";
+import { briefGiverOf, inferGiverFromTitle } from "../../lib/people";
 import { cardSeconds, sumHours, cardHours } from "../../lib/time";
 
-export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_hour", initialPeriod = null, onClose, onOpen }) {
+export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_hour", initialPeriod = null, onClose, onOpen, knownPeople = [], selfName = "" }) {
+  // brief-giver for the report: the card's giver, unless it's the user themself (or
+  // empty) and the TITLE names a known person — then that person. Covers cards
+  // created before titles were read for a giver, without rewriting them.
+  const giverOf = (c: any): string => { const g = briefGiverOf(c); if (g && g !== selfName) return g; return inferGiverFromTitle(c.title, knownPeople, selfName) || g; };
   const seq = last12Months();
   const curYm = ymOf(now);
   const [period, setPeriod] = useState(initialPeriod || "month");   // default: the current month (or the period carried from the dashboard)
@@ -30,7 +34,7 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
   const revenue = billableHours * rate;
   const byGiver: Record<string, any> = {};
   // buno is a tool, never a brief-giver: a buno/unattributed card is "ללא שיוך", not buno.
-  inScope.filter((c) => !c.archived).forEach((c) => { const g = briefGiverOf(c) || "ללא שיוך"; (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += cardSeconds(c, now); });
+  inScope.filter((c) => !c.archived).forEach((c) => { const g = giverOf(c) || "ללא שיוך"; (byGiver[g] = byGiver[g] || { count: 0, sec: 0 }); byGiver[g].count++; byGiver[g].sec += cardSeconds(c, now); });
   const givers = Object.entries(byGiver).map(([k, v]) => ({ name: k, ...v })).sort((a, b) => b.sec - a.sec);
   const distinctGivers = givers.filter((g) => g.name !== "ללא שיוך").length;
   const gDenom = givers.reduce((a, g) => a + g.sec, 0) || 1;
@@ -121,7 +125,7 @@ export function ReportPanel({ client, cards, cardColumn, now, roundMode = "ceil_
             <tbody>
               {listed.map((c) => (
                 <tr key={c.id} onClick={() => onOpen(c.id)}>
-                  <td>{c.title || "ללא כותרת"}</td><td>{briefGiverOf(c) || "ללא שיוך"}</td><td className="num">{fmtD(c.createdAt)}</td><td className="num">{fmtD(doneAt(c))}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
+                  <td>{c.title || "ללא כותרת"}</td><td>{giverOf(c) || "ללא שיוך"}</td><td className="num">{fmtD(c.createdAt)}</td><td className="num">{fmtD(doneAt(c))}</td><td>{statusOf(c)}</td><td>{fmtModeHours(cardHours(cardSeconds(c, now), roundMode), roundMode)}</td>
                 </tr>
               ))}
               {listed.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--faint)", padding: 24 }}>אין משימות בתקופה זו</td></tr>}

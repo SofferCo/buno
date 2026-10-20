@@ -11,6 +11,29 @@ export function briefGiverOf(c) { const g = String(creatorOf(c) || "").trim(); r
 
 export function ccOf(c) { return c.cc || []; }
 
+// "לורן - תיקונים…", "תמונות למאור": the user names the brief-giver IN the title
+// but the card is stamped with themself as creator. Given the known people
+// (contacts, board members, names already on cards), return the one the title
+// names — longest match first, whole-word, case-insensitive; a Hebrew prefix
+// letter (ל/מ/ש/ו/ב/ה) before the name is allowed ("למאור" → מאור). "" if none.
+export function inferGiverFromTitle(title: any, names: any[], selfName: any = ""): string {
+  const t = String(title || "").trim(); if (!t) return "";
+  const self = String(selfName || "").trim().toLowerCase();
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cands: string[] = Array.from(new Set<string>((names || []).map((n: any) => String(n || "").trim()).filter((n) => n.length >= 2 && n !== "buno" && n !== "העוזר" && n.toLowerCase() !== self)));
+  // whole word (Hebrew/Latin), optional single Hebrew prefix letter ("למאור" → מאור)
+  const at = (needle: string): number => { const m = new RegExp(`(^|[^\\p{L}\\p{N}])(?:[למשובהכ])?(${esc(needle)})(?=$|[^\\p{L}\\p{N}])`, "iu").exec(t); return m ? m.index + m[1].length : -1; };
+  let best = ""; let bestAt = Infinity;
+  for (const n of cands) {
+    let i = at(n);
+    const first = n.split(/\s+/)[0];           // "Lauren Stuttaford" named as "Lauren"
+    if (i < 0 && first.length >= 3 && first !== n) i = at(first);
+    // several people in one title → the FIRST mentioned; same spot → the longer name
+    if (i >= 0 && (i < bestAt || (i === bestAt && n.length > best.length))) { best = n; bestAt = i; }
+  }
+  return best;
+}
+
 // buno is the CREATOR in metadata only — it must never show as an assignee/person.
 // Real human creators still appear; assignees come from cc.
 export function peopleOf(c) { const r = []; const cr = creatorOf(c); if (cr && cr !== "buno") r.push(cr); ccOf(c).forEach((n) => { const nm = n === "העוזר" ? "buno" : n; if (nm && nm !== "buno" && !r.includes(nm)) r.push(nm); }); return r; }

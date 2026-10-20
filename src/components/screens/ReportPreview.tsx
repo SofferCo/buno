@@ -19,6 +19,8 @@ export function ReportPreview() {
     mk("קמפיין קיץ", h(4), curDay(4), { creator: "דנה כהן", createdAt: now - 5 * 864e5, columnChangedAt: now - 2 * 864e5 }),
     mk("עיצוב לנדינג", h(2), curDay(9), { creator: "דנה כהן" }),
     mk("באנרים", h(1.5), curDay(11), { creator: "יוסי לוי" }),
+    // stamped with the user, but the TITLE names a known contact → the report shows לורן
+    mk("לורן - תיקונים לקאברים", h(2), curDay(12), { creator: "טל סופר" }),
     mk("ניוזלטר", h(3), curDay(20), { creator: "buno" }),
     // created last month but re-dated into this month → should bill THIS month
     mk("ריטיינר", h(2), curDay(6), { createdAt: prev.getTime(), creator: "דנה כהן" }),
@@ -32,7 +34,7 @@ export function ReportPreview() {
   return (
     <div className="adk" style={{ minHeight: "100vh" }}>
     <ReportPanel
-      client={client} cards={list} cardColumn={{ "קמפיין קיץ": "col-done" }} now={now} roundMode="ceil_hour"
+      client={client} cards={list} cardColumn={{ "קמפיין קיץ": "col-done" }} now={now} knownPeople={["לורן", "מאור", "דנה כהן"]} selfName="טל סופר" roundMode="ceil_hour"
       onClose={() => { location.search = ""; }} onOpen={(id: string) => alert("פתיחת משימה: " + id)}
     />
     </div>
