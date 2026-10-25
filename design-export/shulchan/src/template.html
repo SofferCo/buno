@@ -1,0 +1,380 @@
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>@import"https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&display=swap";</style>
+
+<style>
+html,body{margin:0;padding:0;background:#f4f5f8}
+body{font-family:'Google Sans',system-ui,-apple-system,sans-serif;color:#0f2a4a;-webkit-font-smoothing:antialiased}
+a{color:#7c3aed}a:hover{color:#5b21b6}
+input,button,select,textarea{font-family:inherit}
+input::placeholder{color:#8a97a8}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div dir="rtl" style="min-height:100vh;background:#f4f5f8;color:#0f2a4a;font-family:'Google Sans',system-ui,sans-serif;font-size:16px;line-height:1.45">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+<div style="min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,#efe0ff 0%,#f4f5f8 55%)">
+<div style="width:100%;max-width:400px;background:#fff;border-radius:28px;padding:36px 28px;box-shadow:0 12px 40px rgba(15,42,74,.10);display:flex;flex-direction:column;gap:18px;animation:fadeUp .4s ease">
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+<div style="width:64px;height:64px;border-radius:50%;background:#0f2a4a;color:#d9fb8a;display:grid;place-items:center;font-weight:700;font-size:26px">ש</div>
+<div style="font-size:28px;font-weight:700;letter-spacing:-.01em">שולחן משפחתי</div>
+<div style="color:#5b6b7f;text-align:center;text-wrap:pretty">כל זוג עם הסבב שלו. כל בית רואה מי מגיע. הכול ארוג לרשת אחת.</div>
+</div>
+<button sc-camel-on-click="{{ loginGoogle }}" style="display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:14px;border:1.5px solid #dde3ea;background:#fff;font-size:16px;font-weight:500;color:#0f2a4a;cursor:pointer" style-hover="background:#f4f5f8"><span style="width:18px;height:18px;border-radius:50%;background:conic-gradient(#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)"></span>המשך עם Google</button>
+<div style="display:flex;align-items:center;gap:12px;color:#8a97a8;font-size:13px"><span style="flex:1;height:1px;background:#e5e9ef"></span>או במייל<span style="flex:1;height:1px;background:#e5e9ef"></span></div>
+<input value="{{ loginEmail }}" sc-camel-on-change="{{ setLoginEmail }}" placeholder="tal@example.com" type="email" dir="ltr" style="height:52px;border-radius:14px;border:1.5px solid #dde3ea;padding:0 16px;font-size:16px;outline:none;text-align:left;color:#0f2a4a;background:#fff" style-focus="border-color:#7c3aed">
+<button sc-camel-on-click="{{ loginEmailGo }}" style="height:52px;border-radius:14px;border:none;background:#7c3aed;color:#fff;font-size:16px;font-weight:600;cursor:pointer" style-hover="background:#6d28d9">שליחת קישור כניסה</button>
+<div style="font-size:12px;color:#8a97a8;text-align:center">קיבלת הזמנה מבית קיים? הקישור במייל מחבר אותך ישירות לשולחן.</div>
+</div></div>
+</sc-if>
+
+<sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ false }}">
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 40px">
+<div style="width:100%;max-width:560px;display:flex;flex-direction:column;gap:20px;animation:fadeUp .4s ease">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="font-weight:700;font-size:18px">הגדרת הסבב שלנו</div>
+<div style="display:flex;gap:6px"><sc-for list="{{ obDots }}" as="d" hint-placeholder-count="4"><span style="width:{{ d.w }};height:8px;border-radius:4px;background:{{ d.bg }};transition:all .3s"></span></sc-for></div>
+</div>
+
+<sc-if value="{{ ob0 }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;border-radius:24px;padding:28px 24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 4px 20px rgba(15,42,74,.06)">
+<div><div style="font-size:26px;font-weight:700">נעים להכיר</div><div style="color:#5b6b7f;text-wrap:pretty">הזוג הוא היחידה: כשמאשרים הגעה — שניכם מגיעים, אלא אם כתבתם אחרת. הבתים שאתם הולכים אליהם משותפים עם האחים.</div></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+<label style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;color:#5b6b7f">השם שלך<input value="{{ me }}" sc-camel-on-change="{{ setMe }}" style="height:52px;border-radius:14px;border:1.5px solid #dde3ea;padding:0 16px;font-size:17px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed"></label>
+<label style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500;color:#5b6b7f">בן/בת הזוג<input value="{{ partner }}" sc-camel-on-change="{{ setPartner }}" style="height:52px;border-radius:14px;border:1.5px solid #dde3ea;padding:0 16px;font-size:17px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed"></label>
+</div>
+<div style="background:#f4f5f8;border-radius:16px;padding:14px 16px;font-size:14px;color:#5b6b7f;text-wrap:pretty">הוזמנתם על ידי <b style="color:#0f2a4a">משפחת גוזלן</b> — הבית כבר מקושר לצד של שרון.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob1 }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="padding:0 4px"><div style="font-size:26px;font-weight:700">שני הצדדים שלנו</div><div style="color:#5b6b7f;text-wrap:pretty">כל צד מקבל את אותו מספר שבתות וחגים. בצד עם כמה בתים — הבתים מתחלפים ביניהם.</div></div>
+<sc-for list="{{ sideEditors }}" as="s" hint-placeholder-count="2">
+<div style="background:#fff;border-radius:24px;padding:22px 20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 4px 20px rgba(15,42,74,.06);border-top:6px solid {{ s.color }}">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font-size:13px;font-weight:600;color:#5b6b7f;white-space:nowrap">צד של</span>
+<input value="{{ s.name }}" sc-camel-on-change="{{ s.setName }}" style="flex:1;height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:17px;font-weight:600;outline:none;color:#0f2a4a;min-width:0" style-focus="border-color:#7c3aed">
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ s.homes }}" as="h" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="width:12px;height:12px;border-radius:50%;background:{{ h.color }};flex:none"></span>
+<input value="{{ h.name }}" sc-camel-on-change="{{ h.setName }}" placeholder="שם הבית (למשל: אבא ורונית)" style="flex:1;height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:16px;outline:none;color:#0f2a4a;min-width:0" style-focus="border-color:#7c3aed">
+<input value="{{ h.city }}" sc-camel-on-change="{{ h.setCity }}" placeholder="עיר" style="width:80px;height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 12px;font-size:15px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed">
+<sc-if value="{{ h.shared }}" hint-placeholder-val="{{ false }}"><span title="בית משותף עם זוגות נוספים" style="font-size:11px;font-weight:700;background:#d8f3ec;color:#0b6b4a;padding:4px 8px;border-radius:999px;white-space:nowrap">{{ h.sharedLabel }}</span></sc-if>
+<button sc-camel-on-click="{{ h.remove }}" title="הסרה" style="width:44px;height:44px;border-radius:12px;border:none;background:#f4f5f8;color:#5b6b7f;cursor:pointer;font-size:18px;flex:none" style-hover="background:#fde4ea;color:#b4173a">×</button>
+</div>
+</sc-for>
+<button sc-camel-on-click="{{ s.addHome }}" style="height:44px;border-radius:12px;border:1.5px dashed #c9d2dd;background:transparent;color:#7c3aed;font-weight:600;cursor:pointer;font-size:15px" style-hover="background:#f7f2ff">+ עוד בית בצד הזה</button>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob2 }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border-radius:24px;padding:28px 24px;display:flex;flex-direction:column;gap:20px;box-shadow:0 4px 20px rgba(15,42,74,.06)">
+<div><div style="font-size:26px;font-weight:700">איפה הייתם בשנה שעברה?</div><div style="color:#5b6b7f;text-wrap:pretty">ההיסטוריה קובעת את ההמשך: הצד שלא אירח חג בשנה שעברה — מקבל אותו השנה.</div></div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ historyRows }}" as="r" hint-placeholder-count="6">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<div><div style="font-weight:600">{{ r.name }}</div><div style="font-size:13px;color:#8a97a8">{{ r.lastDate }}</div></div>
+<div style="display:flex;background:#f4f5f8;border-radius:12px;padding:4px;gap:4px">
+<sc-for list="{{ r.options }}" as="o" hint-placeholder-count="2"><button sc-camel-on-click="{{ o.pick }}" style="height:38px;padding:0 16px;border-radius:9px;border:none;background:{{ o.bg }};color:{{ o.fg }};font-weight:600;cursor:pointer;font-size:15px;transition:all .2s">{{ o.label }}</button></sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="height:1px;background:#e5e9ef"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<div><div style="font-weight:600">השבת האחרונה הייתה אצל</div><div style="font-size:13px;color:#8a97a8">מכאן ממשיך הסבב</div></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{ lastShabbatOptions }}" as="o" hint-placeholder-count="3"><button sc-camel-on-click="{{ o.pick }}" style="height:38px;padding:0 14px;border-radius:999px;border:2px solid {{ o.border }};background:{{ o.bg }};color:#0f2a4a;font-weight:600;cursor:pointer;font-size:14px">{{ o.label }}</button></sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ ob3 }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border-radius:24px;padding:28px 24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 4px 20px rgba(15,42,74,.06)">
+<div><div style="font-size:26px;font-weight:700">האנשים</div><div style="color:#5b6b7f;text-wrap:pretty">מייל להזמנה, ואם רוצים — יום הולדת. לא חובה; הוא יופיע כציון קטן ליד השבת הקרובה אליו, לפי הלוח שתבחרו.</div></div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ inviteRows }}" as="p" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:#f4f5f8">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="width:36px;height:36px;border-radius:50%;background:{{ p.color }};display:grid;place-items:center;font-weight:700;font-size:15px;flex:none">{{ p.initial }}</span>
+<div style="flex:1;min-width:0"><div style="font-weight:600">{{ p.name }}</div><div style="font-size:13px;color:#8a97a8">{{ p.sub }}</div></div>
+<input value="{{ p.email }}" sc-camel-on-change="{{ p.setEmail }}" placeholder="email" type="email" dir="ltr" style="width:170px;max-width:42%;height:40px;border-radius:10px;border:1.5px solid #dde3ea;padding:0 12px;font-size:14px;outline:none;color:#0f2a4a;text-align:left;background:#fff" style-focus="border-color:#7c3aed">
+</div>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-inline-start:46px">
+<span style="font-size:13px;color:#8a97a8">יום הולדת</span>
+<input value="{{ p.bday }}" sc-camel-on-change="{{ p.setBday }}" type="date" dir="ltr" style="height:36px;border-radius:10px;border:1.5px solid #dde3ea;padding:0 10px;font-size:13px;outline:none;color:#0f2a4a;background:#fff" style-focus="border-color:#7c3aed">
+<sc-if value="{{ p.bday }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;background:#fff;border-radius:10px;padding:3px;gap:3px;border:1.5px solid #dde3ea">
+<button sc-camel-on-click="{{ p.setGreg }}" style="height:28px;padding:0 10px;border-radius:7px;border:none;background:{{ p.gregBg }};color:{{ p.gregFg }};font-size:13px;font-weight:600;cursor:pointer">לועזי</button>
+<button sc-camel-on-click="{{ p.setHeb }}" style="height:28px;padding:0 10px;border-radius:7px;border:none;background:{{ p.hebBg }};color:{{ p.hebFg }};font-size:13px;font-weight:600;cursor:pointer">עברי</button>
+</div>
+<span style="font-size:12px;color:#8a97a8">{{ p.bdayLabel }}</span>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="display:flex;gap:10px;justify-content:space-between">
+<button sc-camel-on-click="{{ obBack }}" style="height:52px;padding:0 22px;border-radius:14px;border:none;background:#fff;color:#0f2a4a;font-weight:600;cursor:pointer;font-size:16px;visibility:{{ obBackVis }}" style-hover="background:#e9ecf1">חזרה</button>
+<button sc-camel-on-click="{{ obNext }}" style="height:52px;padding:0 28px;border-radius:14px;border:none;background:#0f2a4a;color:#fff;font-weight:600;cursor:pointer;font-size:16px" style-hover="background:#1b3d66">{{ obNextLabel }}</button>
+</div>
+</div></div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+<div style="min-height:100vh;display:flex;flex-direction:column">
+<header style="background:#fff;border-bottom:1px solid #e9ecf1;position:sticky;top:0;z-index:5">
+<div style="max-width:1100px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:42px;height:42px;border-radius:50%;background:#0f2a4a;color:#d9fb8a;display:grid;place-items:center;font-weight:700;font-size:18px">ש</div>
+<div><div style="font-weight:700;font-size:18px;line-height:1.1">{{ unitName }}</div><div style="font-size:12px;color:#8a97a8">{{ headerSub }}</div></div>
+</div>
+<nav style="display:flex;gap:4px;background:#f4f5f8;padding:4px;border-radius:14px">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3"><button sc-camel-on-click="{{ t.go }}" style="height:40px;padding:0 14px;border-radius:10px;border:none;background:{{ t.bg }};color:{{ t.fg }};font-weight:600;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:6px;transition:all .2s">{{ t.label }}<sc-if value="{{ t.badge }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;border-radius:9px;background:#7a1f5c;color:#fff;font-size:11px;display:grid;place-items:center;padding:0 5px">{{ t.badge }}</span></sc-if></button></sc-for>
+</nav>
+</div>
+</header>
+
+<sc-if value="{{ banner }}" hint-placeholder-val="{{ false }}">
+<div style="background:#7a1f5c;color:#fff;padding:12px 18px"><div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px"><div style="font-size:15px">{{ banner }}</div><button sc-camel-on-click="{{ dismissBanner }}" style="border:none;background:transparent;color:#fff;font-size:20px;cursor:pointer;line-height:1">×</button></div></div>
+</sc-if>
+
+<main style="flex:1;max-width:1100px;width:100%;margin:0 auto;padding:20px 18px 40px;box-sizing:border-box">
+
+<sc-if value="{{ tabCal }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px;align-items:start">
+
+<sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+<section style="display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease">
+<sc-if value="{{ hasNext }}" hint-placeholder-val="{{ true }}">
+<button sc-camel-on-click="{{ next.open }}" style="text-align:right;width:100%;border:none;cursor:pointer;background:{{ next.hostBg }};border-radius:28px;padding:24px 24px 22px;display:flex;flex-direction:column;gap:14px;color:#0f2a4a;box-shadow:0 10px 30px rgba(15,42,74,.10);transition:transform .15s" style-hover="transform:translateY(-2px)">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%">
+<span style="font-size:13px;font-weight:700;background:#0f2a4a;color:#fff;padding:5px 12px;border-radius:999px">{{ next.when }}</span>
+<span style="font-size:14px;font-weight:600;color:#5b6b7f">{{ next.hebrew }}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:4px">
+<div style="font-size:14px;font-weight:600;color:#5b6b7f">{{ next.longDate }}</div>
+<div style="font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.01em">{{ next.title }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<span style="display:inline-flex;align-items:center;gap:8px;background:#fff;padding:10px 16px;border-radius:999px;font-weight:700;font-size:17px"><span style="width:10px;height:10px;border-radius:50%;background:{{ next.hostDot }}"></span>{{ next.hostFull }}</span>
+<sc-if value="{{ next.city }}" hint-placeholder-val="{{ false }}"><span style="font-size:15px;color:#5b6b7f">{{ next.city }}</span></sc-if>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;width:100%">
+<div style="font-size:13px;font-weight:700;color:#5b6b7f">{{ next.othersTitle }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{ next.attendees }}" as="a" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.75);font-size:14px;font-weight:600"><span style="width:9px;height:9px;border-radius:50%;background:{{ a.dot }}"></span>{{ a.label }}<sc-if value="{{ a.note }}" hint-placeholder-val="{{ false }}"><span style="font-weight:400;color:#5b6b7f">· {{ a.note }}</span></sc-if></span></sc-for>
+</div>
+<sc-for list="{{ next.bdays }}" as="b" hint-placeholder-count="0"><span style="display:inline-flex;align-items:center;gap:6px;align-self:flex-start;padding:6px 12px;border-radius:999px;background:#fde4ea;color:#9f1239;font-size:13px;font-weight:600">{{ b.label }}</span></sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding-top:6px;border-top:1px solid rgba(15,42,74,.10)">
+<span style="font-size:14px;color:#5b6b7f">{{ next.rsvpSummary }}</span>
+<span style="font-size:14px;font-weight:700;color:#7c3aed">{{ next.cta }} ‹</span>
+</div>
+</button>
+</sc-if>
+<div style="display:flex;gap:6px;background:#fff;padding:4px;border-radius:14px;border:1px solid #e9ecf1">
+<sc-for list="{{ filters }}" as="f" hint-placeholder-count="3"><button sc-camel-on-click="{{ f.go }}" style="flex:1;height:38px;border-radius:10px;border:none;background:{{ f.bg }};color:{{ f.fg }};font-weight:600;cursor:pointer;font-size:14px;transition:all .2s">{{ f.label }}</button></sc-for>
+</div>
+<div style="font-size:15px;font-weight:700;color:#5b6b7f;padding:4px 4px 0">בהמשך</div>
+<sc-for list="{{ months }}" as="m" hint-placeholder-count="2">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:8px;padding:0 4px"><span style="font-size:20px;font-weight:700">{{ m.label }}</span><span style="font-size:13px;color:#8a97a8">({{ m.count }})</span></div>
+<sc-for list="{{ m.events }}" as="ev" hint-placeholder-count="4">
+<button sc-camel-on-click="{{ ev.open }}" style="text-align:right;width:100%;background:#fff;border:2px solid {{ ev.border }};border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .15s;opacity:{{ ev.opacity }}" style-hover="transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,42,74,.08)">
+<div style="width:52px;flex:none;text-align:center;background:{{ ev.dateBg }};border-radius:14px;padding:8px 0"><div style="font-size:20px;font-weight:700;line-height:1">{{ ev.day }}</div><div style="font-size:11px;color:#5b6b7f;font-weight:600">{{ ev.dow }}</div></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-weight:700;font-size:16px">{{ ev.title }}</span><sc-if value="{{ ev.isHoliday }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:700;background:#fff3c4;color:#7a5a00;padding:2px 8px;border-radius:999px">חג</span></sc-if><sc-for list="{{ ev.bdays }}" as="b" hint-placeholder-count="0"><span style="font-size:11px;font-weight:700;background:#fde4ea;color:#9f1239;padding:2px 8px;border-radius:999px">{{ b.short }}</span></sc-for></div>
+<div style="font-size:13px;color:#8a97a8">{{ ev.hebrew }}</div>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+<span style="display:inline-flex;align-items:center;gap:6px;background:{{ ev.hostBg }};color:#0f2a4a;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{ ev.hostDot }}"></span>{{ ev.hostLabel }}</span>
+<span style="font-size:13px;color:#5b6b7f">{{ ev.othersShort }}</span>
+</div>
+</div>
+<span style="color:#c9d2dd;font-size:20px">‹</span>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</section>
+</sc-if>
+
+<sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+<section style="position:sticky;top:90px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease">
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 4px 20px rgba(15,42,74,.06)">
+<div style="background:{{ sel.hostBg }};padding:22px 22px 18px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+<div><div style="font-size:13px;font-weight:600;color:#5b6b7f">{{ sel.longDate }} · {{ sel.hebrew }}</div><div style="font-size:26px;font-weight:700;line-height:1.15">{{ sel.title }}</div></div>
+<sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}"><button sc-camel-on-click="{{ closeDetail }}" style="width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.7);cursor:pointer;font-size:20px;color:#0f2a4a">›</button></sc-if>
+</div>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<span style="display:inline-flex;align-items:center;gap:8px;background:#fff;padding:8px 14px;border-radius:999px;font-weight:700;font-size:15px"><span style="width:10px;height:10px;border-radius:50%;background:{{ sel.hostDot }}"></span>{{ sel.hostFull }}</span>
+<sc-if value="{{ sel.city }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;color:#5b6b7f">{{ sel.city }}</span></sc-if>
+</div>
+<sc-for list="{{ sel.bdays }}" as="b" hint-placeholder-count="0"><span style="align-self:flex-start;padding:6px 12px;border-radius:999px;background:#fde4ea;color:#9f1239;font-size:13px;font-weight:600">{{ b.label }}</span></sc-for>
+</div>
+<sc-if value="{{ selClosedNote }}" hint-placeholder-val="{{ false }}"><div style="margin:14px 22px 0;font-size:13px;color:#7a1f5c;background:#fbe9f4;padding:10px 12px;border-radius:12px">{{ selClosedNote }}</div></sc-if>
+<div style="padding:18px 22px;display:flex;flex-direction:column;gap:22px">
+
+<sc-if value="{{ hasTable }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">{{ rsvpTitle }}</div><div style="font-size:13px;color:#8a97a8">{{ sel.rsvpSummary }}</div></div>
+<sc-if value="{{ isCoupleView }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:6px;background:#f4f5f8;padding:4px;border-radius:14px">
+<sc-for list="{{ rsvpOptions }}" as="o" hint-placeholder-count="3"><button sc-camel-on-click="{{ o.pick }}" style="flex:1;height:44px;border-radius:10px;border:none;background:{{ o.bg }};color:{{ o.fg }};font-weight:600;cursor:pointer;font-size:15px;transition:all .2s">{{ o.label }}</button></sc-for>
+</div>
+<input value="{{ rsvpNote }}" sc-camel-on-change="{{ setRsvpNote }}" placeholder="הערה (למשל: רק טל, מגיעים מאוחר, עם הילדים…)" style="height:42px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:14px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed">
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:6px">
+<sc-for list="{{ attendees }}" as="a" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;background:#f4f5f8">
+<span style="width:10px;height:10px;border-radius:50%;background:{{ a.dot }};flex:none"></span>
+<div style="flex:1;font-weight:600">{{ a.label }}<sc-if value="{{ a.note }}" hint-placeholder-val="{{ false }}"><span style="font-weight:400;color:#5b6b7f"> · {{ a.note }}</span></sc-if></div>
+<span style="font-size:13px;color:#5b6b7f">{{ a.status }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ noAttendees }}" hint-placeholder-val="{{ false }}"><div style="padding:14px;border-radius:12px;border:1.5px dashed #dde3ea;color:#8a97a8;font-size:14px;text-align:center">אף זוג לא משובץ לכאן השבת</div></sc-if>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-weight:700">מי מביא מה</div>
+<sc-for list="{{ bringItems }}" as="b" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#f4f5f8">
+<div style="flex:1;font-weight:500">{{ b.item }}</div>
+<sc-if value="{{ b.who }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#5b6b7f"><span style="width:8px;height:8px;border-radius:50%;background:{{ b.dot }}"></span>{{ b.who }}</span></sc-if>
+<sc-if value="{{ b.open }}" hint-placeholder-val="{{ false }}"><button sc-camel-on-click="{{ b.claim }}" style="height:34px;padding:0 14px;border-radius:999px;border:none;background:#10a974;color:#fff;font-weight:600;cursor:pointer;font-size:13px" style-hover="background:#0b8f61">אנחנו מביאים</button></sc-if>
+<button sc-camel-on-click="{{ b.remove }}" style="width:30px;height:30px;border-radius:50%;border:none;background:transparent;color:#8a97a8;cursor:pointer;font-size:18px" style-hover="background:#fde4ea;color:#b4173a">×</button>
+</div>
+</sc-for>
+<div style="display:flex;gap:8px">
+<input value="{{ newBring }}" sc-camel-on-change="{{ setNewBring }}" sc-camel-on-key-down="{{ bringKey }}" placeholder="למשל: סלט, קינוח, חלות…" style="flex:1;height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:15px;outline:none;color:#0f2a4a;min-width:0" style-focus="border-color:#7c3aed">
+<button sc-camel-on-click="{{ addBring }}" style="height:44px;padding:0 18px;border-radius:12px;border:none;background:#0f2a4a;color:#fff;font-weight:600;cursor:pointer">הוספה</button>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-weight:700">סקרים</div>
+<sc-for list="{{ polls }}" as="p" hint-placeholder-count="1">
+<div style="border:1.5px solid #e9ecf1;border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px">
+<div style="font-weight:600">{{ p.q }}</div>
+<sc-for list="{{ p.options }}" as="o" hint-placeholder-count="2">
+<button sc-camel-on-click="{{ o.vote }}" style="position:relative;overflow:hidden;text-align:right;height:44px;border-radius:12px;border:1.5px solid {{ o.border }};background:#fff;cursor:pointer;padding:0 14px;display:flex;align-items:center;justify-content:space-between;font-size:15px;color:#0f2a4a">
+<span style="position:absolute;inset:0;width:{{ o.pct }};background:{{ o.fill }};transition:width .4s"></span>
+<span style="position:relative;font-weight:{{ o.weight }}">{{ o.t }}</span><span style="position:relative;font-size:13px;color:#5b6b7f">{{ o.count }}</span>
+</button>
+</sc-for>
+</div>
+</sc-for>
+<sc-if value="{{ addingPoll }}" hint-placeholder-val="{{ false }}">
+<div style="border:1.5px dashed #c9d2dd;border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px">
+<input value="{{ newPollQ }}" sc-camel-on-change="{{ setNewPollQ }}" placeholder="השאלה (למשל: ארוחת צהריים או ערב?)" style="height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:15px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed">
+<input value="{{ newPollOpts }}" sc-camel-on-change="{{ setNewPollOpts }}" placeholder="אפשרויות מופרדות בפסיק" style="height:44px;border-radius:12px;border:1.5px solid #dde3ea;padding:0 14px;font-size:15px;outline:none;color:#0f2a4a" style-focus="border-color:#7c3aed">
+<div style="display:flex;gap:8px"><button sc-camel-on-click="{{ savePoll }}" style="height:40px;padding:0 18px;border-radius:12px;border:none;background:#7c3aed;color:#fff;font-weight:600;cursor:pointer">פרסום סקר</button><button sc-camel-on-click="{{ togglePoll }}" style="height:40px;padding:0 14px;border-radius:12px;border:none;background:#f4f5f8;color:#5b6b7f;font-weight:600;cursor:pointer">ביטול</button></div>
+</div>
+</sc-if>
+<sc-if value="{{ notAddingPoll }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ togglePoll }}" style="height:44px;border-radius:12px;border:1.5px dashed #c9d2dd;background:transparent;color:#7c3aed;font-weight:600;cursor:pointer;font-size:15px" style-hover="background:#f7f2ff">+ סקר חדש</button></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCoupleView }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-weight:700">הסבב שלנו</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{ hostOptions }}" as="o" hint-placeholder-count="3"><button sc-camel-on-click="{{ o.pick }}" style="height:40px;padding:0 14px;border-radius:999px;border:2px solid {{ o.border }};background:{{ o.bg }};color:#0f2a4a;font-weight:600;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:{{ o.dot }}"></span>{{ o.label }}</button></sc-for>
+<button sc-camel-on-click="{{ toggleSkip }}" style="height:40px;padding:0 14px;border-radius:999px;border:2px solid {{ skipBorder }};background:{{ skipBg }};color:#0f2a4a;font-weight:600;cursor:pointer;font-size:14px">{{ skipLabel }}</button>
+</div>
+<sc-if value="{{ selNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;color:#5b6b7f">{{ selNote }}</div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ isHomeView }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-weight:700">הבית</div>
+<button sc-camel-on-click="{{ toggleClosed }}" style="height:44px;padding:0 16px;border-radius:12px;border:2px solid {{ closedBorder }};background:{{ closedBg }};color:#0f2a4a;font-weight:600;cursor:pointer;font-size:14px;align-self:flex-start">{{ closedLabel }}</button>
+<div style="font-size:13px;color:#8a97a8">הזוגות שמשובצים אליכם יראו את זה בלוח שלהם.</div>
+</div>
+</sc-if>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<a href="{{ icsHref }}" download="{{ icsName }}" style="height:48px;border-radius:14px;border:1.5px solid #dde3ea;background:#fff;color:#0f2a4a;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-size:15px" style-hover="background:#f4f5f8">הוספה ליומן</a>
+<a href="{{ mailHref }}" style="height:48px;border-radius:14px;border:none;background:#10a974;color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-size:15px" style-hover="background:#0b8f61">שליחת הזמנה במייל</a>
+</div>
+</div></div>
+</sc-if>
+<sc-if value="{{ noSel }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;border-radius:24px;padding:40px 24px;text-align:center;color:#8a97a8;border:1.5px dashed #dde3ea">בחרו שבת או חג מהרשימה כדי לראות מי מגיע, לאשר הגעה ולחלק משימות</div>
+</sc-if>
+</section>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ tabInbox }}" hint-placeholder-val="{{ false }}">
+<section style="max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px;animation:fadeUp .3s ease">
+<div style="font-size:24px;font-weight:700">עדכונים</div>
+<sc-for list="{{ inbox }}" as="n" hint-placeholder-count="3">
+<div style="background:#fff;border-radius:20px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;box-shadow:0 2px 12px rgba(15,42,74,.05)">
+<span style="width:42px;height:42px;border-radius:14px;background:{{ n.bg }};display:grid;place-items:center;font-weight:700;flex:none;font-size:17px">{{ n.icon }}</span>
+<div style="flex:1;display:flex;flex-direction:column;gap:4px"><div style="font-weight:600;text-wrap:pretty">{{ n.title }}</div><div style="font-size:13px;color:#8a97a8">{{ n.sub }}</div></div>
+</div>
+</sc-for>
+<sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}"><div style="background:#fff;border-radius:24px;padding:40px 24px;text-align:center;color:#8a97a8;border:1.5px dashed #dde3ea">הכול מסודר. אין עדכונים שמחכים לך.</div></sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{ tabSettings }}" hint-placeholder-val="{{ false }}">
+<section style="max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease">
+<div style="font-size:24px;font-weight:700">הרשת שלי</div>
+<sc-for list="{{ myHomes }}" as="h" hint-placeholder-count="2">
+<div style="background:#fff;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 2px 12px rgba(15,42,74,.05);border-top:6px solid {{ h.dot }}">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+<div><div style="font-weight:700;font-size:18px">{{ h.name }}</div><div style="font-size:13px;color:#8a97a8">{{ h.sub }}</div></div>
+<button sc-camel-on-click="{{ h.invite }}" style="height:38px;padding:0 14px;border-radius:999px;border:1.5px solid #dde3ea;background:#fff;color:#7c3aed;font-weight:600;cursor:pointer;font-size:13px" style-hover="background:#f7f2ff">+ הזמנת זוג לבית</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{ h.couples }}" as="c" hint-placeholder-count="3"><span style="padding:6px 12px;border-radius:999px;background:{{ c.bg }};font-size:14px;font-weight:600">{{ c.label }}</span></sc-for>
+</div>
+<div style="font-size:13px;color:#5b6b7f">{{ h.stat }}</div>
+</div>
+</sc-for>
+<div style="background:#fff;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:6px;box-shadow:0 2px 12px rgba(15,42,74,.05)">
+<div style="font-weight:700;margin-bottom:4px">צפייה בתור</div>
+<div style="font-size:13px;color:#8a97a8;margin-bottom:8px">כל אחד רואה רק את הסבב שלו ואת השולחנות שהוא שייך אליהם.</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{ viewerOptions }}" as="v" hint-placeholder-count="6"><button sc-camel-on-click="{{ v.pick }}" style="height:36px;padding:0 12px;border-radius:999px;border:2px solid {{ v.border }};background:{{ v.bg }};color:#0f2a4a;font-size:13px;font-weight:600;cursor:pointer">{{ v.label }}</button></sc-for>
+</div>
+</div>
+<div style="background:#fff;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:4px;box-shadow:0 2px 12px rgba(15,42,74,.05)">
+<sc-for list="{{ prefRows }}" as="p" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #f0f2f5">
+<div><div style="font-weight:600">{{ p.title }}</div><div style="font-size:13px;color:#8a97a8">{{ p.sub }}</div></div>
+<button sc-camel-on-click="{{ p.toggle }}" style="width:52px;height:32px;border-radius:16px;border:none;background:{{ p.bg }};position:relative;cursor:pointer;transition:background .2s;flex:none"><span style="position:absolute;top:3px;right:{{ p.knob }};width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:right .2s"></span></button>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<button sc-camel-on-click="{{ reconfigure }}" style="height:48px;padding:0 20px;border-radius:14px;border:1.5px solid #dde3ea;background:#fff;color:#0f2a4a;font-weight:600;cursor:pointer">עריכת הסבב שלנו</button>
+<button sc-camel-on-click="{{ logout }}" style="height:48px;padding:0 20px;border-radius:14px;border:none;background:transparent;color:#b4173a;font-weight:600;cursor:pointer">התנתקות</button>
+</div>
+</section>
+</sc-if>
+
+</main>
+</div>
+</sc-if>
+</div>
+</x-dc>
