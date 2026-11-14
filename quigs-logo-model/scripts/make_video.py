@@ -9,6 +9,8 @@
 
   --photo        any image; cover-fitted to 1080x1920 (outpaint it to 9:16 first)
   --logo         clean black-on-white mark (output of photo_to_logo.py / logo_post.finalize)
+  --placed       --logo is already a 1080x1920 mask sitting on the animal (silhouette_logo.py);
+                 this is the mode where the outline follows the real animal exactly
   --animal-mask  RGBA cutout or mask of the animal, same framing as --photo; the logo is
                  scaled and moved onto the animal by maximising overlap. Without it the
                  logo is centred at 45% height.
@@ -184,6 +186,9 @@ def fit_circle(P):
 
 
 def arc_circles(contours, existing, n=6):
+    allp = np.vstack([P for _, P in contours])
+    bx0, by0, bx1, by1 = allp[:, 0].min(), allp[:, 1].min(), allp[:, 0].max(), allp[:, 1].max()
+    mx, my = 0.08 * (bx1 - bx0), 0.08 * (by1 - by0)    # circle centres stay on the mark, not floating beside it
     cand = []
     for _, P in contours:
         m = len(P)
@@ -197,7 +202,7 @@ def arc_circles(contours, existing, n=6):
                     continue
                 cx, cy, r, rms = f
                 span = 2 * win / r
-                if 20 < r < 0.33 * W and rms < 1.4 and span > 1.0 and -r < cx < W + r and -r < cy < H + r:
+                if 20 < r < 0.33 * W and rms < 1.4 and span > 1.0 and bx0 - mx < cx < bx1 + mx and by0 - my < cy < by1 + my:
                     cand.append((min(span, 6.283) * r / (1 + rms), cx, cy, r))
     cand.sort(key=lambda t: -t[0]); out = []
     for _, cx, cy, r in cand:
@@ -215,6 +220,8 @@ def main():
     ap.add_argument("--photo", required=True)
     ap.add_argument("--logo", required=True)
     ap.add_argument("--animal-mask")
+    ap.add_argument("--placed", action="store_true",
+                    help="--logo is already a 1080x1920 canvas mask in photo coordinates (silhouette_logo.py output)")
     ap.add_argument("--name", default="")
     ap.add_argument("--bg", default="#2b1a10")
     ap.add_argument("--fg", default="#f0b24a")
@@ -228,16 +235,17 @@ def main():
     cover(Image.open(a.photo).convert("RGB")).save(bg_path, quality=95)
 
     lm = np.asarray(Image.open(a.logo).convert("L")) < 128
-    x0, y0, x1, y1 = bbox(lm); lm = lm[y0:y1, x0:x1]
+    if not a.placed:
+        x0, y0, x1, y1 = bbox(lm); lm = lm[y0:y1, x0:x1]
     animal = None
-    if a.animal_mask:
+    if a.animal_mask and not a.placed:
         am = Image.open(a.animal_mask)
         am = am.getchannel("A") if am.mode in ("RGBA", "LA") else am.convert("L")
         animal = np.asarray(cover(am, Image.BILINEAR)) > 127
         lab, n = ndimage.label(animal)                  # keep the main subject only
         if n > 1:
             animal = lab == (1 + int(np.argmax(ndimage.sum(animal, lab, range(1, n + 1)))))
-    mask, iou = place_logo(lm, animal)
+    mask, iou = (lm, 1.0) if a.placed else place_logo(lm, animal)
     contours = [c for c in trace(mask) if len(c[1]) > 20]
 
     big = inscribed_circles(mask)
