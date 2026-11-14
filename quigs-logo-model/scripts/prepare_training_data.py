@@ -17,11 +17,14 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--dataset", default="dataset")
 ap.add_argument("--out", default="train_data")
 ap.add_argument("--mirror", action="store_true")
+ap.add_argument("--kontext", action="store_true", help="also write train_control/ and holdout_control/ photo crops for the Kontext LoRA")
 a = ap.parse_args()
 
 manifest = json.load(open(os.path.join(a.dataset, "manifest.json")))
 os.makedirs(a.out, exist_ok=True)
 os.makedirs("holdout", exist_ok=True)
+if a.kontext:
+    os.makedirs("train_control", exist_ok=True); os.makedirs("holdout_control", exist_ok=True)
 n = 0
 for m in manifest:
     stem = m["stem"]
@@ -32,8 +35,16 @@ for m in manifest:
     shutil.copy(src, os.path.join(dst_dir, stem + ".png"))
     open(os.path.join(dst_dir, stem + ".txt"), "w").write(cap + "\n")
     n += 1
+    if a.kontext:
+        ctrl = os.path.join(a.dataset, "control", stem + ".png")
+        cdst = "train_control" if m["split"] == "train" else "holdout_control"
+        shutil.copy(ctrl, os.path.join(cdst, stem + ".png"))
+        cap = "Turn this photo into a QUIGS logo mark: geometric minimalist flat black silhouette with bold negative-space cuts on a solid white background"
+        open(os.path.join(dst_dir, stem + ".txt"), "w").write(cap + "\n")
     if a.mirror and m["split"] == "train" and "symmetrical" not in cap:
         ImageOps.mirror(Image.open(src)).save(os.path.join(dst_dir, stem + "_flip.png"))
+        if a.kontext:
+            ImageOps.mirror(Image.open(os.path.join(a.dataset, "control", stem + ".png"))).save(os.path.join("train_control", stem + "_flip.png"))
         open(os.path.join(dst_dir, stem + "_flip.txt"), "w").write(cap.replace("side profile", "side profile facing the other way") + "\n")
         n += 1
 print(f"wrote {n} image/caption pairs -> {a.out}/ (train) and holdout/")

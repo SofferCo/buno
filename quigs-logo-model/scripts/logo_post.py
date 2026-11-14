@@ -9,6 +9,11 @@ from extract_dataset import clean_mask, to_svg  # noqa: E402
 
 def raster_to_mask(img, thresh=128):
     """Any generated image -> boolean mask of the mark (True = ink)."""
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        flat = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        flat.alpha_composite(rgba)
+        img = flat.convert("RGB")
     g = np.asarray(img.convert("L"))
     mask = g < thresh
     # if the model drew a dark background with a light mark, flip

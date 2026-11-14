@@ -1,7 +1,62 @@
-# quigs-logo-model — מערכת ליצירת לוגואים גיאומטריים של חיות
+# quigs-logo-model — מערכת: תמונה של חיה נכנסת, לוגו גיאומטרי יוצא
 
-מערכת שמייצרת לוגואים בסגנון הסרטונים (`quigs-32`): סילואטה שחורה, גיאומטרית, מינימליסטית,
-עם חיתוכי "חלל שלילי" (negative space), על רקע אחיד, ובסוף כרטיס ממותג עם שם + ®.
+**המטרה:** תמונה → לוגו בסגנון הסרטונים (`quigs-32`) → SVG + כרטיס ממותג → (שלב הבא) סרטון תהליך → פוסט יומי.
+
+## המערכת (שלב 1, עובד היום)
+
+```bash
+pip install pillow numpy scipy potracer openai      # או google-genai ל-gemini
+export OPENAI_API_KEY=sk-...
+python3 scripts/photo_to_logo.py my_horse.jpg --name "Stallion" --bg "#11393c" --fg "#ffffff"
+```
+
+הפלט ב-`out/my-horse/`: `v0_raw.png` (מה שהמודל צייר), `v0.png` (לוגו נקי שחור על לבן),
+`v0.svg` (וקטור לעריכה באילוסטרייטור), `v0_card.png` (הכרטיס הממותג), `meta.json`.
+
+איך זה עובד: התמונה + 4 לוגואים מהדאטהסט כרפרנס סגנון נשלחים למודל עריכת תמונות
+(`gpt-image-1`, או Gemini עם `--backend gemini`), עם פרומפט שמגדיר את הסגנון (סילואטה שטוחה אחת,
+צורות גיאומטריות, חיתוכי negative space, בלי קווים/צללים/טקסט). הרסטר שחוזר עובר את אותו ניקוי
+שבנה את הדאטהסט (`logo_post.py`: סף → פתיחה מורפולוגית → סינון רכיבים → potrace) ויוצא SVG.
+
+**הדגמה על סוס (חיה שלא בסט האימון), `examples/horse/`** — משמאל לימין: תמונת הקלט, פלט גולמי,
+לוגו נקי, וריאציה שנייה, ובקצה הלוגו המקורי מהסרטון להשוואה:
+
+![horse](examples/horse/comparison.jpg)
+
+עלות: כחצי קרדיט/‑$0.04 לווריאציה. ההדגמה נעשתה דרך Higgsfield (אותו מודל); הקוד ב-`photo_to_logo.py`
+קורא ל-OpenAI/Gemini ישירות ועדיין לא הורץ מול מפתח אמיתי – אם משהו נשבר שם זה יהיה בחתימת ה-API, לא בלוגיקה.
+
+### שלב 1ב: מודל משלנו (תמונה→לוגו, דורש GPU)
+
+הדאטהסט מכיל זוגות מיושרים `dataset/control/<stem>.png` (חיתוך התמונה סביב החיה) ↔ `dataset/logos/<stem>.png`.
+`train/kontext_lora.yaml` מאמן LoRA על **FLUX.1 Kontext [dev]** (מודל עריכת תמונות) שלומד בדיוק את
+ההמרה הזאת מ-27 הזוגות (54 עם שיקוף). זה יתן תוצאות קרובות יותר לסגנון הגולמי של הסרטונים
+(פחות "אייקון סטוק", יותר חיתוכים גסים) ובלי תלות ב-API.
+
+```bash
+python3 scripts/prepare_training_data.py --dataset dataset --out train_data --mirror --kontext
+cp train/kontext_lora.yaml <ai-toolkit>/train/ && cd <ai-toolkit> && python run.py train/kontext_lora.yaml
+python3 scripts/photo_to_logo.py my_horse.jpg --backend kontext --lora output/quigs_kontext_lora/quigs_kontext_lora.safetensors
+```
+
+הדגימות במהלך האימון רצות על תמונות ה-holdout (סוס, שועל, דוב) – השוואה ישירה ל-`dataset/logos/`.
+
+## הרואדמפ
+
+| שלב | מה | סטטוס |
+|---|---|---|
+| 1 | תמונה → לוגו (API) | ✅ עובד, `photo_to_logo.py` |
+| 1ב | תמונה → לוגו (LoRA משלנו על Kontext) | מוכן לאימון, צריך GPU |
+| 1ג | לוגו מטקסט בלבד (LoRA על FLUX) | מוכן לאימון, `train/flux_lora.yaml` |
+| 2 | סרטון תהליך (תמונה → קווי בנייה → מתאר → סילואטה → כרטיס) מ-SVG, ב-HTML+Playwright → mp4 | הבא |
+| 3 | פוסט יומי אוטומטי (תור חיות, רינדור, העלאה) | אחרי 2 |
+| 4 | מכירה: SVG + כרטיס + קבצי מותג בחבילה | אחרי 3 |
+
+---
+
+# מבנה ודאטה
+
+הלוגואים: סילואטה שחורה, גיאומטרית, מינימליסטית, עם חיתוכי negative space, על רקע אחיד, ובסוף כרטיס ממותג עם שם + ®.
 
 ```
 quigs-logo-model/
@@ -10,18 +65,22 @@ quigs-logo-model/
 │   ├── svg/                 אותם לוגואים כווקטור (potrace)
 │   ├── captions/            כיתוב לכל תמונה (trigger word: QUIGS)
 │   ├── pairs/               תמונה מקורית → סילואטה על התמונה → כרטיס → כרטיס ממותג (מוקטן)
+│   ├── control/             חיתוך התמונה סביב החיה, מיושר ללוגו (קלט לאימון תמונה→לוגו)
 │   ├── palette.json         צבע רקע + צבע לוגו של כל כרטיס ממותג בסרטונים
 │   ├── manifest.json        מטא-דאטה: split (train/holdout), זמני הפריימים, bbox
 │   └── preview/             contact sheets לבדיקה בעין
 ├── captions.json            הכיתובים (אפשר לערוך ולהריץ שוב)
 ├── scripts/
+│   ├── photo_to_logo.py     ★ המערכת: תמונה → לוגו PNG+SVG+כרטיס (openai / gemini / kontext)
 │   ├── extract_dataset.py   סרטונים → dataset/ (זיהוי אוטומטי של שלבי הסרטון)
+│   ├── build_control_pairs.py  פריימי overlay → dataset/control/ מיושר ללוגואים
 │   ├── prepare_training_data.py  dataset/ → תיקיית אימון (+ שיקוף אופציונלי)
 │   ├── generate.py          FLUX + LoRA → לוגו נקי + SVG (+ כרטיס)
 │   ├── logo_post.py         ניקוי רסטר → מסכה → SVG
 │   └── make_card.py         לוגו + שם + צבעים → הכרטיס הממותג מסוף הסרטון
 └── train/
-    ├── flux_lora.yaml       קונפיג ai-toolkit ל-LoRA על FLUX.1-dev
+    ├── kontext_lora.yaml    קונפיג ai-toolkit ל-LoRA תמונה→לוגו על FLUX.1 Kontext
+    ├── flux_lora.yaml       קונפיג ai-toolkit ל-LoRA טקסט→לוגו על FLUX.1-dev
     └── run_cloud.sh         סקריפט אימון מלא למכונת GPU בענן
 ```
 
