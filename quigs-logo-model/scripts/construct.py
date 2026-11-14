@@ -21,6 +21,29 @@ import potrace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+# Parameters of the shapes-first construction. The values in dataset/trained_params.json (written by
+# train_on_references.py, fitted against the designer's own constructions) override these defaults.
+DEFAULTS = {
+    "tol_rel": 0.0075,        # base tolerance as a share of the animal's size
+    "oval_delta_mult": 1.0,   # how far an oval's edge may sit from the outline it explains (x tolerance)
+    "line_tau_mult": 1.6,     # how far a straight stroke may sit from the outline (x tolerance)
+    "oval_inside_min": 0.86,  # least share of an oval that must lie inside the animal
+    "oval_max_r": 0.5,        # largest oval radius as a share of the animal's size
+    "oval_min_r": 0.045,      # smallest
+    "oval_max_aspect": 4.0,
+    "oval_min_cover": 0.0,    # least share of an oval's circumference that must lie on the outline
+    "oval_min_gain": 0.045,   # least share of the outline a new oval must explain
+    "oval_max_k": 6,
+    "circle_bonus": 1.08,     # preference for a perfect circle over an ellipse that explains as much
+    "contour_sigma": 1.2,     # smoothing of the outline before fitting (points, 2 px apart)
+    "curl_max_r": 0.075,      # a tight curl outside the ovals may become a small circle up to this radius
+    "curl_min_span": 1.5,     # ... if it turns through at least this many radians
+}
+PARAMS = dict(DEFAULTS)
+_tp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dataset", "trained_params.json")
+if os.path.exists(_tp):
+    PARAMS.update(json.load(open(_tp)).get("params", {}))
+
 STEP = 2.0                                             # contour sampling, px
 MIN_R = 9.0                                            # smaller arcs are treated as corners
 
@@ -225,6 +248,37 @@ def fit_ellipse(P):
     return (float(c0[0] * sc + m[0]), float(c0[1] * sc + m[1]), float(ax[0] * sc), float(ax[1] * sc), ph)
 
 
+def fit_ellipse_axis(P):
+    """Least-squares ellipse with horizontal/vertical axes (the ellipse tool, not rotated)."""
+    m = P.mean(0); sc = np.abs(P - m).max() + 1e-9
+    x, y = ((P - m) / sc).T
+    M = np.stack([x * x, y * y, x, y], 1)
+    (A, C, D, E_), *_ = np.linalg.lstsq(M, np.ones(len(x)), rcond=None)
+    if A <= 1e-9 or C <= 1e-9:
+        return None
+    x0, y0 = -D / (2 * A), -E_ / (2 * C); rhs = 1 + A * x0 * x0 + C * y0 * y0
+    if rhs <= 0:
+        return None
+    rx, ry = np.sqrt(rhs / A) * sc, np.sqrt(rhs / C) * sc
+    cx, cy = x0 * sc + m[0], y0 * sc + m[1]
+    return (float(cx), float(cy), float(rx), float(ry), 0.0) if rx >= ry else (float(cx), float(cy), float(ry), float(rx), float(np.pi / 2))
+
+
+def perfect(E, P):
+    """Snap a fitted oval to the shape a designer would draw: a true circle if it is nearly round,
+    an unrotated ellipse if it is nearly upright. In the references 42% of ovals are circles and
+    half of the ellipses are upright."""
+    if E is None:
+        return None
+    cx, cy, rx, ry, ph = E
+    if rx / max(ry, 1e-6) <= 1.09:
+        return fit_circle_free(P) or E
+    tilt = np.degrees(ph) % 90
+    if min(tilt, 90 - tilt) <= 8:
+        return fit_ellipse_axis(P) or E
+    return E
+
+
 def sweep_on(E, pts):
     """Signed parameter sweep of a point run along the ellipse, and its start parameter."""
     idx = np.unique(np.linspace(0, len(pts) - 1, 9).round().astype(int))
@@ -355,24 +409,30 @@ def inside_share(E, mask):
     return hit / tot
 
 
-def mass_ovals(P, mask, delta, max_k=6, log=None):
-    """The reference designer starts from a few circles and ellipses that sit INSIDE the animal as
-    its masses (torso, haunch, chest, head) and whose edge is the outline for a long stretch.
-    Candidates are circles/ellipses fitted to stretches of the outline; one qualifies if it lies
-    inside the animal, and they are picked greedily by how much new outline they explain."""
+def ell_perimeter(E):
+    a, b = E[2], E[3]; h = ((a - b) / (a + b)) ** 2
+    return np.pi * (a + b) * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
+
+
+def mass_ovals(P, mask, delta, log=None, prm=None):
+    """Pick the circles and ellipses of the construction. Candidates are fitted to stretches of the
+    outline; a candidate must explain a real stretch of outline with a real share of its own
+    circumference; they are taken greedily by how much new outline each explains. Every threshold
+    here is a trained parameter (see DEFAULTS)."""
+    prm = prm or PARAMS
     N = len(P); size = max(np.ptp(P[:, 0]), np.ptp(P[:, 1])); Ps = P[::2]; cands = []
-    for L in (45, 70, 110, 170, 260, 380):
+    for L in (30, 45, 70, 110, 170, 260, 380):
         if L > 0.7 * N:
             continue
-        for s0 in range(0, N, max(8, L // 5)):
+        for s0 in range(0, N, max(6, L // 5)):
             seg = P[(s0 + np.arange(L)) % N]
-            for E in (fit_circle_free(seg), fit_ellipse(seg)):
+            for E in (fit_circle_free(seg), perfect(fit_ellipse(seg), seg)):
                 if E is None:
                     continue
                 cx, cy, rx, ry, ph = E
-                if ry < max(14, 0.045 * size) or rx > 0.5 * size or rx / ry > 4.0:      # masses, not limbs
+                if ry < max(8, prm["oval_min_r"] * size) or rx > prm["oval_max_r"] * size or rx / ry > prm["oval_max_aspect"]:
                     continue
-                if inside_share(E, mask) < 0.86:
+                if prm["oval_inside_min"] > 0 and inside_share(E, mask) < prm["oval_inside_min"]:
                     continue
                 d, _ = ell_project(E, Ps)
                 near = np.repeat(d <= delta, 2)[:N]
@@ -380,13 +440,14 @@ def mass_ovals(P, mask, delta, max_k=6, log=None):
                 for st, ln in _runs(near):
                     if ln >= 14:                        # touching the outline in passing does not count
                         keep[(st + np.arange(ln)) % N] = True
-                if keep.sum() >= 30:
-                    cands.append((E, keep, abs(rx - ry) < 0.03 * rx))
+                if keep.sum() < 20 or keep.sum() * STEP < prm["oval_min_cover"] * ell_perimeter(E):
+                    continue
+                cands.append((E, keep, abs(rx - ry) < 0.03 * rx))
     chosen, covered = [], np.zeros(N, bool)
-    while len(chosen) < max_k and cands:
-        gains = [((k & ~covered).sum() * (1.08 if circ else 1.0)) for _, k, circ in cands]
+    while len(chosen) < prm["oval_max_k"] and cands:
+        gains = [((k & ~covered).sum() * (prm["circle_bonus"] if circ else 1.0)) for _, k, circ in cands]
         b = int(np.argmax(gains))
-        if gains[b] < max(45, 0.045 * N):               # must explain a real stretch of outline
+        if gains[b] < max(24, prm["oval_min_gain"] * N):
             break
         E, keep, _ = cands[b]; chosen.append(E); covered |= keep
         if log:
@@ -418,11 +479,12 @@ def _dp(Q, eps):
     return np.nonzero(keep)[0]
 
 
-def shapes_first_chain(P, mask, delta, tau, log=None, with_ovals=True):
+def shapes_first_chain(P, mask, delta, tau, log=None, with_ovals=True, prm=None):
     """Outline = stretches lying on the body-mass ovals + straight strokes (and the odd small
     circle for a tight curl) for everything between them."""
     N = len(P); size = max(np.ptp(P[:, 0]), np.ptp(P[:, 1]))
-    ovals = mass_ovals(P, mask, delta, log=log) if with_ovals else []
+    prm = prm or PARAMS
+    ovals = mass_ovals(P, mask, delta, log=log, prm=prm) if with_ovals else []
     lab = np.full(N, -1); best = np.full(N, 1e9)
     for k, E in enumerate(ovals):
         d, _ = ell_project(E, P)
@@ -454,7 +516,8 @@ def shapes_first_chain(P, mask, delta, tau, log=None, with_ovals=True):
                               "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + sw).tolist(), "pts": pts})
                 continue
         for p in fit_open(pts, tau):
-            tight = with_ovals and p["type"] == "arc" and p["r"] <= 0.075 * size and abs(p["len"] / p["r"]) >= 1.5
+            tight = (with_ovals and p["type"] == "arc" and p["r"] <= prm["curl_max_r"] * size
+                     and abs(p["len"] / p["r"]) >= prm["curl_min_span"])
             if tight:                                   # a real curl (tail tip, ear, paw): a small circle
                 prims.append(to_earc(p))
             elif p["type"] == "arc":                    # any other curve is drawn with straight strokes, as in the references
@@ -576,7 +639,7 @@ def build_guides(chains, W, full_r=400, min_line=12):
             if pts[0, 0] > pts[-1, 0]:
                 pts, sw = pts[::-1], -sw
             sweeps.append({"type": "path", "x1": float(pts[0, 0]), "y1": float(pts[0, 1]), "pts": np.round(pts, 1).tolist(),
-                           "d": "M" + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts)})
+                           "d": "M" + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts), "E": [float(v) for v in sh["E"]]})
         elif abs(rx - ry) < 0.03 * rx:
             ovals.append({"type": "circle", "cx": cx, "cy": cy, "r": (rx + ry) / 2})
         else:
@@ -680,15 +743,15 @@ def merge_plan(guides, body, max_steps=18, min_face=220):
 
 
 # ------------------------------------------------------------------ fit a whole mask
-def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None):
+def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, prm=None):
     """shapes_first: the big outline is built from body-mass ovals and straight strokes (the way
     the reference clips are built). Otherwise: free line/arc fit, optionally sharing shapes."""
-    chains = []
+    chains = []; prm = prm or PARAMS
     for P in outline_points(mask):
-        P = ndimage.gaussian_filter1d(P, 1.2, axis=0, mode="wrap")
         big = len(P) * STEP > 260
+        P = ndimage.gaussian_filter1d(P, prm["contour_sigma"] if (shapes_first is True and big) else 1.2, axis=0, mode="wrap")
         if shapes_first is True and big:
-            prims, _ = shapes_first_chain(P, mask, delta or eps, 1.6 * eps, log=log)
+            prims, _ = shapes_first_chain(P, mask, (delta or eps) * prm["oval_delta_mult"], prm["line_tau_mult"] * eps, log=log, prm=prm)
         elif shapes_first == "cut":
             E = fit_circle_free(P); d = ell_project(E, P)[0].max() if E else 1e9
             if E and d <= max(2.5, 0.12 * E[2]) and E[2] < 60:        # a round cut (an eye) is simply a circle

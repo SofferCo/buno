@@ -111,7 +111,7 @@ def combine(a):
     # 1. the uncut body, built the way the reference clips are: a few ovals that sit inside the
     #    animal as its masses, then straight strokes for everything else
     bx0, by0, bx1, by1 = bbox(body); size = max(bx1 - bx0, by1 - by0)
-    tol = float(np.clip(a.tolerance * size, 4.0, 8.0))
+    tol = float(np.clip((a.tolerance or K.PARAMS["tol_rel"]) * size, 3.0, 26.0))
     body_chains = K.fit_mask(body, tol, shapes_first=True, delta=tol, log=print)
     st = K.stats(body_chains); eps = tol; trail = []
     # 2. each cut is its own closed shape that gets deleted from the merged body
@@ -171,5 +171,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True)
-    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=0.0075, help="how far the built outline may sit from the animal, as a share of its size"); c.set_defaults(f=combine)
+    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)
