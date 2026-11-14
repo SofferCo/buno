@@ -70,6 +70,9 @@ python3 scripts/make_video.py --photo bg_9x16.png --logo out/lion/v0.png --anima
 ```bash
 # צילום סטודיו על רקע אחיד: אין צורך ב-outpaint, רק מיקום על קנבס 9:16
 python3 scripts/frame_photo.py --photo upscaled.png --cutout cutout.png --out work/   # -> work/bg.png, work/cutout.png
+# צילום עם סצנה: --extend ממלא מעל ומתחת בהמשך מטושטש של התמונה עצמה, בלי outpaint גנרטיבי
+# (outpaint גנרטיבי לגובה החליף פעם אחת את הציפור בציפור אחרת; כך החיה נשארת כמו שצולמה)
+python3 scripts/frame_photo.py --photo photo.png --cutout cutout.png --out work/ --extend
 python3 scripts/silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
 # work/silhouette_sq.png + work/photo_sq.jpg -> מודל התמונה -> gen.png
 python3 scripts/silhouette_logo.py combine --work work/ --model-output gen.png

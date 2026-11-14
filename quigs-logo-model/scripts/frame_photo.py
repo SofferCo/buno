@@ -17,6 +17,9 @@ W, H = 1080, 1920
 ap = argparse.ArgumentParser()
 ap.add_argument("--photo", required=True); ap.add_argument("--cutout", required=True); ap.add_argument("--out", required=True)
 ap.add_argument("--max-w", type=float, default=0.72); ap.add_argument("--max-h", type=float, default=0.40)
+ap.add_argument("--extend", action="store_true",
+                help="scene photo: fit it to the canvas width and fill above and below with a mirrored, blurred "
+                     "continuation of the photo itself. No generative outpainting, so the animal stays exactly as shot.")
 a = ap.parse_args()
 
 photo = Image.open(a.photo).convert("RGB")
@@ -29,9 +32,33 @@ s = min(a.max_w * W / (x1 - x0), a.max_h * H / (y1 - y0))
 px = np.asarray(photo)
 border = np.concatenate([px[:6].reshape(-1, 3), px[-6:].reshape(-1, 3), px[:, :6].reshape(-1, 3), px[:, -6:].reshape(-1, 3)])
 fill = tuple(int(v) for v in np.median(border, axis=0))
+if a.extend:
+    s = W / photo.width
 nw, nh = round(photo.width * s), round(photo.height * s)
 ox = round(W / 2 - (x0 + x1) / 2 * s); oy = round(0.45 * H - (y0 + y1) / 2 * s)
-bg = Image.new("RGB", (W, H), fill); bg.paste(photo.resize((nw, nh), Image.LANCZOS), (ox, oy))
+if a.extend:
+    from PIL import ImageFilter, ImageOps
+    ox = 0; oy = int(np.clip(oy, H - nh - nh + 1, nh - 1)) if nh < H else min(0, max(H - nh, oy))
+    band = photo.resize((nw, nh), Image.LANCZOS)
+    bg = Image.new("RGB", (W, H), fill)
+    flip = ImageOps.flip(band).filter(ImageFilter.GaussianBlur(60))
+    soft = band.filter(ImageFilter.GaussianBlur(60))
+    if oy > 0:                                          # above: the photo mirrored upwards, blurred
+        bg.paste(flip.crop((0, nh - oy, nw, nh)), (0, 0))
+    if oy + nh < H:                                     # below: mirrored downwards, blurred
+        need = H - (oy + nh); bg.paste(flip.crop((0, 0, nw, need)), (0, oy + nh))
+    bg.paste(band, (0, oy))
+    feather = 90                                        # melt the sharp photo into the blur at both seams
+    ramp = np.ones(nh, np.float32)
+    if oy > 0:
+        ramp[:feather] = np.linspace(0, 1, feather)
+    if oy + nh < H:
+        ramp[-feather:] = np.minimum(ramp[-feather:], np.linspace(1, 0, feather))
+    mask = Image.fromarray((np.repeat(ramp[:, None], nw, 1) * 255).astype(np.uint8))
+    under = bg.crop((0, oy, nw, oy + nh)); under.paste(soft, (0, 0))
+    bg.paste(Image.composite(band, under, mask), (0, oy))
+else:
+    bg = Image.new("RGB", (W, H), fill); bg.paste(photo.resize((nw, nh), Image.LANCZOS), (ox, oy))
 ca = Image.new("L", (W, H), 0); ca.paste(alpha.resize((nw, nh), Image.LANCZOS), (ox, oy))
 os.makedirs(a.out, exist_ok=True)
 bg.save(os.path.join(a.out, "bg.png"))
