@@ -261,7 +261,7 @@ def main():
 
     # ---- timeline (seconds)
     t = 1.25
-    per = float(np.clip(10.0 / max(len(prims), 1), 0.18, 0.5))   # whole build stays around 10 s
+    per = float(np.clip(10.0 / max(len(prims), 1), 0.13, 0.5))   # whole build stays around 10 s
     for p in prims:
         p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.36 * per, 3), round(t + 0.96 * per, 3)
         t += per
