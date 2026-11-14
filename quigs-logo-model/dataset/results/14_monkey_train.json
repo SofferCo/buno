@@ -1,0 +1,59 @@
+{
+ "stem": "14_monkey_train",
+ "size": 427,
+ "cuts": 5,
+ "cut_area_share": 0.12940679068557304,
+ "parts": 2,
+ "regions": {
+  "regions": 18,
+  "kept": 10,
+  "thrown": 8,
+  "decided_area_share": 1.0,
+  "kept_area_share": 0.8856830147377955
+ },
+ "added_to_animal": 0.21295694028879927,
+ "removed_from_animal": 0.07946289322530335,
+ "cut_list": [
+  {
+   "area_share": 0.12083712761805646,
+   "width_rel": 0.12784397249607665,
+   "elongation": 2.493624161073825,
+   "enclosed": false,
+   "cx_rel": 0.8211584043930154,
+   "cy_rel": 0.2924491583300164
+  },
+  {
+   "area_share": 0.005561337322752699,
+   "width_rel": 0.033775655976243456,
+   "elongation": 1.6442307692307694,
+   "enclosed": false,
+   "cx_rel": 0.5279797855293973,
+   "cy_rel": 0.22703616965912052
+  },
+  {
+   "area_share": 0.0010081956550019513,
+   "width_rel": 0.013247902223635552,
+   "elongation": 1.9374999999999996,
+   "enclosed": false,
+   "cx_rel": 0.13466042154566746,
+   "cy_rel": 0.27985948477751754
+  },
+  {
+   "area_share": 0.0010407180954858852,
+   "width_rel": 0.01405152224824356,
+   "elongation": 1.7777777777777777,
+   "enclosed": false,
+   "cx_rel": 0.2504757025761124,
+   "cy_rel": 0.3249780444964871
+  },
+  {
+   "area_share": 0.0009594119942760505,
+   "width_rel": 0.01405152224824356,
+   "elongation": 1.6388888888888888,
+   "enclosed": false,
+   "cx_rel": 0.60377882745207,
+   "cy_rel": 0.4499662604691778
+  }
+ ],
+ "card": null
+}

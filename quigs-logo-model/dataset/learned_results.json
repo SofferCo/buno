@@ -1,0 +1,41 @@
+{
+ "clips": 32,
+ "regions": {
+  "per_clip_median": 22.5,
+  "kept_median": 16.0,
+  "thrown_median": 5.5,
+  "whole_region_decisions_area_share": 0.9808219306003525,
+  "kept_area_share": 0.9322434991164469
+ },
+ "cuts": {
+  "per_mark_median": 7.0,
+  "per_mark_p25": 5.0,
+  "per_mark_p75": 8.25,
+  "area_share_of_figure_median": 0.06352625940387581,
+  "enclosed_share": 0.1762114537444934,
+  "band_share": 0.28634361233480177,
+  "band_width_rel_median": 0.029644093691818744,
+  "band_width_rel_p25": 0.023136418198332846,
+  "band_width_rel_p75": 0.04210377183777172,
+  "spot_width_rel_median": 0.019122855764501706,
+  "width_rel_p95": 0.06452224640249064,
+  "area_share_p95": 0.03876947999356989,
+  "area_share_p98": 0.10604321163322197
+ },
+ "parts_median": 2.0,
+ "single_piece_share": 0.34375,
+ "added_to_animal_median": 0.090355164104266,
+ "removed_from_animal_median": 0.083014108382376,
+ "card": {
+  "mark_w": 0.6111111111111112,
+  "mark_h": 0.21979166666666666,
+  "mark_cy": 0.4505208333333333,
+  "mark_cx": 0.49444444444444446,
+  "name_h": 0.10925925925925926,
+  "name_w_over_mark_w": 0.7272727272727273,
+  "gap": 0.04259259259259259,
+  "name_cx": 0.5203703703703704,
+  "measured_on": 29,
+  "mark_lighter_than_card_share": 0.5172413793103449
+ }
+}

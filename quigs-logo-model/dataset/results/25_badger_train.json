@@ -1,0 +1,54 @@
+{
+ "stem": "25_badger_train",
+ "size": 319,
+ "cuts": 3,
+ "cut_area_share": 0.357378123719787,
+ "parts": 8,
+ "regions": {
+  "regions": 11,
+  "kept": 4,
+  "thrown": 5,
+  "decided_area_share": 0.5743618618618619,
+  "kept_area_share": 0.3725788288288288
+ },
+ "added_to_animal": null,
+ "removed_from_animal": null,
+ "cut_list": [
+  {
+   "area_share": 0.35559197050389185,
+   "width_rel": 0.22709429813510765,
+   "elongation": 4.134908536585365,
+   "enclosed": false,
+   "cx_rel": 0.496110974676047,
+   "cy_rel": 0.4025739999711079
+  },
+  {
+   "area_share": 0.000852109791069234,
+   "width_rel": 0.018808777429467086,
+   "elongation": 1.4444444444444444,
+   "enclosed": false,
+   "cx_rel": 0.07686279238003377,
+   "cy_rel": 0.4680491921871231
+  },
+  {
+   "area_share": 0.000934043424825891,
+   "width_rel": 0.018808777429467086,
+   "elongation": 1.5833333333333333,
+   "enclosed": false,
+   "cx_rel": 0.9160204586701864,
+   "cy_rel": 0.4669196502227354
+  }
+ ],
+ "card": {
+  "mark_w": 0.4388888888888889,
+  "mark_h": 0.21770833333333334,
+  "mark_cy": 0.4375,
+  "mark_cx": 0.4925925925925926,
+  "name_h": 0.11666666666666667,
+  "name_w": 0.4685185185185185,
+  "name_w_over_mark_w": 1.0675105485232068,
+  "gap": 0.05185185185185185,
+  "name_cx": 0.5277777777777778,
+  "mark_lighter_than_card": false
+ }
+}

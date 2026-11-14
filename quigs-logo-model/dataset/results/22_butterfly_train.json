@@ -1,0 +1,86 @@
+{
+ "stem": "22_butterfly_train",
+ "size": 466,
+ "cuts": 7,
+ "cut_area_share": 0.050416156670746635,
+ "parts": 1,
+ "regions": {
+  "regions": 17,
+  "kept": 17,
+  "thrown": 0,
+  "decided_area_share": 1.0,
+  "kept_area_share": 1.0
+ },
+ "added_to_animal": 0.0984577723378213,
+ "removed_from_animal": 0.06531477228024314,
+ "cut_list": [
+  {
+   "area_share": 0.014443084455324358,
+   "width_rel": 0.054626274941450025,
+   "elongation": 1.8209876543209877,
+   "enclosed": false,
+   "cx_rel": 0.4337455444824326,
+   "cy_rel": 0.12468720448097757
+  },
+  {
+   "area_share": 0.013916768665850673,
+   "width_rel": 0.05377666989760373,
+   "elongation": 1.8105095541401275,
+   "enclosed": false,
+   "cx_rel": 0.5643663582728435,
+   "cy_rel": 0.125209024577138
+  },
+  {
+   "area_share": 0.0013341493268053855,
+   "width_rel": 0.017695732298788243,
+   "elongation": 1.6029411764705883,
+   "enclosed": false,
+   "cx_rel": 0.4992125054140253,
+   "cy_rel": 0.1263141315903452
+  },
+  {
+   "area_share": 0.0013708690330477356,
+   "width_rel": 0.017167381974248927,
+   "elongation": 1.75,
+   "enclosed": false,
+   "cx_rel": 0.21139255058246478,
+   "cy_rel": 0.32529889638258724
+  },
+  {
+   "area_share": 0.0011627906976744186,
+   "width_rel": 0.015474468993407679,
+   "elongation": 1.826923076923077,
+   "enclosed": false,
+   "cx_rel": 0.7866049243279873,
+   "cy_rel": 0.3257736616218659
+  },
+  {
+   "area_share": 0.009657282741738066,
+   "width_rel": 0.032685721484394456,
+   "elongation": 3.400862068965517,
+   "enclosed": false,
+   "cx_rel": 0.46559180143279094,
+   "cy_rel": 0.4259371073287749
+  },
+  {
+   "area_share": 0.008531211750305998,
+   "width_rel": 0.032685721484394456,
+   "elongation": 3.004310344827586,
+   "enclosed": false,
+   "cx_rel": 0.5334295971083921,
+   "cy_rel": 0.4302097893485878
+  }
+ ],
+ "card": {
+  "mark_w": 0.6425925925925926,
+  "mark_h": 0.25,
+  "mark_cy": 0.44947916666666665,
+  "mark_cx": 0.49444444444444446,
+  "name_h": 0.12962962962962962,
+  "name_w": 0.5425925925925926,
+  "name_w_over_mark_w": 0.8443804034582133,
+  "gap": 0.044444444444444446,
+  "name_cx": 0.5203703703703704,
+  "mark_lighter_than_card": false
+ }
+}

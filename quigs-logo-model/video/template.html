@@ -71,13 +71,24 @@ const paths = SC.paths.map(p => {
 });
 // shape-builder data
 const B = SC.build || null;
-// card layout: centre the mark horizontally, name underneath
+// card layout, as measured on the designer's brand cards (dataset/learned_results.json): the mark
+// is scaled to a fixed share of the frame and centred a little above the middle, the name sits
+// under it at about three quarters of the mark's width. On the white card the mark stays where
+// it was built.
 const [bx0, by0, bx1, by1] = SC.logoBBox;
-const cardDx = SC.W / 2 - (bx0 + bx1) / 2;
-$('cardp').setAttribute('transform', `translate(${cardDx},0)`);
+const L = SC.cardLayout, mw = bx1 - bx0, mh = by1 - by0;
+const cardS = Math.min(L.markW * SC.W / mw, L.markHmax * SC.H / mh);
+const cardCx = SC.W / 2, cardCy = L.markCy * SC.H;
+const cardTf = `translate(${cardCx},${cardCy}) scale(${cardS}) translate(${-(bx0 + bx1) / 2},${-(by0 + by1) / 2})`;
 const nameEl = $('name');
-nameEl.setAttribute('x', SC.W / 2); nameEl.setAttribute('y', by1 + 160);
-if (SC.card.name) nameEl.innerHTML = SC.card.name + '<tspan font-size="32" dy="-36" dx="6" font-weight="500">®</tspan>';
+if (SC.card.name) {
+  nameEl.textContent = SC.card.name; nameEl.setAttribute('font-size', 100);
+  const want = Math.max(L.nameMinW * SC.W, Math.min(L.nameMaxW * SC.W, L.nameW * mw * cardS));
+  const fs = Math.min(L.nameMaxFont, 100 * want / Math.max(1, nameEl.getComputedTextLength()));
+  nameEl.setAttribute('font-size', fs.toFixed(1)); nameEl.setAttribute('letter-spacing', (-0.018 * fs).toFixed(2));
+  nameEl.setAttribute('x', SC.W / 2); nameEl.setAttribute('y', cardCy + mh * cardS / 2 + L.gap * SC.W + 0.72 * fs);
+  nameEl.innerHTML = SC.card.name + `<tspan font-size="${(0.36 * fs).toFixed(1)}" dy="${(-0.42 * fs).toFixed(1)}" dx="${(0.06 * fs).toFixed(1)}" font-weight="500">®</tspan>`;
+}
 
 const REST = [SC.W * 0.82, SC.H * 0.62];
 function cursorAt(t) {
@@ -170,6 +181,7 @@ window.setTime = function (t) {
     const col = t >= T.cardColor;
     $('cardbg').setAttribute('fill', col ? SC.card.bg : '#fff');
     $('cardp').setAttribute('fill', col ? SC.card.fg : '#000');
+    $('cardp').setAttribute('transform', col ? cardTf : '');
     nameEl.setAttribute('fill', SC.card.fg);
     nameEl.setAttribute('opacity', col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0);
   }

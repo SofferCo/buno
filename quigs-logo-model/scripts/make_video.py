@@ -270,6 +270,10 @@ def main():
     bx0, by0, bx1, by1 = bb
     scene = {"W": W, "H": H, "fps": FPS, "bg": "file://" + bg_path, "wash": 0.4, "prims": prims,
              "card": {"bg": a.bg, "fg": a.fg, "name": a.name}, "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
+    lc = json.load(open(os.path.join(os.path.dirname(HERE), "dataset", "learned_results.json")))["card"]
+    # the designer's brand card: mark width / centre / name size as measured; a tall animal is limited by height instead
+    scene["cardLayout"] = {"markW": lc["mark_w"], "markHmax": 0.36, "markCy": lc["mark_cy"], "nameW": lc["name_w_over_mark_w"],
+                           "nameMinW": 0.38, "nameMaxW": 0.62, "nameMaxFont": round(lc["name_h"] * W / 0.9, 1), "gap": lc["gap"]}
     T = {"washStart": -1.0, "washEnd": -0.5}          # the photo is faded from the first frame, as in the references
     if a.construction:
         # select all -> shape-builder sweep over the regions -> black -> delete cuts -> delete leftovers

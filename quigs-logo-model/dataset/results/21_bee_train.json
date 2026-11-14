@@ -1,0 +1,78 @@
+{
+ "stem": "21_bee_train",
+ "size": 451,
+ "cuts": 6,
+ "cut_area_share": 0.16093074107524838,
+ "parts": 9,
+ "regions": {
+  "regions": 26,
+  "kept": 15,
+  "thrown": 10,
+  "decided_area_share": 0.9840733990555878,
+  "kept_area_share": 0.8547551984094109
+ },
+ "added_to_animal": null,
+ "removed_from_animal": null,
+ "cut_list": [
+  {
+   "area_share": 0.0020796691543471025,
+   "width_rel": 0.02388099692742574,
+   "elongation": 1.5086206896551726,
+   "enclosed": false,
+   "cx_rel": 0.4316503009185936,
+   "cy_rel": 0.05066835603420972
+  },
+  {
+   "area_share": 0.0007367970718258306,
+   "width_rel": 0.012542914078697074,
+   "elongation": 1.9374999999999996,
+   "enclosed": false,
+   "cx_rel": 0.4977827050997783,
+   "cy_rel": 0.038051641513482636
+  },
+  {
+   "area_share": 0.0019964823881732188,
+   "width_rel": 0.02388099692742574,
+   "elongation": 1.4482758620689657,
+   "enclosed": false,
+   "cx_rel": 0.5642883539225002,
+   "cy_rel": 0.05076021539436179
+  },
+  {
+   "area_share": 0.14605219375386225,
+   "width_rel": 0.10122139432827784,
+   "elongation": 5.897312859884838,
+   "enclosed": false,
+   "cx_rel": 0.4989386211637099,
+   "cy_rel": 0.38944755258633285
+  },
+  {
+   "area_share": 0.0050743927366069305,
+   "width_rel": 0.02839522943429201,
+   "elongation": 2.6036585365853657,
+   "enclosed": false,
+   "cx_rel": 0.3076483692237391,
+   "cy_rel": 0.3348790353988275
+  },
+  {
+   "area_share": 0.004991205970433047,
+   "width_rel": 0.02839522943429201,
+   "elongation": 2.5609756097560976,
+   "enclosed": false,
+   "cx_rel": 0.6876728962094816,
+   "cy_rel": 0.3344103051420125
+  }
+ ],
+ "card": {
+  "mark_w": 0.6351851851851852,
+  "mark_h": 0.33541666666666664,
+  "mark_cy": 0.4328125,
+  "mark_cx": 0.5,
+  "name_h": 0.10925925925925926,
+  "name_w": 0.34629629629629627,
+  "name_w_over_mark_w": 0.5451895043731778,
+  "gap": 0.024074074074074074,
+  "name_cx": 0.524074074074074,
+  "mark_lighter_than_card": false
+ }
+}

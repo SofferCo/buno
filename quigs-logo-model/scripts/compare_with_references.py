@@ -31,13 +31,19 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--ref", required=True); ap.add_argument("--constructions", required=True)
     ap.add_argument("--params"); ap.add_argument("--stems", nargs="+", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--tile", type=int, default=420)
+    ap.add_argument("--from-mark", action="store_true", help="feed the designer's own finished mark to the method (tests shape recovery alone)")
+    ap.add_argument("--set", default="{}", help="JSON of parameter overrides")
     a = ap.parse_args()
     prm = dict(K.DEFAULTS)
     if a.params:
         prm.update(json.load(open(a.params))["params"])
+    prm.update(json.loads(a.set))
     rows = []
     for stem in a.stems:
-        c = T.load_clip(a.ref, a.constructions, stem); r = T.run_clip(c, prm, keep=True)
+        c = T.load_clip(a.ref, a.constructions, stem)
+        if a.from_mark:
+            c["sil"] = c["body"]
+        r = T.run_clip(c, prm, keep=True)
         photo = Image.open(os.path.join(a.ref, stem + ".photo.png")).convert("RGB")
         photo = photo.resize((int(photo.width * T.SCALE), int(photo.height * T.SCALE)))
         faded = Image.blend(photo, Image.new("RGB", photo.size, "white"), 0.42)

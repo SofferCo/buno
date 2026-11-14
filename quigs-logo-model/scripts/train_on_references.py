@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Train the construction method against the designer's own constructions.
+"""Train the construction method against the designer's own work.
 
-For every reference clip the method gets what it would get for a new photo, the animal's
-silhouette, and its output is scored against what the designer actually made:
+Every reference clip is used twice:
 
+  from the photo   the method gets what it gets for a new animal, the cut-out silhouette, and
+                   what it builds is compared with what the designer built from the same photo
+  from his mark    the method gets the designer's finished mark and must hand it back unchanged,
+                   built from his own circles, ellipses and strokes (no abstraction allowed here:
+                   this run trains which shapes are chosen). It also tells how simple his mark
+                   is - how many shapes, how long the strokes - in the method's own terms.
+
+Scores:
   mark      IoU between the built body and the designer's finished mark (holes filled)
   ovals     F1 of the method's circles/ellipses against the designer's (same place, same size)
   strokes   F1 of the method's straight strokes against the designer's (same direction, same place)
-  mix       how close the share of outline on ovals vs strokes is to the designer's
-  counts    how close the number of ovals and of strokes is to the designer's for that animal
-  length    how close the typical stroke length is to the designer's (his strokes are long)
-
-The last three keep the method at the designer's level of abstraction: without them the best
-score comes from tracing the photo tightly with many short strokes.
+  counts    is the build from the photo as simple as his mark (number of shapes); this sets how
+            boldly the photo is abstracted
+  length    ... and are its strokes as long
 
 Parameters are tuned by coordinate descent on the training clips only; the hold-out clips are
 scored before and after and never used for tuning.
@@ -29,18 +33,17 @@ import construct as K  # noqa: E402
 
 SCALE = 1.5          # reference frames are 720 wide; the method works on a 1080-wide canvas
 GRID = {
-    "tol_rel": [0.005, 0.0075, 0.011, 0.016, 0.022],
-    "oval_inside_min": [0.0, 0.4, 0.86],
-    "oval_min_cover": [0.0, 0.12, 0.2, 0.3],
-    "oval_max_r": [0.2, 0.3, 0.5],
-    "oval_min_r": [0.02, 0.045, 0.07],
-    "oval_min_gain": [0.025, 0.045, 0.07],
-    "oval_max_k": [4, 6, 8, 10],
-    "oval_delta_mult": [0.7, 1.0, 1.5],
-    "line_tau_mult": [1.0, 1.6, 2.4],
-    "circle_bonus": [1.0, 1.08, 1.3],
-    "contour_sigma": [1.2, 3.0, 6.0],
-    "curl_max_r": [0.04, 0.075, 0.12],
+    "thick_k": [0.1, 0.16, 0.22, 0.3, 0.4],
+    "tol_max_rel": [0.015, 0.022, 0.03, 0.045],
+    "tol_rel": [0.004, 0.006, 0.0075, 0.01],
+    "arc_cost": [1.5, 2.2, 3.0],
+    "ell_cost": [2.2, 2.9, 3.7, 99],
+    "arc_min_sweep": [0.4, 0.6, 0.9],
+    "ell_min_sweep": [1.2, 1.6, 2.2],
+    "circle_max_r": [0.18, 0.25, 0.35],
+    "ell_max_r": [0.25, 0.35, 0.5],
+    "ell_max_aspect": [2.0, 2.6, 3.4],
+    "oval_min_r": [0.02, 0.03, 0.045],
 }
 
 
@@ -112,7 +115,7 @@ def match_lines(pred, gt, size):
 
 def run_clip(c, prm, keep=False):
     tol = float(np.clip(prm["tol_rel"] * c["size"], 3.0, 26.0))
-    chains = K.fit_mask(c["sil"], tol, shapes_first=True, delta=tol, prm=prm)
+    chains = K.fit_mask(c["sil"], tol, shapes_first=prm.get("method", "dp"), delta=tol, prm=prm)
     guides = K.build_guides(chains, c["sil"].shape[1])
     built = K.rasterize(chains, c["sil"].shape)
     po = [(g["cx"], g["cy"], g.get("r", g.get("rx")), g.get("r", g.get("ry"))) for g in guides if g["type"] in ("circle", "ellipse")]
@@ -129,7 +132,7 @@ def run_clip(c, prm, keep=False):
     plen = [p["len"] for p in prims if p["type"] == "line" and p["len"] >= 0.03 * c["size"]]
     length = near(float(np.median(plen)) if plen else 1.0, 0.53 * c["med_len"]) if c["med_len"] else 0.0
     out = {"mark": float(iou), "ovals": fo, "strokes": fl, "mix": float(mix), "counts": counts, "length": length,
-           "n_ovals": len(po), "n_lines": len(pl)}
+           "n_ovals": len(po), "n_lines": len(pl), "med_len": float(np.median(plen)) if plen else 0.0}
     if keep:
         out.update({"guides": guides, "built": built})
     return out
@@ -139,19 +142,35 @@ _POOL = None
 _CLIPS = {}
 
 
+def run_pair(c, prm):
+    """One clip, both ways: from the photo's silhouette and from the designer's own mark."""
+    a = run_clip(c, prm); c2 = dict(c); c2["sil"] = c["body"]
+    p2 = dict(prm); p2["thick_k"] = 0.0; p2["tol_rel"] = 0.004      # his mark is already abstracted: rebuild it as it is
+    b = run_clip(c2, p2)
+    near = lambda p_, g_: float(np.exp(-abs(np.log(max(p_, 0.5) / max(g_, 0.5)))))
+    counts = 0.5 * near(a["n_ovals"], b["n_ovals"]) + 0.5 * near(a["n_lines"], b["n_lines"])
+    length = near(a["med_len"], b["med_len"]) if b["med_len"] else 0.0
+    return {"mark": a["mark"], "ovals": a["ovals"], "strokes": a["strokes"], "counts": counts, "length": length,
+            "n_ovals": a["n_ovals"], "n_lines": a["n_lines"], "fix_mark": b["mark"], "fix_ovals": b["ovals"],
+            "fix_strokes": b["strokes"], "fix_n_ovals": b["n_ovals"], "fix_n_lines": b["n_lines"]}
+
+
 def _work(args):
     key, i, prm = args
-    return run_clip(_CLIPS[key][i], prm)
+    return run_pair(_CLIPS[key][i], prm)
 
 
-def score(clips, prm, target_mix, key=None):
+KEYS = ("mark", "ovals", "strokes", "counts", "length", "n_ovals", "n_lines", "fix_mark", "fix_ovals", "fix_strokes", "fix_n_ovals", "fix_n_lines")
+
+
+def score(clips, prm, target_mix=None, key=None):
     if _POOL is not None and key in _CLIPS:
         rows = _POOL.map(_work, [(key, i, prm) for i in range(len(clips))])
     else:
-        rows = [run_clip(c, prm) for c in clips]
-    agg = {k: float(np.mean([r[k] for r in rows])) for k in ("mark", "ovals", "strokes", "mix", "counts", "length", "n_ovals", "n_lines")}
-    agg["total"] = (0.3 * agg["mark"] + 0.2 * agg["ovals"] + 0.2 * agg["strokes"] + 0.1 * agg["counts"] + 0.1 * agg["length"]
-                    + 0.1 * (1 - min(1, abs(agg["mix"] - target_mix) / 0.3)))
+        rows = [run_pair(c, prm) for c in clips]
+    agg = {k: float(np.mean([r[k] for r in rows])) for k in KEYS}
+    agg["total"] = (0.5 * (0.4 * agg["mark"] + 0.15 * agg["ovals"] + 0.15 * agg["strokes"] + 0.15 * agg["counts"] + 0.15 * agg["length"])
+                    + 0.5 * (0.4 * agg["fix_mark"] + 0.3 * agg["fix_ovals"] + 0.3 * agg["fix_strokes"]))
     return agg, rows
 
 
@@ -165,9 +184,9 @@ def main():
     train = [c for c in usable if c["stem"].endswith("_train")]; hold = [c for c in usable if c["stem"].endswith("_holdout")]
     print(f"{len(clips)} clips; usable (the local cut-out found the animal): {len(train)} train, {len(hold)} hold-out")
     target_mix = float(np.median(json.load(open(a.grammar))["per_clip"] and [r["outline_on_ovals"] for r in json.load(open(a.grammar))["per_clip"]])) if a.grammar else 0.31
-    fmt = lambda s: (f"total {s['total']:.3f} | mark IoU {s['mark']:.3f} | ovals F1 {s['ovals']:.2f} | strokes F1 {s['strokes']:.2f} | "
-                     f"counts {s['counts']:.2f} | length {s['length']:.2f} | on ovals {s['mix']:.0%} | "
-                     f"{s['n_ovals']:.1f} ovals, {s['n_lines']:.1f} strokes")
+    fmt = lambda s: (f"total {s['total']:.3f} | from the photo: mark IoU {s['mark']:.3f}, ovals F1 {s['ovals']:.2f}, strokes F1 {s['strokes']:.2f}, "
+                     f"{s['n_ovals']:.1f} ovals + {s['n_lines']:.1f} strokes | from his mark: IoU {s['fix_mark']:.3f}, ovals F1 {s['fix_ovals']:.2f}, "
+                     f"strokes F1 {s['fix_strokes']:.2f}, {s['fix_n_ovals']:.1f} ovals + {s['fix_n_lines']:.1f} strokes")
     global _POOL
     _CLIPS["train"], _CLIPS["hold"] = train, hold
     import multiprocessing as mp
@@ -175,6 +194,9 @@ def main():
     gt_o = np.mean([len(c["ovals"]) for c in train]); gt_l = np.mean([len(c["lines"]) for c in train])
     print(f"designer on the training clips: {gt_o:.1f} ovals, {gt_l:.1f} strokes per animal", flush=True)
     prm = dict(K.DEFAULTS)
+    old = dict(prm); old["method"] = True               # the earlier method: ovals fitted to stretches, then strokes
+    old_tr, _ = score(train, old, None, "train"); old_ho, _ = score(hold, old, None, "hold")
+    print("earlier method  train:", fmt(old_tr)); print("earlier method  hold :", fmt(old_ho), flush=True)
     base_tr, _ = score(train, prm, target_mix, "train"); base_ho, _ = score(hold, prm, target_mix, "hold")
     print("before  train:", fmt(base_tr)); print("before  hold :", fmt(base_ho), flush=True); best = base_tr["total"]; log = []
     for ps in range(a.passes):
@@ -195,8 +217,8 @@ def main():
     tr, _ = score(train, prm, target_mix, "train"); ho, _ = score(hold, prm, target_mix, "hold")
     print("after   train:", fmt(tr)); print("after   hold :", fmt(ho))
     json.dump({"params": prm, "trained_on": [c["stem"] for c in train], "held_out": [c["stem"] for c in hold],
-               "before": {"train": base_tr, "holdout": base_ho}, "after": {"train": tr, "holdout": ho},
-               "target_share_of_outline_on_ovals": target_mix, "search": log}, open(a.out, "w"), indent=1)
+               "earlier_method": {"train": old_tr, "holdout": old_ho},
+               "before": {"train": base_tr, "holdout": base_ho}, "after": {"train": tr, "holdout": ho}, "search": log}, open(a.out, "w"), indent=1)
     print("wrote", a.out)
 
 

@@ -38,6 +38,16 @@ DEFAULTS = {
     "contour_sigma": 1.2,     # smoothing of the outline before fitting (points, 2 px apart)
     "curl_max_r": 0.075,      # a tight curl outside the ovals may become a small circle up to this radius
     "curl_min_span": 1.5,     # ... if it turns through at least this many radians
+    # the outline as the fewest perfect shapes (dp_chain)
+    "thick_k": 0.22,          # allowance = this share of the local thickness of the animal (or of the gap beside it)
+    "tol_max_rel": 0.03,      # ... but never more than this share of the animal's size
+    "arc_cost": 2.2,          # a circular arc is used where it replaces more than this many straight strokes
+    "ell_cost": 2.9,          # same for an arc of an ellipse
+    "arc_min_sweep": 0.6,     # an arc must turn through at least this many radians (flatter is a stroke)
+    "ell_min_sweep": 1.6,
+    "circle_max_r": 0.25,     # largest circle radius, share of the animal's size (designer: 90% are under 0.21)
+    "ell_max_r": 0.35,        # largest ellipse half-length (designer: 90% are under 0.31)
+    "ell_max_aspect": 2.6,    # longest ellipse (designer: median 1.55, three quarters under 2.13)
 }
 PARAMS = dict(DEFAULTS)
 _tp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dataset", "trained_params.json")
@@ -538,6 +548,265 @@ def shapes_first_chain(P, mask, delta, tau, log=None, with_ovals=True, prm=None)
     return prims, ovals
 
 
+# ------------------------------------------------------------------ the outline as the fewest perfect shapes
+def local_tolerance(P, mask, tmin, tmax, k):
+    """How far the built outline may sit from each outline point. The designer redraws a broad
+    body boldly and a thin leg precisely, so the allowance is a share of how thick the animal
+    is behind the point - or how wide the gap is in front of it, whichever is smaller."""
+    N = len(P); H, W = mask.shape
+    tan = np.roll(P, -4, 0) - np.roll(P, 4, 0); tan /= np.hypot(*tan.T)[:, None] + 1e-9
+    nrm = np.stack([-tan[:, 1], tan[:, 0]], 1)
+    q = P + 3 * nrm; xi = np.clip(q[:, 0].round().astype(int), 0, W - 1); yi = np.clip(q[:, 1].round().astype(int), 0, H - 1)
+    if mask[yi, xi].mean() < 0.5:
+        nrm = -nrm
+    s = np.arange(2.0, max(12.0, 14 * tmax), 2.0)
+
+    def depth(sign, m):
+        dt = ndimage.distance_transform_edt(m)
+        X = P[:, None, :] + sign * s[None, :, None] * nrm[:, None, :]
+        xi = X[..., 0].round().astype(int); yi = X[..., 1].round().astype(int)
+        ok = (xi >= 0) & (xi < W) & (yi >= 0) & (yi < H)
+        v = np.where(ok, dt[np.clip(yi, 0, H - 1), np.clip(xi, 0, W - 1)], 1e6 if sign < 0 else 0.0)
+        alive = np.cumprod(v > 0, axis=1).astype(bool)
+        rising = np.ones_like(alive); rising[:, 2:] = (v[:, 2:] - v[:, :-2]) >= 1.0      # the ridge: thickness stops growing
+        rising = np.cumprod(rising, axis=1).astype(bool)
+        return np.where(alive & rising, v, 0).max(1)
+
+    h = np.minimum(depth(+1, mask), depth(-1, ~mask))
+    tol = np.clip(k * h, tmin, tmax)
+    tol = ndimage.minimum_filter1d(tol, 9, mode="wrap")
+    return ndimage.gaussian_filter1d(tol, 3, mode="wrap")
+
+
+def _line_fit(Q, w):
+    m = (Q * w[:, None]).sum(0) / w.sum(); X = (Q - m) * np.sqrt(w)[:, None]
+    _, _, vt = np.linalg.svd(X, full_matrices=False); d = vt[0]
+    return m, d, np.abs((Q - m) @ np.array([-d[1], d[0]]))
+
+
+def _circle_fit(Q, w):
+    E = fit_circle_free(Q)
+    if E is None:
+        return None, None
+    cx, cy, r = E[0], E[1], E[2]
+    for _ in range(3):                                  # geometric refinement (the algebraic fit shrinks short arcs)
+        dx, dy = Q[:, 0] - cx, Q[:, 1] - cy; d = np.hypot(dx, dy) + 1e-9
+        J = np.stack([-dx / d, -dy / d, -np.ones_like(d)], 1) * w[:, None]
+        try:
+            step, *_ = np.linalg.lstsq(J, -(d - r) * w, rcond=None)
+        except np.linalg.LinAlgError:
+            break
+        cx, cy, r = cx + step[0], cy + step[1], r + step[2]
+        if not np.isfinite(r) or r <= 0:
+            return None, None
+    return (float(cx), float(cy), float(r), float(r), 0.0), np.abs(np.hypot(Q[:, 0] - cx, Q[:, 1] - cy) - r)
+
+
+def _sub(a, b, n=56):
+    return np.unique(np.linspace(a, b, min(n, b - a + 1)).round().astype(int))
+
+
+def dp_chain(P, mask, tmin, prm=None, log=None):
+    """The outline as the cheapest chain of perfect shapes: straight strokes, arcs of true circles
+    and arcs of ellipses, each within the local allowance of the points it replaces. A dynamic
+    programme over the whole ring picks the breakpoints, so a long bold stroke is preferred to
+    several timid ones. Corners are where neighbouring shapes actually intersect."""
+    prm = prm or PARAMS
+    N = len(P); size = max(np.ptp(P[:, 0]), np.ptp(P[:, 1]))
+    tau = local_tolerance(P, mask, tmin, prm["tol_max_rel"] * size, prm["thick_k"])
+    v1 = P - np.roll(P, 5, 0); v2 = np.roll(P, -5, 0) - P
+    turn = np.degrees(np.arccos(np.clip((v1 * v2).sum(1) / (np.hypot(*v1.T) * np.hypot(*v2.T) + 1e-9), -1, 1)))
+    start = int(np.argmax(turn)); P = np.roll(P, -start, 0); tau = np.roll(tau, -start); turn = np.roll(turn, -start)
+    P2 = np.vstack([P, P]); tau2 = np.concatenate([tau, tau]); w2 = 1.0 / tau2
+    m = max(2, N // int(prm.get("dp_nodes", 320))); B = list(range(0, N, m))
+    if N - B[-1] < m // 2 + 1:
+        B.pop()
+    B.append(N); K = len(B) - 1                          # breakpoints 0..K, B[K] closes the ring
+    rmin, rmax, emax = prm["oval_min_r"] * size, prm["circle_max_r"] * size, prm["ell_max_r"] * size
+
+    def line_ok(a, b):
+        i = _sub(a, b); _, _, r = _line_fit(P2[i], w2[i])
+        return bool((r <= tau2[i]).all())
+
+    def circle(a, b, slack=1.0):
+        i = _sub(a, b)
+        if len(i) < 6:
+            return None
+        E0 = fit_circle_free(P2[i])                     # cheap screen before the careful fit
+        if E0 is None or (np.abs(np.hypot(P2[i, 0] - E0[0], P2[i, 1] - E0[1]) - E0[2]) > 3 * tau2[i]).any():
+            return None
+        E, r = _circle_fit(P2[i], w2[i])
+        if E is None or not (rmin <= E[2] <= rmax) or (r > slack * tau2[i]).any():
+            return None
+        sw = (b - a) * STEP / E[2]
+        return E if prm["arc_min_sweep"] <= sw <= 1.9 * np.pi else None
+
+    def ellipse(a, b, slack=1.0):
+        i = _sub(a, b, 44)
+        if len(i) < 16:
+            return None
+        E = perfect(fit_ellipse(P2[i]), P2[i])
+        if E is None or abs(E[2] - E[3]) < 0.03 * E[2]:
+            return None
+        if not (E[3] >= rmin and E[2] <= emax and E[2] / E[3] <= prm["ell_max_aspect"]):
+            return None
+        d, t = ell_project(E, P2[i])
+        if (d > slack * tau2[i]).any():
+            return None
+        sw = abs(wrap(np.diff(t)).sum())
+        return E if prm["ell_min_sweep"] <= sw <= 1.9 * np.pi else None
+
+    reach_l = np.zeros(K, int); lo_c = np.full(K, K + 1); hi_c = np.zeros(K, int); lo_e = np.full(K, K + 1); hi_e = np.zeros(K, int)
+    span = max(2, int(0.75 * K))
+    for k in range(K):
+        top = min(K, k + span)
+        j, stp = k + 1, 1                               # straight strokes: gallop, then bisect
+        while j < top and line_ok(B[k], B[min(top, j + stp)]):
+            j = min(top, j + stp); stp *= 2
+        lo, hi = j, min(top, j + stp)
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if line_ok(B[k], B[mid]):
+                lo = mid
+            else:
+                hi = mid
+        reach_l[k] = lo
+        for fn, lo_a, hi_a, on in ((circle, lo_c, hi_c, True), (ellipse, lo_e, hi_e, prm["ell_cost"] < 50)):
+            if not on:
+                continue
+            L = max(3, reach_l[k] - k + 1); last = None  # ovals: a ladder of lengths beyond what a stroke can do
+            while k + L <= top:
+                if fn(B[k], B[k + L]) is not None:
+                    lo_a[k] = min(lo_a[k], k + L); last = k + L
+                elif last is not None:
+                    break
+                L = max(L + 1, int(L * 1.22))
+            if last is not None:
+                lo, hi = last, min(top, max(last + 1, int((last - k) * 1.22) + k))
+                while hi - lo > 1:
+                    mid = (lo + hi) // 2
+                    if fn(B[k], B[mid]) is not None:
+                        lo = mid
+                    else:
+                        hi = mid
+                hi_a[k] = lo
+    corner = np.array([1.0 - min(1.0, turn[B[j] % N] / 60.0) for j in range(K + 1)]) * 0.08   # break at real corners
+    f = np.full(K + 1, 1e9); f[0] = 0.0; back = [None] * (K + 1)
+    for j in range(1, K + 1):
+        for typ, cost in (("line", 1.0), ("circle", prm["arc_cost"]), ("ellipse", prm["ell_cost"])):
+            if typ == "line":
+                ok = reach_l[:j] >= j
+            elif typ == "circle":
+                ok = (lo_c[:j] <= j) & (hi_c[:j] >= j)
+            else:
+                ok = (lo_e[:j] <= j) & (hi_e[:j] >= j)
+            if ok.any():
+                c = np.where(ok, f[:j] + cost, 1e9); i = int(np.argmin(c))
+                if c[i] + corner[j] < f[j]:
+                    f[j] = c[i] + corner[j]; back[j] = (i, typ)
+    segs = []; j = K
+    while j > 0:
+        i, typ = back[j]; segs.append((i, j, typ)); j = i
+    segs.reverse()
+    prims = []
+    for i, j, typ in segs:
+        a, b = B[i], B[j]; pts = P2[a:b + 1]; E = None
+        fn = circle if typ == "circle" else (ellipse if typ == "ellipse" else None)
+        if fn is not None:
+            E = fn(a, b) or fn(a, b, 1.5)
+        if E is not None:
+            t0, sw = sweep_on(E, pts)
+            prims.append({"type": "earc", "E": list(E), "t0": t0, "sw": sw, "g": next(_GID), "len": float((b - a) * STEP),
+                          "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + sw).tolist(), "pts": pts, "tau": tau2[a:b + 1]})
+        elif typ != "line":                             # the oval does not hold on the full run: strokes and smaller arcs
+            T = tau2[a:b + 1]; k0 = 0
+            for q in fit_open(pts, float(np.median(T))):
+                n_q = len(q["pts"]); q["tau"] = T[k0:k0 + n_q] if k0 + n_q <= len(T) else np.full(n_q, T[-1]); k0 += n_q - 1
+                if q["type"] == "arc":
+                    to_earc(q)
+                    q["A"] = ell_xy(q["E"], q["t0"]).tolist(); q["B"] = ell_xy(q["E"], q["t0"] + q["sw"]).tolist()
+                prims.append(q)
+        else:
+            ii = np.arange(a, b + 1); c0, d, _ = _line_fit(P2[ii], w2[ii])
+            if (P2[b] - P2[a]) @ d < 0:
+                d = -d
+            A = c0 + d * ((P2[a] - c0) @ d); Bp = c0 + d * ((P2[b] - c0) @ d)
+            prims.append({"type": "line", "A": A.tolist(), "B": Bp.tolist(), "err": 0.0, "len": float((b - a) * STEP), "pts": pts, "tau": tau2[a:b + 1]})
+    share_ovals(prims)
+    join_shapes(prims)
+    if log:
+        n_o = len({p["g"] for p in prims if p["type"] == "earc"})
+        log(f"    outline: {sum(p['type'] == 'line' for p in prims)} strokes + {n_o} ovals, allowance {tau.min():.1f}-{tau.max():.1f}px")
+    return prims
+
+
+def share_ovals(prims):
+    """Arcs that belong to one and the same circle or ellipse become pieces of that one shape."""
+    arcs = [p for p in prims if p["type"] == "earc"]
+    for i, a in enumerate(arcs):
+        for b in arcs[i + 1:]:
+            if a["g"] == b["g"]:
+                continue
+            Ea, Eb = a["E"], b["E"]; ra, rb = (Ea[2] + Ea[3]) / 2, (Eb[2] + Eb[3]) / 2
+            if not (0.75 <= ra / rb <= 1.33) or np.hypot(Ea[0] - Eb[0], Ea[1] - Eb[1]) > 0.45 * min(ra, rb):
+                continue
+            Q = np.vstack([a["pts"], b["pts"]]); T = np.concatenate([a["tau"], b["tau"]]); idx = _sub(0, len(Q) - 1, 90)
+            round_ = abs(Ea[2] - Ea[3]) < 0.03 * Ea[2] and abs(Eb[2] - Eb[3]) < 0.03 * Eb[2]
+            E = _circle_fit(Q[idx], 1.0 / T[idx])[0] if round_ else perfect(fit_ellipse(Q[idx]), Q[idx])
+            if E is None or (ell_project(E, Q[idx])[0] > 1.15 * T[idx]).any():
+                continue
+            old = b["g"]
+            for p in arcs:
+                if p["g"] in (a["g"], old):
+                    t0, sw = sweep_on(E, p["pts"])
+                    p.update({"E": list(E), "t0": t0, "sw": sw, "g": a["g"], "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + sw).tolist()})
+
+
+def _implicit(p, X):
+    if p["type"] == "line":
+        A, B = np.array(p["A"]), np.array(p["B"]); d = (B - A) / (np.hypot(*(B - A)) + 1e-9)
+        return d[0] * (X[:, 1] - A[1]) - d[1] * (X[:, 0] - A[0])
+    cx, cy, rx, ry, ph = p["E"]; c, s_ = np.cos(ph), np.sin(ph); dx, dy = X[:, 0] - cx, X[:, 1] - cy
+    return ((dx * c + dy * s_) / rx) ** 2 + ((-dx * s_ + dy * c) / ry) ** 2 - 1.0
+
+
+def _trace(p, q, reach):
+    """Points along the whole shape near q: the extended line, or the full ellipse."""
+    if p["type"] == "line":
+        A, B = np.array(p["A"]), np.array(p["B"]); d = (B - A) / (np.hypot(*(B - A)) + 1e-9)
+        t = (q - A) @ d + np.linspace(-reach, reach, 400)
+        return A[None] + t[:, None] * d[None]
+    return ell_xy(p["E"], np.linspace(0, 2 * np.pi, 1441))
+
+
+def join_shapes(prims):
+    """Corners are the points where neighbouring shapes really cross, as in a construction made of
+    overlapping circles and lines. Where they do not cross nearby, the join stays a short step."""
+    n = len(prims)
+    for i in range(n):
+        a, b = prims[i], prims[(i + 1) % n]
+        q = (np.array(a["B"]) + np.array(b["A"])) / 2; lim = 2.0 * float(min(a["tau"][-1], b["tau"][0])) + 4.0
+        X = _trace(a, q, 6 * lim); f = _implicit(b, X); k = np.nonzero(np.sign(f[:-1]) != np.sign(f[1:]))[0]
+        C = q                                           # no crossing nearby (two nearly parallel strokes): meet half way
+        if len(k):
+            u = f[k] / (f[k] - f[k + 1] + 1e-12); Cs = X[k] + u[:, None] * (X[k + 1] - X[k])
+            dist = np.hypot(*(Cs - q).T); j = int(np.argmin(dist))
+            if dist[j] <= lim:
+                C = Cs[j]
+        a["B"] = np.asarray(C).tolist(); b["A"] = np.asarray(C).tolist()
+    for p in prims:                                     # arcs follow their new end points
+        if p["type"] == "earc":
+            _, t = ell_project(tuple(p["E"]), np.array([p["A"], p["B"]]))
+            sw = wrap(t[1] - t[0]); sgn = np.sign(p["sw"]) or 1.0
+            if np.sign(sw) != sgn:
+                sw += sgn * 2 * np.pi
+            if abs(abs(sw) - abs(p["sw"])) > 1.2:        # wrapped the wrong way round a nearly closed arc
+                sw = p["sw"]; t = [p["t0"]]
+                p["A"] = ell_xy(p["E"], p["t0"]).tolist(); p["B"] = ell_xy(p["E"], p["t0"] + sw).tolist()
+            p["t0"], p["sw"] = float(t[0]), float(sw)
+            p["A"] = ell_xy(p["E"], p["t0"]).tolist(); p["B"] = ell_xy(p["E"], p["t0"] + p["sw"]).tolist()
+
+
 # ------------------------------------------------------------------ geometry -> svg / raster / guides
 def arc_points(p, step=2.0):
     if p["type"] == "earc":
@@ -661,6 +930,34 @@ def disk(r):
     return x * x + y * y <= r * r
 
 
+def envelope(logo, size):
+    """The figure a mark occupies: the mark with its negative space filled in (gaps up to about
+    7% of its size closed, holes filled)."""
+    r = max(3, int(round(0.035 * size)))
+    m = ndimage.binary_closing(np.pad(logo, r + 2), structure=disk(r))[r + 2:-(r + 2), r + 2:-(r + 2)]
+    return ndimage.binary_fill_holes(m | logo)
+
+
+def cut_list(logo, size):
+    """Negative space of a mark: every white shape inside its envelope, with its share of the
+    figure, its width, whether it is a band or a spot, and whether it is enclosed."""
+    env = envelope(logo, size); cuts = env & ~logo
+    lab, n = ndimage.label(cuts); out = []
+    if not n:
+        return env, out, lab
+    areas = np.asarray(ndimage.sum(cuts, lab, range(1, n + 1))); dt = ndimage.distance_transform_edt(cuts)
+    outside = ndimage.binary_dilation(~env, iterations=2); ey, ex = np.nonzero(env)
+    for i in range(1, n + 1):
+        if areas[i - 1] < max(10, 0.0006 * env.sum()):
+            continue
+        comp = lab == i; width = 2 * float(dt[comp].max()); ys, xs = np.nonzero(comp)
+        out.append({"label": i, "area_share": float(areas[i - 1] / env.sum()), "width_rel": width / size,
+                    "elongation": float(areas[i - 1] / max(width * width, 1.0)),
+                    "enclosed": not bool((comp & outside).any()),
+                    "cx_rel": float((xs.mean() - ex.min()) / size), "cy_rel": float((ys.mean() - ey.min()) / size)})
+    return env, out, lab
+
+
 def raster_guides(guides, shape, width=3):
     im = Image.new("L", (shape[1], shape[0]), 0); d = ImageDraw.Draw(im)
     for g in guides:
@@ -750,7 +1047,9 @@ def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, pr
     for P in outline_points(mask):
         big = len(P) * STEP > 260
         P = ndimage.gaussian_filter1d(P, prm["contour_sigma"] if (shapes_first is True and big) else 1.2, axis=0, mode="wrap")
-        if shapes_first is True and big:
+        if shapes_first == "dp" and big:
+            prims = dp_chain(ndimage.gaussian_filter1d(P, 0.4, axis=0, mode="wrap"), mask, eps, prm=prm, log=log)
+        elif shapes_first is True and big:
             prims, _ = shapes_first_chain(P, mask, (delta or eps) * prm["oval_delta_mult"], prm["line_tau_mult"] * eps, log=log, prm=prm)
         elif shapes_first == "cut":
             E = fit_circle_free(P); d = ell_project(E, P)[0].max() if E else 1e9
