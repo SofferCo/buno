@@ -261,7 +261,7 @@ def main():
 
     # ---- timeline (seconds)
     t = 1.25
-    per = float(np.clip(10.0 / max(len(prims), 1), 0.24, 0.5))   # whole build stays around 10 s
+    per = float(np.clip(10.0 / max(len(prims), 1), 0.18, 0.5))   # whole build stays around 10 s
     for p in prims:
         p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.36 * per, 3), round(t + 0.96 * per, 3)
         t += per
@@ -276,15 +276,15 @@ def main():
         m1a, m1b = t + 0.35, t + 0.85
         keys += [{"t": m1a, "x": gx0, "y": gy0}, {"t": m1b, "x": gx1, "y": gy1}]
         steps = con["merge"]["steps"]; npoles = sum(len(sp["poles"]) for sp in steps)
-        dt = float(np.clip(4.4 / max(npoles, 1), 0.1, 0.36)); t = m1b + 0.55; build_steps = []
+        dt = float(np.clip(4.6 / max(npoles, 1), 0.04, 0.36)); t = m1b + 0.55; build_steps = []
         for sp in steps:
             for (x, y) in sp["poles"]:
                 keys.append({"t": round(t, 3), "x": x, "y": y}); t += dt
             build_steps.append({"d": sp["d"], "t": round(t - dt, 3)})
         release = t + 0.15; t = release + 0.45; cuts = []
         for c in con["cuts"]:
-            keys.append({"t": round(t + 0.35, 3), "x": c["pole"][0], "y": c["pole"][1]})
-            cuts.append({"d": c["d"], "tHover": round(t + 0.35, 3), "tDelete": round(t + 0.8, 3)}); t += 0.95
+            keys.append({"t": round(t + 0.3, 3), "x": c["pole"][0], "y": c["pole"][1]})
+            cuts.append({"d": c["d"], "tHover": round(t + 0.3, 3), "tDelete": round(t + 0.62, 3)}); t += 0.72
         m2a, m2b = t + 0.4, t + 0.85
         keys += [{"t": m2a, "x": gx0, "y": gy0}, {"t": m2b, "x": gx1, "y": gy1},
                  {"t": m2b + 0.55, "x": W * 0.82, "y": H * 0.62}]

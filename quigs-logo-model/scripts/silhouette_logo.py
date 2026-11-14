@@ -137,7 +137,7 @@ def combine(a):
     cr = K.critique(logo, target); fst = K.stats(final_chains)
 
     Image.fromarray(np.where(logo, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
-    Image.fromarray(np.where(mask_to_square(logo, 1024), 0, 255).astype(np.uint8)).convert("RGB").save(os.path.join(a.work, "logo.png"))
+    K.render_square(final_chains, bb).save(os.path.join(a.work, "logo.png"))
     K.write_svg(final_chains, bb, os.path.join(a.work, "logo.svg"))
     json.dump({"eps": eps, "paths": [K.chain_path(c) for c in final_chains], "guides": guides, "bbox": bb,
                "fill_states": fill_states, "cuts": cut_items, "merge": plan,

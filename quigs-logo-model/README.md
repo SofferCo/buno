@@ -68,6 +68,8 @@ python3 scripts/make_video.py --photo bg_9x16.png --logo out/lion/v0.png --anima
 (אדום: הלוגו חורג מהחיה, כחול: חלק מהחיה שלא כוסה). באריה: IoU 0.957, סטייה ממוצעת 1.7px, מקסימום 5px.
 
 ```bash
+# צילום סטודיו על רקע אחיד: אין צורך ב-outpaint, רק מיקום על קנבס 9:16
+python3 scripts/frame_photo.py --photo upscaled.png --cutout cutout.png --out work/   # -> work/bg.png, work/cutout.png
 python3 scripts/silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
 # work/silhouette_sq.png + work/photo_sq.jpg -> מודל התמונה -> gen.png
 python3 scripts/silhouette_logo.py combine --work work/ --model-output gen.png

@@ -161,13 +161,21 @@ def chain_path(prims):
     return "".join(d) + "Z"
 
 
-def rasterize(chains, shape):
+def rasterize(chains, shape, scale=1.0, ox=0.0, oy=0.0):
+    """Even-odd raster of the chains; scale/offset render the vector at another size."""
     H, W = shape; out = np.zeros(shape, bool); S = 2
     for prims in chains:
         im = Image.new("L", (W * S, H * S), 0)
-        ImageDraw.Draw(im).polygon([(float(x) * S, float(y) * S) for x, y in chain_polyline(prims)], fill=255)
+        ImageDraw.Draw(im).polygon([((float(x) - ox) * scale * S, (float(y) - oy) * scale * S) for x, y in chain_polyline(prims)], fill=255)
         out ^= np.asarray(im.resize((W, H), Image.LANCZOS)) > 127
     return out
+
+
+def render_square(chains, bbox_, size=1024, pad=0.12):
+    """The mark as a crisp black-on-white square image, drawn from the vector."""
+    x0, y0, x1, y1 = bbox_; side = max(x1 - x0, y1 - y0) * (1 + 2 * pad)
+    m = rasterize(chains, (size, size), size / side, (x0 + x1) / 2 - side / 2, (y0 + y1) / 2 - side / 2)
+    return Image.fromarray(np.where(m, 0, 255).astype(np.uint8)).convert("RGB")
 
 
 def build_guides(chains, W, full_circle_r=400):
