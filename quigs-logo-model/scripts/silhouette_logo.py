@@ -109,7 +109,7 @@ def combine(a):
     print(f"model drawing vs silhouette IoU {iou:.2f}; kept {kept} cuts. Building the body from arcs and lines:")
 
     # 1. the uncut body: its arcs and lines give the guides
-    eps, body_chains, st, _, trail = K.construct(body, animal, max_guides=a.max_guides)
+    eps, body_chains, st, _, trail = K.construct(body, animal, max_ovals=a.max_ovals)
     # 2. each cut is its own closed shape that gets deleted from the merged body
     cut_items, cut_chains = [], []
     clab, cn = ndimage.label(cuts)
@@ -117,7 +117,7 @@ def combine(a):
     for i in range(1, cn + 1):
         comp = clab == i
         ext = comp | (ndimage.binary_dilation(comp, structure=disk(6)) & ~body)   # reach past the outline at an open mouth
-        ch = K.fit_mask(ext, min(eps, 2.5))
+        ch = K.fit_mask(ext, eps if comp.sum() > 1500 else min(eps, 2.5))   # small cuts (eyes) stay crisp
         if not ch:
             continue
         py, px = ndimage.maximum_position(depth, clab, i)
@@ -158,5 +158,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True)
-    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--max-guides", type=int, default=46); c.set_defaults(f=combine)
+    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--max-ovals", type=int, default=14, help="most circles/ellipses/sweeps the body may be built from"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

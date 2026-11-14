@@ -122,19 +122,189 @@ def fit_chain(P, eps, corners):
                     lo2, best = mid, (e, pr)
                 else:
                     hi2 = mid
-            pr = dict(best[1]); pr["err"] = best[0]; pr["len"] = float((lo2 - i) * STEP)
-            if pr["type"] == "arc" and pr["r"] < MIN_R:
-                pr = {"type": "line", "A": pr["A"], "B": pr["B"], "err": pr["err"], "len": pr["len"]}
+            pr = dict(best[1]); pr["err"] = best[0]; pr["len"] = float((lo2 - i) * STEP); pr["pts"] = Q[i:lo2 + 1]
+            if pr["type"] == "arc" and (pr["r"] < MIN_R or (abs(pr["s"]) <= 1.3 * eps and pr["len"] < 260)):
+                pr = {"type": "line", "A": pr["A"], "B": pr["B"], "err": pr["err"], "len": pr["len"], "pts": pr["pts"]}
             prims.append(pr); i = lo2
     return prims
 
 
+# ------------------------------------------------------------------ shared shapes: circles and ellipses
+def wrap(x):
+    return (x + np.pi) % (2 * np.pi) - np.pi
+
+
+def ell_xy(E, t):
+    cx, cy, rx, ry, ph = E; c, s_ = np.cos(ph), np.sin(ph); t = np.asarray(t, float)
+    return np.stack([cx + rx * np.cos(t) * c - ry * np.sin(t) * s_, cy + rx * np.cos(t) * s_ + ry * np.sin(t) * c], -1)
+
+
+_T = np.linspace(0, 2 * np.pi, 540, endpoint=False)
+_GID = __import__('itertools').count()
+
+
+def ell_project(E, P):
+    """Nearest point of the ellipse for each P: (distance, parameter)."""
+    S = ell_xy(E, _T)
+    d2 = (P[:, None, 0] - S[None, :, 0]) ** 2 + (P[:, None, 1] - S[None, :, 1]) ** 2
+    k = d2.argmin(1); t = _T[k]; h = _T[1]
+    for _ in range(3):                                  # refine between neighbouring samples
+        h /= 3
+        cand = np.stack([t - h, t, t + h], 1)
+        Q = ell_xy(E, cand)
+        dd = (P[:, None, 0] - Q[..., 0]) ** 2 + (P[:, None, 1] - Q[..., 1]) ** 2
+        t = cand[np.arange(len(P)), dd.argmin(1)]
+    Q = ell_xy(E, t)
+    return np.hypot(P[:, 0] - Q[:, 0], P[:, 1] - Q[:, 1]), t
+
+
+def fit_circle_free(P):
+    A = np.c_[P, np.ones(len(P))]; b = -(P ** 2).sum(1)
+    (a, bb, c), *_ = np.linalg.lstsq(A, b, rcond=None)
+    cx, cy = -a / 2, -bb / 2; r2 = cx * cx + cy * cy - c
+    return None if r2 <= 0 else (float(cx), float(cy), float(np.sqrt(r2)), float(np.sqrt(r2)), 0.0)
+
+
+def fit_ellipse(P):
+    """Direct least-squares ellipse (Halir-Flusser). Returns (cx, cy, rx, ry, phi) with rx >= ry, or None."""
+    m = P.mean(0); sc = np.abs(P - m).max() + 1e-9
+    x, y = ((P - m) / sc).T
+    D1 = np.stack([x * x, x * y, y * y], 1); D2 = np.stack([x, y, np.ones_like(x)], 1)
+    S1, S2, S3 = D1.T @ D1, D1.T @ D2, D2.T @ D2
+    try:
+        T = -np.linalg.solve(S3, S2.T)
+        M = S1 + S2 @ T
+        M = np.array([M[2] / 2, -M[1], M[0] / 2])
+        w, v = np.linalg.eig(M)
+    except np.linalg.LinAlgError:
+        return None
+    v = np.real(v); cond = 4 * v[0] * v[2] - v[1] ** 2
+    if not (cond > 1e-12).any():
+        return None
+    a1 = v[:, int(np.argmax(cond))]
+    A, B, C = a1; D, E_, F = T @ a1
+    Qm = np.array([[A, B / 2], [B / 2, C]])
+    try:
+        c0 = -np.linalg.solve(Qm, np.array([D / 2, E_ / 2]))
+    except np.linalg.LinAlgError:
+        return None
+    k = c0 @ Qm @ c0 + np.array([D, E_]) @ c0 + F
+    lam, vec = np.linalg.eigh(Qm / (-k))
+    if (lam <= 0).any():
+        return None
+    ax = 1 / np.sqrt(lam)                               # lam ascending -> ax descending
+    ph = float(np.arctan2(vec[1, 0], vec[0, 0]))
+    return (float(c0[0] * sc + m[0]), float(c0[1] * sc + m[1]), float(ax[0] * sc), float(ax[1] * sc), ph)
+
+
+def sweep_on(E, pts):
+    """Signed parameter sweep of a point run along the ellipse, and its start parameter."""
+    idx = np.unique(np.linspace(0, len(pts) - 1, 9).round().astype(int))
+    _, t = ell_project(E, pts[idx])
+    return float(t[0]), float(wrap(np.diff(t)).sum())
+
+
+def shape_ok(E, tol, groups_pts):
+    """Does the shape carry every point run? Each run must lie within tol of it AND travel along
+    it once, in one direction, over about its own length (otherwise the arc would be drawn the
+    wrong way round the shape)."""
+    if E is None:
+        return None
+    cx, cy, rx, ry, ph = E
+    if not (ry >= 10 and rx <= 760 and rx / ry <= 5.5):
+        return None
+    cover = 0.0
+    for P in groups_pts:
+        d, t = ell_project(E, P[::2] if len(P) > 40 else P)
+        if d.max() > tol:
+            return None
+        steps = wrap(np.diff(t))
+        if len(steps) and (np.sign(steps[np.abs(steps) > 1e-4]) != np.sign(steps.sum())).mean() > 0.12:
+            return None                                 # the run doubles back along the shape
+        t0, sw = sweep_on(E, P)
+        arc = ell_xy(E, t0 + np.linspace(0, sw, 40)); on_shape = np.hypot(*np.diff(arc, axis=0).T).sum()
+        own = np.hypot(*np.diff(P, axis=0).T).sum()
+        if not (0.7 * own <= on_shape <= 1.4 * own) or abs(sw) > 1.9 * np.pi:
+            return None
+        cover += abs(sw)
+    return cover
+
+
+def consolidate(chains, tol):
+    """Let several outline pieces share one circle or ellipse, the way a designer's body ellipse
+    gives both the back and the belly. Curved primitives are grouped greedily: a pair of groups
+    merges when one circle (preferred) or ellipse fits all their points within tol."""
+    prims = [p for c in chains for p in c if p["type"] == "arc"]
+    groups = [{"m": [p], "E": (p["C"][0], p["C"][1], p["r"], p["r"], 0.0), "len": p["len"]} for p in prims]
+    cache = {}
+
+    def try_pair(g, h):
+        pts = [p["pts"] for p in g["m"] + h["m"]]
+        allp = np.vstack(pts)
+        if len(allp) < 12:
+            return None
+        for E in (fit_circle_free(allp), fit_ellipse(allp)):
+            cov = shape_ok(E, tol, pts)
+            if cov is not None and cov >= 0.2 * 2 * np.pi:      # the pieces must span a real part of the shape
+                return E
+        return None
+
+    while True:
+        best = None
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                key = (id(groups[i]), id(groups[j]))
+                if key not in cache:
+                    cache[key] = try_pair(groups[i], groups[j])
+                if cache[key] is not None:
+                    score = groups[i]["len"] + groups[j]["len"]
+                    if best is None or score > best[0]:
+                        best = (score, i, j, cache[key])
+        if best is None:
+            break
+        _, i, j, E = best
+        g = {"m": groups[i]["m"] + groups[j]["m"], "E": E, "len": groups[i]["len"] + groups[j]["len"]}
+        groups = [x for k, x in enumerate(groups) if k not in (i, j)] + [g]
+    def own_arc(p):                                     # the primitive's original circle, exact through its endpoints
+        A, B, C, Q = (np.array(p[k]) for k in ("A", "B", "C", "Q"))
+        a0, aq, a1 = (np.arctan2(*(X - C)[::-1]) for X in (A, Q, B))
+        return (C[0], C[1], p["r"], p["r"], 0.0), float(a0), float(wrap(aq - a0) + wrap(a1 - aq))
+
+    final = []
+    for g in groups:
+        placed, ok = [], len(g["m"]) > 1
+        for p in g["m"] if ok else []:
+            t0, sw = sweep_on(g["E"], p["pts"])
+            arc = ell_xy(g["E"], t0 + np.linspace(0, sw, 48))
+            far = np.sqrt(((arc[:, None] - p["pts"][None]) ** 2).sum(-1).min(1)).max()
+            ends = max(np.hypot(*(arc[0] - p["pts"][0])), np.hypot(*(arc[-1] - p["pts"][-1])))
+            if far > 2.0 * tol or ends > 2.0 * tol:     # the drawn arc must stay on its own stretch of outline
+                ok = False; break
+            placed.append((p, t0, sw))
+        if ok:
+            final.append((g["E"], placed))
+        else:                                           # fall back to one shape per piece
+            for p in g["m"]:
+                E, t0, sw = own_arc(p); final.append((E, [(p, t0, sw)]))
+    groups = []
+    for E, placed in final:
+        gi = next(_GID)                                 # unique across calls: body, cuts and final mark are fitted separately
+        for p, t0, sw in placed:
+            p.update({"type": "earc", "E": list(E), "t0": t0, "sw": sw, "g": gi,
+                      "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + sw).tolist()})
+        groups.append({"E": E, "m": [p for p, _, _ in placed], "len": sum(p["len"] for p, _, _ in placed)})
+    return [{"E": list(g["E"]), "n": len(g["m"]), "cover": sum(abs(p["sw"]) for p in g["m"]),
+             "len": g["len"]} for g in groups]
+
+
 # ------------------------------------------------------------------ geometry -> svg / raster / guides
 def arc_points(p, step=2.0):
+    if p["type"] == "earc":
+        E = p["E"]; n = max(3, int(abs(p["sw"]) * max(E[2], E[3]) / step))
+        return ell_xy(E, p["t0"] + np.linspace(0, p["sw"], n))
     A, B, C, Q = (np.array(p[k]) for k in ("A", "B", "C", "Q")); r = p["r"]
     a0, aq, a1 = (np.arctan2(*(X - C)[::-1]) for X in (A, Q, B))
-    w = lambda x: (x + np.pi) % (2 * np.pi) - np.pi
-    d1, d2 = w(aq - a0), w(a1 - aq)
+    d1, d2 = wrap(aq - a0), wrap(a1 - aq)
     m = max(2, int(abs(d1 + d2) * r / step))
     t = a0 + np.concatenate([np.linspace(0, d1, m // 2 + 1), d1 + np.linspace(0, d2, m // 2 + 1)[1:]])
     return np.stack([C[0] + r * np.cos(t), C[1] + r * np.sin(t)], 1)
@@ -143,15 +313,26 @@ def arc_points(p, step=2.0):
 def chain_polyline(prims):
     pts = []
     for p in prims:
-        pts.append(arc_points(p)[:-1] if p["type"] == "arc" else np.array([p["A"]]))
+        pts.append(np.array([p["A"]]) if p["type"] == "line" else arc_points(p))
     return np.vstack(pts)
 
 
 def chain_path(prims):
-    d = [f"M{prims[0]['A'][0]:.2f},{prims[0]['A'][1]:.2f}"]
-    for p in prims:
+    """SVG path made only of lines and (elliptical) arcs. A piece on a shared shape starts and ends
+    on that shape; the join to its neighbour is a straight step no longer than the tolerance."""
+    first = prims[0]["A"]
+    d = [f"M{first[0]:.2f},{first[1]:.2f}"]
+    for k, p in enumerate(prims):
         if p["type"] == "line":
             d.append(f"L{p['B'][0]:.2f},{p['B'][1]:.2f}")
+        elif p["type"] == "earc":
+            cx, cy, rx, ry, ph = p["E"]
+            if k:
+                d.append(f"L{p['A'][0]:.2f},{p['A'][1]:.2f}")
+            sw = p["sw"]; parts = max(1, int(np.ceil(abs(sw) / 3.0)))   # keep every arc under 180 degrees
+            for q in range(1, parts + 1):
+                e = ell_xy(p["E"], p["t0"] + sw * q / parts)
+                d.append(f"A{rx:.2f},{ry:.2f} {np.degrees(ph):.2f} 0 {1 if sw > 0 else 0} {e[0]:.2f},{e[1]:.2f}")
         else:
             A, B, Q = np.array(p["A"]), np.array(p["B"]), np.array(p["Q"])
             v1, v2 = Q - A, B - Q
@@ -178,29 +359,16 @@ def render_square(chains, bbox_, size=1024, pad=0.12):
     return Image.fromarray(np.where(m, 0, 255).astype(np.uint8)).convert("RGB")
 
 
-def build_guides(chains, W, full_circle_r=400):
-    """One guide per primitive, so the mark is exactly a union of the regions the guides enclose:
-    an arc gives its full circle (a very large one gives a longer sweep of itself), a line gives
-    the line extended past both ends. Coincident circles and collinear lines share one guide."""
-    circles, lines, sweeps = [], [], []
+def build_guides(chains, W, full_r=400):
+    """One guide per shape. A shared or compact shape is drawn whole (circle or ellipse); a lone,
+    very large arc is drawn as a longer sweep of itself; a line is extended past both ends.
+    Collinear lines share one guide."""
+    shapes, lines, sweeps = {}, [], []
     for p in sorted([p for c in chains for p in c], key=lambda p: -p["len"]):
-        if p["type"] == "arc" and p["r"] <= full_circle_r:
-            for c in circles:
-                if np.hypot(c["cx"] - p["C"][0], c["cy"] - p["C"][1]) < 2.0 and abs(c["r"] - p["r"]) < 2.0:
-                    break
-            else:
-                circles.append({"type": "circle", "cx": p["C"][0], "cy": p["C"][1], "r": p["r"]})
-        elif p["type"] == "arc":
-            A, B, C, Q = (np.array(p[k]) for k in ("A", "B", "C", "Q")); r = p["r"]
-            w = lambda x: (x + np.pi) % (2 * np.pi) - np.pi
-            a0, aq, a1 = (np.arctan2(*(X - C)[::-1]) for X in (A, Q, B))
-            sw = w(aq - a0) + w(a1 - aq); ext = np.sign(sw) * min(0.25 * abs(sw) + 45 / r, 0.6)
-            ang = np.linspace(a0 - ext, a0 + sw + ext, max(8, int(abs(sw + 2 * ext) * r / 6)))
-            pts = np.stack([C[0] + r * np.cos(ang), C[1] + r * np.sin(ang)], 1)
-            if pts[0, 0] > pts[-1, 0]:
-                pts, sw = pts[::-1], -sw
-            sweeps.append({"type": "path", "x1": float(pts[0, 0]), "y1": float(pts[0, 1]), "pts": np.round(pts, 1).tolist(),
-                           "d": f"M{pts[0,0]:.1f},{pts[0,1]:.1f}A{r:.1f},{r:.1f} 0 0 {1 if sw > 0 else 0} {pts[-1,0]:.1f},{pts[-1,1]:.1f}"})
+        if p["type"] == "earc":
+            shapes.setdefault(p["g"], {"E": p["E"], "m": []})["m"].append(p)
+        elif p["type"] == "arc":                        # not consolidated (calibration path)
+            shapes.setdefault(id(p), {"E": [p["C"][0], p["C"][1], p["r"], p["r"], 0.0], "m": [p]})
         else:
             A, B = np.array(p["A"]), np.array(p["B"]); Ln = np.hypot(*(B - A))
             if Ln < 1e-6:
@@ -215,13 +383,29 @@ def build_guides(chains, W, full_circle_r=400):
                     l["t0"], l["t1"] = min(l["t0"], *ts), max(l["t1"], *ts); break
             else:
                 lines.append({"p": A, "d": d, "t0": 0.0, "t1": float(Ln)})
+    ovals = []
+    for sh in shapes.values():
+        cx, cy, rx, ry, ph = sh["E"]; m = sh["m"]
+        if len(m) == 1 and rx > full_r and m[0]["type"] == "earc":
+            p = m[0]; sw = p["sw"]; ext = np.sign(sw) * min(0.25 * abs(sw) + 45 / rx, 0.6)
+            t = np.linspace(p["t0"] - ext, p["t0"] + sw + ext, max(8, int(abs(sw + 2 * ext) * rx / 6)))
+            pts = ell_xy(sh["E"], t)
+            if pts[0, 0] > pts[-1, 0]:
+                pts, sw = pts[::-1], -sw
+            sweeps.append({"type": "path", "x1": float(pts[0, 0]), "y1": float(pts[0, 1]), "pts": np.round(pts, 1).tolist(),
+                           "d": "M" + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts)})
+        elif abs(rx - ry) < 0.03 * rx:
+            ovals.append({"type": "circle", "cx": cx, "cy": cy, "r": (rx + ry) / 2})
+        else:
+            ovals.append({"type": "ellipse", "cx": cx, "cy": cy, "rx": rx, "ry": ry, "rot": float(np.degrees(ph))})
     out_lines = []
     for l in lines:
         ext = 0.2 * (l["t1"] - l["t0"]) + 24
         a, b = l["p"] + l["d"] * (l["t0"] - ext), l["p"] + l["d"] * (l["t1"] + ext)
         out_lines.append({"type": "line", "x1": float(a[0]), "y1": float(a[1]), "x2": float(b[0]), "y2": float(b[1])})
-    big = sorted([c for c in circles if c["r"] >= 60], key=lambda c: -c["r"])
-    small = sorted([c for c in circles if c["r"] < 60], key=lambda c: c["cx"])
+    size = lambda o: o.get("r", o.get("rx", 0))
+    big = sorted([o for o in ovals if size(o) >= 60], key=lambda o: -size(o))
+    small = sorted([o for o in ovals if size(o) < 60], key=lambda o: o["cx"])
     return big + sorted(sweeps, key=lambda l: l["x1"]) + sorted(out_lines, key=lambda l: l["x1"]) + small
 
 
@@ -236,6 +420,9 @@ def raster_guides(guides, shape, width=3):
     for g in guides:
         if g["type"] == "circle":
             d.ellipse([g["cx"] - g["r"], g["cy"] - g["r"], g["cx"] + g["r"], g["cy"] + g["r"]], outline=255, width=width)
+        elif g["type"] == "ellipse":
+            pts = ell_xy((g["cx"], g["cy"], g["rx"], g["ry"], np.radians(g["rot"])), np.linspace(0, 2 * np.pi, 400))
+            d.line([tuple(q) for q in pts], fill=255, width=width)
         elif g["type"] == "line":
             d.line([g["x1"], g["y1"], g["x2"], g["y2"]], fill=255, width=width)
         else:
@@ -310,7 +497,7 @@ def merge_plan(guides, body, max_steps=18, min_face=220):
 
 
 # ------------------------------------------------------------------ fit a whole mask
-def fit_mask(mask, eps):
+def fit_mask(mask, eps, share=True):
     chains = []
     for P in outline_points(mask):
         P = ndimage.gaussian_filter1d(P, 1.2, axis=0, mode="wrap")
@@ -318,6 +505,8 @@ def fit_mask(mask, eps):
         prims = fit_chain(P, e, find_corners(P))
         if len(prims) >= 2:
             chains.append(prims)
+    if share:
+        consolidate(chains, 1.3 * eps)
     return chains
 
 
@@ -326,7 +515,7 @@ def stats(chains):
     per = sum(p["len"] for p in prims)
     return {"primitives": len(prims), "outline_px": per, "density": 1000 * len(prims) / max(per, 1),
             "line_share": sum(p["type"] == "line" for p in prims) / max(len(prims), 1),
-            "radii": [p["r"] for p in prims if p["type"] == "arc"]}
+            "radii": [p["r"] if p["type"] == "arc" else p["E"][2] for p in prims if p["type"] != "line"]}
 
 
 def critique(logo, target):
@@ -347,7 +536,7 @@ def calibrate(a):
     rows = []
     for f in files:
         m = np.asarray(Image.open(os.path.join(a.dataset, "logos", f)).convert("L")) < 128
-        st = stats(fit_mask(m, a.eps)); rows.append({"logo": f[:-4], **{k: v for k, v in st.items() if k != "radii"},
+        st = stats(fit_mask(m, a.eps, share=False)); rows.append({"logo": f[:-4], **{k: v for k, v in st.items() if k != "radii"},
                                                      "r_median": float(np.median(st["radii"])) if st["radii"] else 0})
         print(f"{f[:-4]:26s} prims {st['primitives']:3d}  density {st['density']:5.1f}/1000px  lines {st['line_share']:.0%}")
     dens = np.array([r["density"] for r in rows]); ls = np.array([r["line_share"] for r in rows])
@@ -359,19 +548,20 @@ def calibrate(a):
           f"outline (p75 {out['density_p75']:.1f}), {out['line_share_median']:.0%} straight lines")
 
 
-def construct(mask, target=None, style=None, log=print, max_guides=None):
+def construct(mask, target=None, style=None, log=print, max_ovals=None):
     """Tightest construction whose density stays within the reference logos' density
     (and, when asked, whose number of guide shapes stays readable on screen)."""
     style = style or json.load(open(os.path.join(ROOT, "dataset", "style_stats.json")))
     budget = style["density_p75"]; chosen = None; trail = []
     for eps in (1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 12.0):
-        chains = fit_mask(mask, eps); st = stats(chains); ng = len(build_guides(chains, mask.shape[1]))
+        chains = fit_mask(mask, eps); st = stats(chains); gs = build_guides(chains, mask.shape[1])
+        ng = len(gs); no = sum(g["type"] != "line" for g in gs)     # circles, ellipses and sweeps crowd the frame; lines do not
         cr = critique(rasterize(chains, mask.shape), target if target is not None else mask)
         trail.append({"eps": eps, "primitives": st["primitives"], "density": round(st["density"], 1),
                       "line_share": round(st["line_share"], 2), "iou": round(cr["iou"], 4), "p95": round(cr["outline_p95_px"], 1)})
-        log(f"  eps {eps:4.1f}px -> {st['primitives']:3d} primitives, {ng:2d} guides ({st['density']:5.1f}/1000px, budget {budget:.1f})  "
-            f"IoU {cr['iou']:.3f}  outline p95 {cr['outline_p95_px']:.1f}px")
-        if st["density"] <= budget and (max_guides is None or ng <= max_guides) and chosen is None:
+        log(f"  eps {eps:4.1f}px -> {st['primitives']:3d} primitives, {ng:2d} guides of which {no:2d} ovals ({st['density']:5.1f}/1000px, "
+            f"budget {budget:.1f})  IoU {cr['iou']:.3f}  outline p95 {cr['outline_p95_px']:.1f}px")
+        if st["density"] <= budget and (max_ovals is None or no <= max_ovals) and chosen is None:
             chosen = (eps, chains, st, cr)
             break
     if chosen is None:

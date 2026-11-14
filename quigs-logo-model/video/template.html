@@ -43,8 +43,10 @@ $('fillp').setAttribute('d', SC.fillD);
 $('cardp').setAttribute('d', SC.fillD);
 
 // guides
+const rotv = (v, deg) => { const a = deg * Math.PI / 180; return [v[0]*Math.cos(a) - v[1]*Math.sin(a), v[0]*Math.sin(a) + v[1]*Math.cos(a)]; };
 const prims = SC.prims.map(p => {
-  const el = document.createElementNS(NS, p.type === 'circle' ? 'ellipse' : p.type === 'path' ? 'path' : 'line');
+  const oval = p.type === 'circle' || p.type === 'ellipse';
+  const el = document.createElementNS(NS, oval ? 'ellipse' : p.type === 'path' ? 'path' : 'line');
   el.setAttribute('visibility', 'hidden'); $('guides').appendChild(el);
   if (p.type === 'path') {
     el.setAttribute('d', p.d);
@@ -52,9 +54,12 @@ const prims = SC.prims.map(p => {
     el.setAttribute('stroke-dasharray', len + ' ' + len);
     return { ...p, el, len, a: [s.x, s.y], b: [e.x, e.y] };
   }
-  const a = p.type === 'circle' ? [p.cx - p.r, p.cy - p.r] : [p.x1, p.y1];
-  const b = p.type === 'circle' ? [p.cx + p.r, p.cy + p.r] : [p.x2, p.y2];
-  return { ...p, el, a, b };
+  if (oval) {                                           // dragged out from one corner of its own box, like the ellipse tool
+    const rx = p.rx || p.r, ry = p.ry || p.r, rot = p.rot || 0;
+    const off = rotv([rx, ry], rot);
+    return { ...p, el, rx, ry, rot, a: [p.cx - off[0], p.cy - off[1]], b: [p.cx + off[0], p.cy + off[1]] };
+  }
+  return { ...p, el, a: [p.x1, p.y1], b: [p.x2, p.y2] };
 });
 // outline paths
 const paths = SC.paths.map(p => {
@@ -118,9 +123,11 @@ window.setTime = function (t) {
     const cx = lerp(p.a[0], p.b[0], u), cy = lerp(p.a[1], p.b[1], u);
     if (p.type === 'path') {
       p.el.setAttribute('stroke-dashoffset', p.len * (1 - u));
-    } else if (p.type === 'circle') {
-      p.el.setAttribute('cx', (p.a[0] + cx) / 2); p.el.setAttribute('cy', (p.a[1] + cy) / 2);
-      p.el.setAttribute('rx', Math.abs(cx - p.a[0]) / 2); p.el.setAttribute('ry', Math.abs(cy - p.a[1]) / 2);
+    } else if (p.type === 'circle' || p.type === 'ellipse') {
+      const off = rotv([p.rx * u, p.ry * u], p.rot), ccx = p.a[0] + off[0], ccy = p.a[1] + off[1];
+      p.el.setAttribute('cx', ccx); p.el.setAttribute('cy', ccy);
+      p.el.setAttribute('rx', p.rx * u); p.el.setAttribute('ry', p.ry * u);
+      p.el.setAttribute('transform', `rotate(${p.rot} ${ccx} ${ccy})`);
     } else {
       p.el.setAttribute('x1', p.a[0]); p.el.setAttribute('y1', p.a[1]);
       p.el.setAttribute('x2', cx); p.el.setAttribute('y2', cy);
