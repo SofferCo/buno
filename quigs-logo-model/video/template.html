@@ -18,7 +18,7 @@
     </pattern>
   </defs>
   <path id="fillp" fill="#000" fill-rule="evenodd" visibility="hidden"/>
-  <g id="guides" fill="none" stroke="#111" stroke-width="2.4"></g>
+  <g id="guides" fill="none" stroke="#111" stroke-width="3" stroke-linecap="butt"></g>
   <g id="trace" fill="none" stroke="#e8362d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"></g>
   <path id="sel" fill="url(#dots)" fill-rule="evenodd" stroke="#e8362d" stroke-width="3.5" stroke-linejoin="round" visibility="hidden"/>
   <path id="cuthover" fill="url(#dotsDel)" stroke="#e8362d" stroke-width="3" stroke-linejoin="round" visibility="hidden"/>
@@ -164,7 +164,7 @@ window.setTime = function (t) {
   }
   const c = cursorAt(t);
   $('cursor').setAttribute('transform', `translate(${c[0]},${c[1]})`);
-  $('cursor').setAttribute('visibility', onCard || t < 0.9 ? 'hidden' : 'visible');
+  $('cursor').setAttribute('visibility', onCard ? 'hidden' : 'visible');
   $('card').setAttribute('visibility', onCard ? 'visible' : 'hidden');
   if (onCard) {
     const col = t >= T.cardColor;

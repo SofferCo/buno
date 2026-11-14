@@ -106,10 +106,14 @@ def combine(a):
         sizes = np.asarray(ndimage.sum(final, lab, range(1, n + 1)))
         final = np.isin(lab, 1 + np.nonzero(sizes >= 0.004 * sizes.sum())[0])
     animal = np.asarray(Image.open(os.path.join(a.work, "animal_canvas.png")).convert("L")) < 128
-    print(f"model drawing vs silhouette IoU {iou:.2f}; kept {kept} cuts. Building the body from arcs and lines:")
+    print(f"model drawing vs silhouette IoU {iou:.2f}; kept {kept} cuts. Building the body, shapes first:")
 
-    # 1. the uncut body: its arcs and lines give the guides
-    eps, body_chains, st, _, trail = K.construct(body, animal, max_ovals=a.max_ovals)
+    # 1. the uncut body, built the way the reference clips are: a few ovals that sit inside the
+    #    animal as its masses, then straight strokes for everything else
+    bx0, by0, bx1, by1 = bbox(body); size = max(bx1 - bx0, by1 - by0)
+    tol = float(np.clip(a.tolerance * size, 4.0, 8.0))
+    body_chains = K.fit_mask(body, tol, shapes_first=True, delta=tol, log=print)
+    st = K.stats(body_chains); eps = tol; trail = []
     # 2. each cut is its own closed shape that gets deleted from the merged body
     cut_items, cut_chains = [], []
     clab, cn = ndimage.label(cuts)
@@ -117,7 +121,7 @@ def combine(a):
     for i in range(1, cn + 1):
         comp = clab == i
         ext = comp | (ndimage.binary_dilation(comp, structure=disk(6)) & ~body)   # reach past the outline at an open mouth
-        ch = K.fit_mask(ext, eps if comp.sum() > 1500 else min(eps, 2.5))   # small cuts (eyes) stay crisp
+        ch = K.fit_mask(ext, 0.7 * tol if comp.sum() > 1500 else min(tol, 2.5), shapes_first="cut")
         if not ch:
             continue
         py, px = ndimage.maximum_position(depth, clab, i)
@@ -126,15 +130,25 @@ def combine(a):
                           "mask": K.rasterize(ch, body.shape)})
     cut_items.sort(key=lambda c: -c["area"])
     state = K.rasterize(body_chains, body.shape); fill_states = [K.mask_path(state)]   # merged body, then minus each cut
+    body_built = state.copy()
     for c in cut_items:
         state = state & ~c.pop("mask"); fill_states.append(K.mask_path(state))
     guides = K.build_guides(body_chains + cut_chains, W)
-    plan = K.merge_plan(guides, body)
-    # 3. the finished mark, fitted on its own so the deliverable SVG is clean arcs and lines
-    final_chains = K.fit_mask(final, eps)
+    # one long ground line under the feet, as in nearly every reference clip
+    gy = float(bbox(body_built)[3]); gl = [g for g in guides if g["type"] == "line" and abs(g["y1"] - g["y2"]) < 2.5 and abs(g["y1"] - gy) < 4]
+    if gl and not a.no_ground:
+        guides = [g for g in guides if g not in gl]
+        k = next((i for i, g in enumerate(guides) if g["type"] == "line"), len(guides))
+        guides.insert(k, {"type": "line", "x1": float(bx0 - 0.07 * size), "y1": gy, "x2": float(bx1 + 0.07 * size), "y2": gy})
+    plan = K.merge_plan(guides, body_built)
+    # 3. the finished mark = built body minus the cuts, re-expressed as clean arcs and lines for the SVG
+    final_chains = K.fit_mask(state, 1.5, share=False)
     logo = K.rasterize(final_chains, final.shape); bb = [int(v) for v in bbox(logo)]
     target = animal & ~cuts                            # judge the outline, not the cuts carved on purpose
     cr = K.critique(logo, target); fst = K.stats(final_chains)
+    kinds = {}
+    for g in guides:
+        kinds[g["type"]] = kinds.get(g["type"], 0) + 1
 
     Image.fromarray(np.where(logo, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
     K.render_square(final_chains, bb).save(os.path.join(a.work, "logo.png"))
@@ -146,9 +160,8 @@ def combine(a):
     img = np.full(final.shape + (3,), 255, np.uint8); img[logo & target] = (30, 30, 30)
     img[logo & ~target] = (230, 50, 40); img[target & ~logo] = (40, 110, 230)
     Image.fromarray(img).crop((max(0, bb[0] - 40), max(0, bb[1] - 40), bb[2] + 40, bb[3] + 40)).save(os.path.join(a.work, "critique.png"))
-    print(f"-> body: {st['primitives']} primitives at tolerance {eps}px; {len(guides)} guide shapes cut the plane into "
-          f"{plan['regions']} regions inside the animal (+{plan['small_regions']} slivers); their union covers "
-          f"{plan['union_covers_body']:.1%} of the body; {len(cut_items)} cuts deleted\n"
+    print(f"-> {len(guides)} guide shapes {kinds} cut the plane into {plan['regions']} regions inside the animal; "
+          f"{len(cut_items)} cuts deleted\n"
           f"   critique vs the animal: IoU {cr['iou']:.3f} | outline off by mean {cr['outline_mean_px']:.1f}px, "
           f"p95 {cr['outline_p95_px']:.1f}px, max {cr['outline_max_px']:.0f}px")
 
@@ -158,5 +171,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True)
-    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--max-ovals", type=int, default=14, help="most circles/ellipses/sweeps the body may be built from"); c.set_defaults(f=combine)
+    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=0.0075, help="how far the built outline may sit from the animal, as a share of its size"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

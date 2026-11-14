@@ -260,32 +260,34 @@ def main():
         bb = [int(v) for v in bbox(mask)]
 
     # ---- timeline (seconds)
-    t = 1.25
-    per = float(np.clip(10.0 / max(len(prims), 1), 0.13, 0.5))   # whole build stays around 10 s
+    # pacing measured on the 32 reference clips (dataset/reference_phases.json): building starts at
+    # once and takes ~15 s at about half a second per shape; merge ~5 s; clean-up ~2 s; cards ~2 s
+    t = 0.35
+    per = float(np.clip(14.0 / max(len(prims), 1), 0.24, 0.6))
     for p in prims:
-        p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.36 * per, 3), round(t + 0.96 * per, 3)
+        p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.4 * per, 3), round(t + 0.96 * per, 3)
         t += per
     bx0, by0, bx1, by1 = bb
     scene = {"W": W, "H": H, "fps": FPS, "bg": "file://" + bg_path, "wash": 0.4, "prims": prims,
              "card": {"bg": a.bg, "fg": a.fg, "name": a.name}, "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
-    T = {"washStart": 0.7, "washEnd": 1.1}
+    T = {"washStart": -1.0, "washEnd": -0.5}          # the photo is faded from the first frame, as in the references
     if a.construction:
         # select all -> shape-builder sweep over the regions -> black -> delete cuts -> delete leftovers
         keys = []; mg = 46
         gx0, gy0 = max(8, bx0 - mg), max(8, by0 - mg); gx1, gy1 = min(W - 8, bx1 + mg), min(H - 8, by1 + mg)
-        m1a, m1b = t + 0.35, t + 0.85
+        m1a, m1b = t + 0.3, t + 0.7
         keys += [{"t": m1a, "x": gx0, "y": gy0}, {"t": m1b, "x": gx1, "y": gy1}]
         steps = con["merge"]["steps"]; npoles = sum(len(sp["poles"]) for sp in steps)
-        dt = float(np.clip(4.6 / max(npoles, 1), 0.04, 0.36)); t = m1b + 0.55; build_steps = []
+        dt = float(np.clip(3.6 / max(npoles, 1), 0.04, 0.36)); t = m1b + 0.45; build_steps = []
         for sp in steps:
             for (x, y) in sp["poles"]:
                 keys.append({"t": round(t, 3), "x": x, "y": y}); t += dt
             build_steps.append({"d": sp["d"], "t": round(t - dt, 3)})
-        release = t + 0.15; t = release + 0.45; cuts = []
+        release = t + 0.15; t = release + 0.35; cuts = []
         for c in con["cuts"]:
-            keys.append({"t": round(t + 0.3, 3), "x": c["pole"][0], "y": c["pole"][1]})
-            cuts.append({"d": c["d"], "tHover": round(t + 0.3, 3), "tDelete": round(t + 0.62, 3)}); t += 0.72
-        m2a, m2b = t + 0.4, t + 0.85
+            keys.append({"t": round(t + 0.25, 3), "x": c["pole"][0], "y": c["pole"][1]})
+            cuts.append({"d": c["d"], "tHover": round(t + 0.25, 3), "tDelete": round(t + 0.5, 3)}); t += 0.58
+        m2a, m2b = t + 0.3, t + 0.65
         keys += [{"t": m2a, "x": gx0, "y": gy0}, {"t": m2b, "x": gx1, "y": gy1},
                  {"t": m2b + 0.55, "x": W * 0.82, "y": H * 0.62}]
         guides_off = m2b + 0.2
@@ -306,9 +308,9 @@ def main():
         guides_off = fill + 1.1
         scene.update({"paths": paths, "fillD": " ".join(c[0] for c in contours)})
         T["traceStart"] = round(trace_start, 3)
-    card_white = guides_off + 1.3
-    card_color = card_white + 1.1
-    end = card_color + 3.0
+    card_white = guides_off + 1.1
+    card_color = card_white + 0.9
+    end = card_color + 1.8
     T.update({"fill": round(fill, 3), "guidesOff": round(guides_off, 3), "cardWhite": round(card_white, 3), "cardColor": round(card_color, 3)})
     scene["t"] = T; scene["duration"] = round(end, 3)
     scene_path = os.path.join(work, "scene.json")

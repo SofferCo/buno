@@ -94,6 +94,35 @@ def fit_prim(pts, eps):
     return best
 
 
+def _greedy(Q, eps):
+    """Longest-fit primitives along an open run of points."""
+    prims, m, i = [], len(Q), 0
+    while i < m - 1:
+        lo, hi, step = i + 1, None, 8
+        best = fit_prim(Q[i:lo + 1], eps)
+        j = lo
+        while hi is None:                               # gallop
+            j2 = min(m - 1, j + step); e, pr = fit_prim(Q[i:j2 + 1], eps)
+            if e <= eps and pr:
+                j, best = j2, (e, pr); step *= 2
+                if j == m - 1:
+                    hi = j
+            else:
+                hi = j2
+        lo2, hi2 = j, hi
+        while hi2 - lo2 > 1:                            # bisect
+            mid = (lo2 + hi2) // 2; e, pr = fit_prim(Q[i:mid + 1], eps)
+            if e <= eps and pr:
+                lo2, best = mid, (e, pr)
+            else:
+                hi2 = mid
+        pr = dict(best[1]); pr["err"] = best[0]; pr["len"] = float((lo2 - i) * STEP); pr["pts"] = Q[i:lo2 + 1]
+        if pr["type"] == "arc" and (pr["r"] < MIN_R or (abs(pr["s"]) <= 1.3 * eps and pr["len"] < 260)):
+            pr = {"type": "line", "A": pr["A"], "B": pr["B"], "err": pr["err"], "len": pr["len"], "pts": pr["pts"]}
+        prims.append(pr); i = lo2
+    return prims
+
+
 def fit_chain(P, eps, corners):
     """Greedy longest-fit chain of primitives around a closed contour, broken at corners."""
     n = len(P)
@@ -102,30 +131,29 @@ def fit_chain(P, eps, corners):
         corners.append((corners[0] + n // 2) % n); corners.sort()
     prims = []
     for a, b in zip(corners, corners[1:] + [corners[0] + n]):
-        idx = np.arange(a, b + 1) % n; Q = P[idx]; m = len(Q); i = 0
-        while i < m - 1:
-            lo, hi, step = i + 1, None, 8
-            best = fit_prim(Q[i:lo + 1], eps)
-            j = lo
-            while hi is None:                           # gallop
-                j2 = min(m - 1, j + step); e, pr = fit_prim(Q[i:j2 + 1], eps)
-                if e <= eps and pr:
-                    j, best = j2, (e, pr); step *= 2
-                    if j == m - 1:
-                        hi = j
-                else:
-                    hi = j2
-            lo2, hi2 = j, hi
-            while hi2 - lo2 > 1:                        # bisect
-                mid = (lo2 + hi2) // 2; e, pr = fit_prim(Q[i:mid + 1], eps)
-                if e <= eps and pr:
-                    lo2, best = mid, (e, pr)
-                else:
-                    hi2 = mid
-            pr = dict(best[1]); pr["err"] = best[0]; pr["len"] = float((lo2 - i) * STEP); pr["pts"] = Q[i:lo2 + 1]
-            if pr["type"] == "arc" and (pr["r"] < MIN_R or (abs(pr["s"]) <= 1.3 * eps and pr["len"] < 260)):
-                pr = {"type": "line", "A": pr["A"], "B": pr["B"], "err": pr["err"], "len": pr["len"], "pts": pr["pts"]}
-            prims.append(pr); i = lo2
+        prims += _greedy(P[np.arange(a, b + 1) % n], eps)
+    return prims
+
+
+def fit_open(Q, eps, k=5, thr_deg=42):
+    """Same, for an open run: split at its own corners first."""
+    if len(Q) < 3:
+        return [{"type": "line", "A": Q[0].tolist(), "B": Q[-1].tolist(), "err": 0.0, "len": float(len(Q) * STEP), "pts": Q}]
+    cuts = [0]
+    if len(Q) > 2 * k + 2:
+        v1 = Q[k:-k] - Q[:-2 * k]; v2 = Q[2 * k:] - Q[k:-k]
+        cos = (v1 * v2).sum(1) / (np.hypot(*v1.T) * np.hypot(*v2.T) + 1e-9)
+        ang = np.degrees(np.arccos(np.clip(cos, -1, 1)))
+        for i in np.argsort(-ang):
+            if ang[i] < thr_deg:
+                break
+            if all(abs(i + k - c) > 6 for c in cuts) and 4 < i + k < len(Q) - 5:
+                cuts.append(int(i + k))
+    cuts = sorted(cuts) + [len(Q) - 1]
+    prims = []
+    for a, b in zip(cuts[:-1], cuts[1:]):
+        if b > a:
+            prims += _greedy(Q[a:b + 1], eps)
     return prims
 
 
@@ -297,6 +325,156 @@ def consolidate(chains, tol):
              "len": g["len"]} for g in groups]
 
 
+# ------------------------------------------------------------------ shapes first: body-mass ovals, then lines
+def _runs(flag):
+    """Circular runs of True in a boolean ring: list of (start, length)."""
+    n = len(flag)
+    if flag.all():
+        return [(0, n)]
+    if not flag.any():
+        return []
+    start = int(np.nonzero(~flag)[0][0]); f = np.roll(flag, -start); out = []; i = 0
+    while i < n:
+        if f[i]:
+            j = i
+            while j < n and f[j]:
+                j += 1
+            out.append(((i + start) % n, j - i)); i = j
+        else:
+            i += 1
+    return out
+
+
+def inside_share(E, mask):
+    t = np.linspace(0, 2 * np.pi, 48, endpoint=False); H, W = mask.shape; hit = tot = 0
+    for f in (0.35, 0.7, 0.93):
+        q = ell_xy((E[0], E[1], E[2] * f, E[3] * f, E[4]), t)
+        x = np.clip(q[:, 0].round().astype(int), 0, W - 1); y = np.clip(q[:, 1].round().astype(int), 0, H - 1)
+        ok = (q[:, 0] >= 0) & (q[:, 0] < W) & (q[:, 1] >= 0) & (q[:, 1] < H)
+        hit += (mask[y, x] & ok).sum(); tot += len(t)
+    return hit / tot
+
+
+def mass_ovals(P, mask, delta, max_k=6, log=None):
+    """The reference designer starts from a few circles and ellipses that sit INSIDE the animal as
+    its masses (torso, haunch, chest, head) and whose edge is the outline for a long stretch.
+    Candidates are circles/ellipses fitted to stretches of the outline; one qualifies if it lies
+    inside the animal, and they are picked greedily by how much new outline they explain."""
+    N = len(P); size = max(np.ptp(P[:, 0]), np.ptp(P[:, 1])); Ps = P[::2]; cands = []
+    for L in (45, 70, 110, 170, 260, 380):
+        if L > 0.7 * N:
+            continue
+        for s0 in range(0, N, max(8, L // 5)):
+            seg = P[(s0 + np.arange(L)) % N]
+            for E in (fit_circle_free(seg), fit_ellipse(seg)):
+                if E is None:
+                    continue
+                cx, cy, rx, ry, ph = E
+                if ry < max(14, 0.045 * size) or rx > 0.5 * size or rx / ry > 4.0:      # masses, not limbs
+                    continue
+                if inside_share(E, mask) < 0.86:
+                    continue
+                d, _ = ell_project(E, Ps)
+                near = np.repeat(d <= delta, 2)[:N]
+                keep = np.zeros(N, bool)
+                for st, ln in _runs(near):
+                    if ln >= 14:                        # touching the outline in passing does not count
+                        keep[(st + np.arange(ln)) % N] = True
+                if keep.sum() >= 30:
+                    cands.append((E, keep, abs(rx - ry) < 0.03 * rx))
+    chosen, covered = [], np.zeros(N, bool)
+    while len(chosen) < max_k and cands:
+        gains = [((k & ~covered).sum() * (1.08 if circ else 1.0)) for _, k, circ in cands]
+        b = int(np.argmax(gains))
+        if gains[b] < max(45, 0.045 * N):               # must explain a real stretch of outline
+            break
+        E, keep, _ = cands[b]; chosen.append(E); covered |= keep
+        if log:
+            log(f"    oval {len(chosen)}: centre ({E[0]:.0f},{E[1]:.0f}) radii {E[2]:.0f}x{E[3]:.0f} explains {gains[b] * STEP:.0f}px of outline")
+    return chosen
+
+
+def to_earc(p):
+    """A free circular arc as a piece of its own circle."""
+    A, B, C, Q = (np.array(p[k]) for k in ("A", "B", "C", "Q"))
+    a0, aq, a1 = (np.arctan2(*(X - C)[::-1]) for X in (A, Q, B))
+    p.update({"type": "earc", "E": [float(C[0]), float(C[1]), p["r"], p["r"], 0.0], "t0": float(a0),
+              "sw": float(wrap(aq - a0) + wrap(a1 - aq)), "g": next(_GID)})
+    return p
+
+
+def _dp(Q, eps):
+    """Douglas-Peucker on an open run: indices of the kept points."""
+    n = len(Q); keep = np.zeros(n, bool); keep[[0, n - 1]] = True; stack = [(0, n - 1)]
+    while stack:
+        a, b = stack.pop()
+        if b <= a + 1:
+            continue
+        p, d = Q[a], Q[b] - Q[a]; L = np.hypot(*d); seg = Q[a + 1:b]
+        dist = np.hypot(*(seg - p).T) if L < 1e-9 else np.abs(d[0] * (seg[:, 1] - p[1]) - d[1] * (seg[:, 0] - p[0])) / L
+        i = int(np.argmax(dist))
+        if dist[i] > eps:
+            k = a + 1 + i; keep[k] = True; stack += [(a, k), (k, b)]
+    return np.nonzero(keep)[0]
+
+
+def shapes_first_chain(P, mask, delta, tau, log=None, with_ovals=True):
+    """Outline = stretches lying on the body-mass ovals + straight strokes (and the odd small
+    circle for a tight curl) for everything between them."""
+    N = len(P); size = max(np.ptp(P[:, 0]), np.ptp(P[:, 1]))
+    ovals = mass_ovals(P, mask, delta, log=log) if with_ovals else []
+    lab = np.full(N, -1); best = np.full(N, 1e9)
+    for k, E in enumerate(ovals):
+        d, _ = ell_project(E, P)
+        m = (d <= delta) & (d < best); lab[m] = k; best[m] = d[m]
+    for k in range(len(ovals)):                         # an oval only owns real stretches
+        for st, ln in _runs(lab == k):
+            if ln < 14:
+                lab[(st + np.arange(ln)) % N] = -1
+    gids = [next(_GID) for _ in ovals]
+    segs = []                                           # (label, start, length) around the ring
+    if (lab == lab[0]).all():
+        segs = [(int(lab[0]), 0, N)]
+    else:
+        start = int(np.nonzero(lab != np.roll(lab, 1))[0][0]); i = 0
+        while i < N:
+            a = (start + i) % N; j = i
+            while j < N and lab[(start + j) % N] == lab[a]:
+                j += 1
+            segs.append((int(lab[a]), a, j - i)); i = j
+    prims = []
+    for k, a, ln in segs:
+        pts = P[(a + np.arange(ln + 1)) % N] if ln < N else P
+        if k >= 0:
+            E = ovals[k]; t0, sw = sweep_on(E, pts)
+            arc = ell_xy(E, t0 + np.linspace(0, sw, 48))
+            far = np.sqrt(((arc[:, None] - pts[None]) ** 2).sum(-1).min(1)).max()
+            if far <= 2.2 * delta and abs(sw) < 1.95 * np.pi:
+                prims.append({"type": "earc", "E": list(E), "t0": t0, "sw": sw, "g": gids[k], "len": float(ln * STEP),
+                              "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + sw).tolist(), "pts": pts})
+                continue
+        for p in fit_open(pts, tau):
+            tight = with_ovals and p["type"] == "arc" and p["r"] <= 0.075 * size and abs(p["len"] / p["r"]) >= 1.5
+            if tight:                                   # a real curl (tail tip, ear, paw): a small circle
+                prims.append(to_earc(p))
+            elif p["type"] == "arc":                    # any other curve is drawn with straight strokes, as in the references
+                Q = p["pts"]; idx = _dp(Q, tau)
+                for a0, b0 in zip(idx[:-1], idx[1:]):
+                    prims.append({"type": "line", "A": Q[a0].tolist(), "B": Q[b0].tolist(), "err": tau,
+                                  "len": float((b0 - a0) * STEP), "pts": Q[a0:b0 + 1]})
+            else:
+                prims.append(p)
+    n = len(prims)                                      # strokes meet the ovals exactly: no step at the joins
+    for i, p in enumerate(prims):
+        if p["type"] == "line":
+            prv, nxt = prims[i - 1], prims[(i + 1) % n]
+            if prv["type"] == "earc":
+                p["A"] = list(prv["B"])
+            if nxt["type"] == "earc":
+                p["B"] = list(nxt["A"])
+    return prims, ovals
+
+
 # ------------------------------------------------------------------ geometry -> svg / raster / guides
 def arc_points(p, step=2.0):
     if p["type"] == "earc":
@@ -317,6 +495,10 @@ def chain_polyline(prims):
     return np.vstack(pts)
 
 
+def _same(a, b):
+    return abs(a[0] - b[0]) < 0.05 and abs(a[1] - b[1]) < 0.05
+
+
 def chain_path(prims):
     """SVG path made only of lines and (elliptical) arcs. A piece on a shared shape starts and ends
     on that shape; the join to its neighbour is a straight step no longer than the tolerance."""
@@ -327,7 +509,7 @@ def chain_path(prims):
             d.append(f"L{p['B'][0]:.2f},{p['B'][1]:.2f}")
         elif p["type"] == "earc":
             cx, cy, rx, ry, ph = p["E"]
-            if k:
+            if k and not _same(prims[k - 1]["B"], p["A"]):
                 d.append(f"L{p['A'][0]:.2f},{p['A'][1]:.2f}")
             sw = p["sw"]; parts = max(1, int(np.ceil(abs(sw) / 3.0)))   # keep every arc under 180 degrees
             for q in range(1, parts + 1):
@@ -359,7 +541,7 @@ def render_square(chains, bbox_, size=1024, pad=0.12):
     return Image.fromarray(np.where(m, 0, 255).astype(np.uint8)).convert("RGB")
 
 
-def build_guides(chains, W, full_r=400):
+def build_guides(chains, W, full_r=400, min_line=12):
     """One guide per shape. A shared or compact shape is drawn whole (circle or ellipse); a lone,
     very large arc is drawn as a longer sweep of itself; a line is extended past both ends.
     Collinear lines share one guide."""
@@ -371,22 +553,23 @@ def build_guides(chains, W, full_r=400):
             shapes.setdefault(id(p), {"E": [p["C"][0], p["C"][1], p["r"], p["r"], 0.0], "m": [p]})
         else:
             A, B = np.array(p["A"]), np.array(p["B"]); Ln = np.hypot(*(B - A))
-            if Ln < 1e-6:
-                continue
+            if Ln < min_line:
+                continue                                # a tiny chamfer is not a construction stroke
             d = (B - A) / Ln
             if d[0] < 0 or (abs(d[0]) < 1e-9 and d[1] < 0):
                 d, A, B = -d, B, A
             for l in lines:
-                off = abs(l["d"][0] * (A[1] - l["p"][1]) - l["d"][1] * (A[0] - l["p"][0]))
-                if abs(d @ l["d"]) > 0.9996 and off < 2.0:
-                    ts = [(X - l["p"]) @ l["d"] for X in (A, B)]
+                offs = [abs(l["d"][0] * (X[1] - l["p"][1]) - l["d"][1] * (X[0] - l["p"][0])) for X in (A, B)]
+                ts = [(X - l["p"]) @ l["d"] for X in (A, B)]
+                gap = max(min(ts) - l["t1"], l["t0"] - max(ts), 0)
+                if abs(d @ l["d"]) > 0.9985 and max(offs) < 3.5 and gap < 90:
                     l["t0"], l["t1"] = min(l["t0"], *ts), max(l["t1"], *ts); break
             else:
                 lines.append({"p": A, "d": d, "t0": 0.0, "t1": float(Ln)})
     ovals = []
     for sh in shapes.values():
         cx, cy, rx, ry, ph = sh["E"]; m = sh["m"]
-        if len(m) == 1 and rx > full_r and m[0]["type"] == "earc":
+        if len(m) == 1 and m[0]["type"] == "earc" and (rx > full_r or (m[0].get("cut") and rx > 45)):   # drawn as a stroke, not a whole circle
             p = m[0]; sw = p["sw"]; ext = np.sign(sw) * min(0.25 * abs(sw) + 45 / rx, 0.6)
             t = np.linspace(p["t0"] - ext, p["t0"] + sw + ext, max(8, int(abs(sw + 2 * ext) * rx / 6)))
             pts = ell_xy(sh["E"], t)
@@ -400,7 +583,7 @@ def build_guides(chains, W, full_r=400):
             ovals.append({"type": "ellipse", "cx": cx, "cy": cy, "rx": rx, "ry": ry, "rot": float(np.degrees(ph))})
     out_lines = []
     for l in lines:
-        ext = 0.2 * (l["t1"] - l["t0"]) + 24
+        ext = 0.16 * (l["t1"] - l["t0"]) + 20            # strokes overshoot their corners a little, as drawn by hand
         a, b = l["p"] + l["d"] * (l["t0"] - ext), l["p"] + l["d"] * (l["t1"] + ext)
         out_lines.append({"type": "line", "x1": float(a[0]), "y1": float(a[1]), "x2": float(b[0]), "y2": float(b[1])})
     size = lambda o: o.get("r", o.get("rx", 0))
@@ -497,16 +680,40 @@ def merge_plan(guides, body, max_steps=18, min_face=220):
 
 
 # ------------------------------------------------------------------ fit a whole mask
-def fit_mask(mask, eps, share=True):
+def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None):
+    """shapes_first: the big outline is built from body-mass ovals and straight strokes (the way
+    the reference clips are built). Otherwise: free line/arc fit, optionally sharing shapes."""
     chains = []
     for P in outline_points(mask):
         P = ndimage.gaussian_filter1d(P, 1.2, axis=0, mode="wrap")
-        e = eps if len(P) * STEP > 260 else min(eps, 2.0)   # eyes and small cuts stay crisp
-        prims = fit_chain(P, e, find_corners(P))
+        big = len(P) * STEP > 260
+        if shapes_first is True and big:
+            prims, _ = shapes_first_chain(P, mask, delta or eps, 1.6 * eps, log=log)
+        elif shapes_first == "cut":
+            E = fit_circle_free(P); d = ell_project(E, P)[0].max() if E else 1e9
+            if E and d <= max(2.5, 0.12 * E[2]) and E[2] < 60:        # a round cut (an eye) is simply a circle
+                gid = next(_GID)
+                prims = [{"type": "earc", "E": list(E), "t0": t0, "sw": np.pi, "g": gid, "len": float(np.pi * E[2]),
+                          "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + np.pi).tolist(), "pts": P} for t0 in (0.0, np.pi)]
+            else:                                                     # any other cut: a few strokes, straight or one arc each
+                prims = fit_chain(P, eps, find_corners(P))
+                for q in prims:
+                    if q["type"] == "arc":
+                        to_earc(q)["cut"] = True
+        else:
+            prims = fit_chain(P, eps if big else min(eps, 2.0), find_corners(P))   # eyes and small cuts stay crisp
         if len(prims) >= 2:
             chains.append(prims)
-    if share:
-        consolidate(chains, 1.3 * eps)
+    if not shapes_first:
+        if share:
+            consolidate(chains, 1.3 * eps)
+        else:
+            return chains
+    else:
+        for c in chains:
+            for p in c:
+                if p["type"] == "arc":
+                    to_earc(p)
     return chains
 
 
