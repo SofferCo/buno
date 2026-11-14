@@ -1,0 +1,6 @@
+train_data/
+holdout/
+out/
+output/
+*.safetensors
+__pycache__/

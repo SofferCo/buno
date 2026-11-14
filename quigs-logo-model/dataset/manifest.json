@@ -1,0 +1,642 @@
+[
+  {
+    "stem": "01_wolf_train",
+    "index": "01",
+    "animal": "wolf",
+    "split": "train",
+    "video": "01_wolf_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 27.44,
+    "t_overlay": 24.6,
+    "t_card": 25.5,
+    "t_final": 27.14,
+    "logo_bbox_in_card": [
+      137,
+      535,
+      602,
+      750
+    ],
+    "svg": true
+  },
+  {
+    "stem": "02_maned-wolf_train",
+    "index": "02",
+    "animal": "maned-wolf",
+    "split": "train",
+    "video": "02_maned-wolf_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 25.52,
+    "t_overlay": 23.1,
+    "t_card": 24.0,
+    "t_final": 25.22,
+    "logo_bbox_in_card": [
+      168,
+      491,
+      544,
+      782
+    ],
+    "svg": true
+  },
+  {
+    "stem": "03_hyena_train",
+    "index": "03",
+    "animal": "hyena",
+    "split": "train",
+    "video": "03_hyena_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 25.73,
+    "t_overlay": 23.1,
+    "t_card": 24.0,
+    "t_final": 25.43,
+    "logo_bbox_in_card": [
+      122,
+      503,
+      617,
+      795
+    ],
+    "svg": true
+  },
+  {
+    "stem": "04_cheetah_train",
+    "index": "04",
+    "animal": "cheetah",
+    "split": "train",
+    "video": "04_cheetah_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 24.03,
+    "t_overlay": 21.35,
+    "t_card": 22.25,
+    "t_final": 23.73,
+    "logo_bbox_in_card": [
+      176,
+      808,
+      888,
+      1106
+    ],
+    "svg": true
+  },
+  {
+    "stem": "05_snow-leopard_train",
+    "index": "05",
+    "animal": "snow-leopard",
+    "split": "train",
+    "video": "05_snow-leopard_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 21.48,
+    "t_overlay": 19.35,
+    "t_card": 20.25,
+    "t_final": 21.18,
+    "logo_bbox_in_card": [
+      114,
+      851,
+      941,
+      1116
+    ],
+    "svg": true
+  },
+  {
+    "stem": "06_ferret_train",
+    "index": "06",
+    "animal": "ferret",
+    "split": "train",
+    "video": "06_ferret_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 25.38,
+    "t_overlay": 22.85,
+    "t_card": 23.75,
+    "t_final": 25.08,
+    "logo_bbox_in_card": [
+      165,
+      797,
+      868,
+      1115
+    ],
+    "svg": true
+  },
+  {
+    "stem": "07_hare_train",
+    "index": "07",
+    "animal": "hare",
+    "split": "train",
+    "video": "07_hare_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 22.87,
+    "t_overlay": 20.6,
+    "t_card": 21.5,
+    "t_final": 22.57,
+    "logo_bbox_in_card": [
+      220,
+      777,
+      844,
+      1118
+    ],
+    "svg": true
+  },
+  {
+    "stem": "08_rhino_train",
+    "index": "08",
+    "animal": "rhino",
+    "split": "train",
+    "video": "08_rhino_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 27.28,
+    "t_overlay": 24.6,
+    "t_card": 25.5,
+    "t_final": 26.98,
+    "logo_bbox_in_card": [
+      141,
+      547,
+      584,
+      740
+    ],
+    "svg": true
+  },
+  {
+    "stem": "09_bison_train",
+    "index": "09",
+    "animal": "bison",
+    "split": "train",
+    "video": "09_bison_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 24.13,
+    "t_overlay": 21.6,
+    "t_card": 22.5,
+    "t_final": 23.83,
+    "logo_bbox_in_card": [
+      220,
+      785,
+      820,
+      1139
+    ],
+    "svg": true
+  },
+  {
+    "stem": "10_moose_train",
+    "index": "10",
+    "animal": "moose",
+    "split": "train",
+    "video": "10_moose_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 24.08,
+    "t_overlay": 21.85,
+    "t_card": 22.75,
+    "t_final": 23.78,
+    "logo_bbox_in_card": [
+      261,
+      748,
+      817,
+      1228
+    ],
+    "svg": true
+  },
+  {
+    "stem": "11_elk_train",
+    "index": "11",
+    "animal": "elk",
+    "split": "train",
+    "video": "11_elk_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 23.99,
+    "t_overlay": 21.6,
+    "t_card": 22.5,
+    "t_final": 23.69,
+    "logo_bbox_in_card": [
+      174,
+      664,
+      898,
+      1214
+    ],
+    "svg": true
+  },
+  {
+    "stem": "12_polar-bear_train",
+    "index": "12",
+    "animal": "polar-bear",
+    "split": "train",
+    "video": "12_polar-bear_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 21.87,
+    "t_overlay": 19.35,
+    "t_card": 20.25,
+    "t_final": 21.57,
+    "logo_bbox_in_card": [
+      133,
+      539,
+      600,
+      740
+    ],
+    "svg": true
+  },
+  {
+    "stem": "13_lemur_train",
+    "index": "13",
+    "animal": "lemur",
+    "split": "train",
+    "video": "13_lemur_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 26.03,
+    "t_overlay": 23.35,
+    "t_card": 24.25,
+    "t_final": 25.73,
+    "logo_bbox_in_card": [
+      143,
+      459,
+      580,
+      806
+    ],
+    "svg": true
+  },
+  {
+    "stem": "14_monkey_train",
+    "index": "14",
+    "animal": "monkey",
+    "split": "train",
+    "video": "14_monkey_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 25.06,
+    "t_overlay": 22.35,
+    "t_card": 23.25,
+    "t_final": 24.76,
+    "logo_bbox_in_card": [
+      224,
+      737,
+      873,
+      1237
+    ],
+    "svg": true
+  },
+  {
+    "stem": "15_elephant_train",
+    "index": "15",
+    "animal": "elephant",
+    "split": "train",
+    "video": "15_elephant_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 22.5,
+    "t_overlay": 20.1,
+    "t_card": 21.0,
+    "t_final": 22.2,
+    "logo_bbox_in_card": [
+      186,
+      734,
+      881,
+      1156
+    ],
+    "svg": true
+  },
+  {
+    "stem": "16_swan_train",
+    "index": "16",
+    "animal": "swan",
+    "split": "train",
+    "video": "16_swan_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 22.92,
+    "t_overlay": 20.35,
+    "t_card": 21.25,
+    "t_final": 22.62,
+    "logo_bbox_in_card": [
+      194,
+      492,
+      532,
+      778
+    ],
+    "svg": true
+  },
+  {
+    "stem": "17_penguin_train",
+    "index": "17",
+    "animal": "penguin",
+    "split": "train",
+    "video": "17_penguin_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 27.14,
+    "t_overlay": 24.6,
+    "t_card": 25.5,
+    "t_final": 26.84,
+    "logo_bbox_in_card": [
+      224,
+      432,
+      481,
+      847
+    ],
+    "svg": true
+  },
+  {
+    "stem": "18_kiwi_train",
+    "index": "18",
+    "animal": "kiwi",
+    "split": "train",
+    "video": "18_kiwi_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 23.94,
+    "t_overlay": 21.1,
+    "t_card": 22.0,
+    "t_final": 23.64,
+    "logo_bbox_in_card": [
+      247,
+      747,
+      875,
+      1162
+    ],
+    "svg": true
+  },
+  {
+    "stem": "19_eagle_train",
+    "index": "19",
+    "animal": "eagle",
+    "split": "train",
+    "video": "19_eagle_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 22.83,
+    "t_overlay": 20.6,
+    "t_card": 21.5,
+    "t_final": 22.53,
+    "logo_bbox_in_card": [
+      240,
+      590,
+      786,
+      1362
+    ],
+    "svg": true
+  },
+  {
+    "stem": "20_secretary-bird_train",
+    "index": "20",
+    "animal": "secretary-bird",
+    "split": "train",
+    "video": "20_secretary-bird_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 24.78,
+    "t_overlay": 22.6,
+    "t_card": 23.5,
+    "t_final": 24.48,
+    "logo_bbox_in_card": [
+      201,
+      567,
+      826,
+      1333
+    ],
+    "svg": true
+  },
+  {
+    "stem": "21_bee_train",
+    "index": "21",
+    "animal": "bee",
+    "split": "train",
+    "video": "21_bee_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 25.8,
+    "t_overlay": 23.35,
+    "t_card": 24.25,
+    "t_final": 25.5,
+    "logo_bbox_in_card": [
+      201,
+      636,
+      882,
+      1280
+    ],
+    "svg": true
+  },
+  {
+    "stem": "22_butterfly_train",
+    "index": "22",
+    "animal": "butterfly",
+    "split": "train",
+    "video": "22_butterfly_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 22.46,
+    "t_overlay": 19.6,
+    "t_card": 20.5,
+    "t_final": 22.16,
+    "logo_bbox_in_card": [
+      181,
+      717,
+      887,
+      1194
+    ],
+    "svg": true
+  },
+  {
+    "stem": "23_moth_train",
+    "index": "23",
+    "animal": "moth",
+    "split": "train",
+    "video": "23_moth_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 25.1,
+    "t_overlay": 22.85,
+    "t_card": 23.75,
+    "t_final": 24.8,
+    "logo_bbox_in_card": [
+      170,
+      774,
+      907,
+      1131
+    ],
+    "svg": true
+  },
+  {
+    "stem": "24_shrimp_train",
+    "index": "24",
+    "animal": "shrimp",
+    "split": "train",
+    "video": "24_shrimp_train.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 27.98,
+    "t_overlay": 25.6,
+    "t_card": 26.5,
+    "t_final": 27.68,
+    "logo_bbox_in_card": [
+      292,
+      772,
+      863,
+      1105
+    ],
+    "svg": true
+  },
+  {
+    "stem": "25_badger_train",
+    "index": "25",
+    "animal": "badger",
+    "split": "train",
+    "video": "25_badger_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 19.32,
+    "t_overlay": 16.85,
+    "t_card": 17.75,
+    "t_final": 19.02,
+    "logo_bbox_in_card": [
+      197,
+      482,
+      512,
+      740
+    ],
+    "svg": true
+  },
+  {
+    "stem": "26_espeon_train",
+    "index": "26",
+    "animal": "espeon",
+    "split": "train",
+    "video": "26_espeon_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 23.42,
+    "t_overlay": 21.35,
+    "t_card": 22.25,
+    "t_final": 23.12,
+    "logo_bbox_in_card": [
+      122,
+      426,
+      596,
+      764
+    ],
+    "svg": true
+  },
+  {
+    "stem": "27_red-panda_train",
+    "index": "27",
+    "animal": "red-panda",
+    "split": "train",
+    "video": "27_red-panda_train.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 23.4,
+    "t_overlay": 21.1,
+    "t_card": 22.0,
+    "t_final": 23.1,
+    "logo_bbox_in_card": [
+      89,
+      538,
+      623,
+      736
+    ],
+    "svg": true
+  },
+  {
+    "stem": "28_fox_holdout",
+    "index": "28",
+    "animal": "fox",
+    "split": "holdout",
+    "video": "28_fox_holdout.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 21.16,
+    "t_overlay": 18.6,
+    "t_card": 19.5,
+    "t_final": 20.86,
+    "logo_bbox_in_card": [
+      149,
+      701,
+      932,
+      1212
+    ],
+    "svg": true
+  },
+  {
+    "stem": "29_horse_holdout",
+    "index": "29",
+    "animal": "horse",
+    "split": "holdout",
+    "video": "29_horse_holdout.mp4",
+    "width": 720,
+    "height": 1280,
+    "duration": 25.54,
+    "t_overlay": 23.35,
+    "t_card": 24.25,
+    "t_final": 25.24,
+    "logo_bbox_in_card": [
+      100,
+      500,
+      608,
+      774
+    ],
+    "svg": true
+  },
+  {
+    "stem": "30_serval_holdout",
+    "index": "30",
+    "animal": "serval",
+    "split": "holdout",
+    "video": "30_serval_holdout.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 23.71,
+    "t_overlay": 21.6,
+    "t_card": 22.5,
+    "t_final": 23.41,
+    "logo_bbox_in_card": [
+      177,
+      702,
+      834,
+      1234
+    ],
+    "svg": true
+  },
+  {
+    "stem": "31_gazelle_holdout",
+    "index": "31",
+    "animal": "gazelle",
+    "split": "holdout",
+    "video": "31_gazelle_holdout.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 22.55,
+    "t_overlay": 20.1,
+    "t_card": 21.0,
+    "t_final": 22.25,
+    "logo_bbox_in_card": [
+      211,
+      765,
+      863,
+      1117
+    ],
+    "svg": true
+  },
+  {
+    "stem": "32_bear_holdout",
+    "index": "32",
+    "animal": "bear",
+    "split": "holdout",
+    "video": "32_bear_holdout.mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration": 24.31,
+    "t_overlay": 21.6,
+    "t_card": 22.5,
+    "t_final": 24.01,
+    "logo_bbox_in_card": [
+      273,
+      673,
+      798,
+      1232
+    ],
+    "svg": true
+  }
+]

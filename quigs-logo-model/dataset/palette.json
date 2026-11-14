@@ -1,0 +1,130 @@
+{
+  "01_wolf_train": {
+    "background": "#ffffff",
+    "logo": "#040404"
+  },
+  "02_maned-wolf_train": {
+    "background": "#490600",
+    "logo": "#ffffff"
+  },
+  "03_hyena_train": {
+    "background": "#ffffff",
+    "logo": "#040404"
+  },
+  "04_cheetah_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "05_snow-leopard_train": {
+    "background": "#2e2066",
+    "logo": "#d5d7d4"
+  },
+  "06_ferret_train": {
+    "background": "#ffffff",
+    "logo": "#040404"
+  },
+  "07_hare_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "08_rhino_train": {
+    "background": "#ffffff",
+    "logo": "#040404"
+  },
+  "09_bison_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "10_moose_train": {
+    "background": "#392317",
+    "logo": "#b4540b"
+  },
+  "11_elk_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "12_polar-bear_train": {
+    "background": "#07142f",
+    "logo": "#dceffb"
+  },
+  "13_lemur_train": {
+    "background": "#ffffff",
+    "logo": "#040404"
+  },
+  "14_monkey_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "15_elephant_train": {
+    "background": "#444c5a",
+    "logo": "#fcfcfc"
+  },
+  "16_swan_train": {
+    "background": "#f0c156",
+    "logo": "#241d1f"
+  },
+  "17_penguin_train": {
+    "background": "#f3e9da",
+    "logo": "#1f2527"
+  },
+  "18_kiwi_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "19_eagle_train": {
+    "background": "#fea101",
+    "logo": "#000000"
+  },
+  "20_secretary-bird_train": {
+    "background": "#0a0a0a",
+    "logo": "#d5c9af"
+  },
+  "21_bee_train": {
+    "background": "#f0b627",
+    "logo": "#2b2e39"
+  },
+  "22_butterfly_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "23_moth_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "24_shrimp_train": {
+    "background": "#c60824",
+    "logo": "#f9eff2"
+  },
+  "25_badger_train": {
+    "background": "#c7b69b",
+    "logo": "#2e292b"
+  },
+  "26_espeon_train": {
+    "background": "#9445d3",
+    "logo": "#ffffff"
+  },
+  "27_red-panda_train": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "28_fox_holdout": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "29_horse_holdout": {
+    "background": "#11393c",
+    "logo": "#ffffff"
+  },
+  "30_serval_holdout": {
+    "background": "#ffd02e",
+    "logo": "#440400"
+  },
+  "31_gazelle_holdout": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  },
+  "32_bear_holdout": {
+    "background": "#ffffff",
+    "logo": "#000000"
+  }
+}
