@@ -218,8 +218,10 @@ def arc_circles(contours, existing, n=6):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--photo", required=True)
-    ap.add_argument("--logo", required=True)
+    ap.add_argument("--logo")
     ap.add_argument("--animal-mask")
+    ap.add_argument("--construction", help="construction.json from silhouette_logo.py: the mark is built from its arcs "
+                    "and lines and the guides are exactly the circles and lines it is made of (no --logo needed)")
     ap.add_argument("--placed", action="store_true",
                     help="--logo is already a 1080x1920 canvas mask in photo coordinates (silhouette_logo.py output)")
     ap.add_argument("--name", default="")
@@ -234,32 +236,44 @@ def main():
     bg_path = os.path.join(work, "bg.jpg")
     cover(Image.open(a.photo).convert("RGB")).save(bg_path, quality=95)
 
-    lm = np.asarray(Image.open(a.logo).convert("L")) < 128
-    if not a.placed:
-        x0, y0, x1, y1 = bbox(lm); lm = lm[y0:y1, x0:x1]
-    animal = None
-    if a.animal_mask and not a.placed:
-        am = Image.open(a.animal_mask)
-        am = am.getchannel("A") if am.mode in ("RGBA", "LA") else am.convert("L")
-        animal = np.asarray(cover(am, Image.BILINEAR)) > 127
-        lab, n = ndimage.label(animal)                  # keep the main subject only
-        if n > 1:
-            animal = lab == (1 + int(np.argmax(ndimage.sum(animal, lab, range(1, n + 1)))))
-    mask, iou = (lm, 1.0) if a.placed else place_logo(lm, animal)
-    contours = [c for c in trace(mask) if len(c[1]) > 20]
-
-    big = inscribed_circles(mask)
-    lines = edge_lines(contours)
-    arcs = arc_circles(contours, big)
-    prims = big + lines + arcs
+    if a.construction:
+        con = json.load(open(a.construction))
+        prims = con["guides"]; contours = [(d, np.zeros((max(30, int(len(d))), 2))) for d in con["paths"]]
+        bb = con["bbox"]; iou = con["critique"]["iou"]; big = lines = arcs = []
+        import re
+        lens_override = []
+        for d in con["paths"]:                         # rough length per path for trace timing
+            nums = np.array(re.findall(r"-?\d+\.?\d*", d), float)
+            lens_override.append(len(nums))
+    else:
+        lens_override = None
+        lm = np.asarray(Image.open(a.logo).convert("L")) < 128
+        if not a.placed:
+            x0, y0, x1, y1 = bbox(lm); lm = lm[y0:y1, x0:x1]
+        animal = None
+        if a.animal_mask and not a.placed:
+            am = Image.open(a.animal_mask)
+            am = am.getchannel("A") if am.mode in ("RGBA", "LA") else am.convert("L")
+            animal = np.asarray(cover(am, Image.BILINEAR)) > 127
+            lab, n = ndimage.label(animal)                  # keep the main subject only
+            if n > 1:
+                animal = lab == (1 + int(np.argmax(ndimage.sum(animal, lab, range(1, n + 1)))))
+        mask, iou = (lm, 1.0) if a.placed else place_logo(lm, animal)
+        contours = [c for c in trace(mask) if len(c[1]) > 20]
+        big = inscribed_circles(mask)
+        lines = edge_lines(contours)
+        arcs = arc_circles(contours, big)
+        prims = big + lines + arcs
+        bb = [int(v) for v in bbox(mask)]
 
     # ---- timeline (seconds)
     t = 1.25
+    per = float(np.clip(11.0 / max(len(prims), 1), 0.24, 0.5))   # whole build stays around 11 s
     for p in prims:
-        p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.18, 3), round(t + 0.48, 3)
-        t += 0.5
+        p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.36 * per, 3), round(t + 0.96 * per, 3)
+        t += per
     trace_start = t + 0.3
-    lens = np.array([len(c[1]) for c in contours], float)
+    lens = np.array(lens_override if lens_override else [len(c[1]) for c in contours], float)
     durs = np.maximum(0.22, 3.4 * lens / lens.sum())
     paths, tt = [], trace_start
     for (d, _), du in zip(contours, durs):
@@ -269,7 +283,7 @@ def main():
     card_white = guides_off + 1.2
     card_color = card_white + 1.1
     end = card_color + 3.0
-    bx0, by0, bx1, by1 = bbox(mask)
+    bx0, by0, bx1, by1 = bb
     scene = {"W": W, "H": H, "fps": FPS, "duration": round(end, 3), "bg": "file://" + bg_path,
              "wash": 0.4, "prims": prims, "paths": paths, "fillD": " ".join(c[0] for c in contours),
              "t": {"washStart": 0.7, "washEnd": 1.1, "traceStart": round(trace_start, 3), "fill": round(fill, 3),
@@ -278,8 +292,7 @@ def main():
              "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
     scene_path = os.path.join(work, "scene.json")
     json.dump(scene, open(scene_path, "w"))
-    print(f"placement IoU {iou:.2f} | {len(big)} body circles, {len(lines)} lines, {len(arcs)} arc circles, "
-          f"{len(paths)} contours | {end:.1f}s")
+    print(f"IoU with the animal {iou:.2f} | {len(prims)} guides, {len(paths)} contours | {end:.1f}s")
     cmd = ["node", os.path.join(HERE, "render_video.cjs"), scene_path, os.path.abspath(a.out)]
     for s in a.still or []:
         cmd += ["--still", str(s)]

@@ -8,7 +8,8 @@
 
   python3 silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
   python3 silhouette_logo.py combine --work work/ --model-output gen.png
-  -> work/logo_canvas.png (1080x1920, feed to make_video.py --placed) and work/logo.png / logo.svg
+  -> work/construction.json (arcs, lines, guides, critique; feed to make_video.py --construction),
+     work/logo.svg (pure arcs and lines), work/logo.png, work/critique.png
 """
 import argparse, json, os, sys
 import numpy as np
@@ -16,7 +17,8 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_video import W, H, cover, bbox, trace, douglas_peucker, place_logo  # noqa: E402
+from make_video import W, H, cover, bbox, place_logo  # noqa: E402
+import construct as K  # noqa: E402
 from extract_dataset import to_svg  # noqa: E402
 from logo_post import raster_to_mask, mask_to_square  # noqa: E402
 
@@ -26,29 +28,20 @@ def disk(r):
     return x * x + y * y <= r * r
 
 
-def simplify(mask, eps=4.0, close_r=6, open_r=3):
-    """Real cutout -> blunt, angular silhouette that still follows the animal."""
+def simplify(mask, close_r=6, open_r=3):
+    """Real cutout -> clean silhouette: fur fringe closed, specks removed, one piece, no pinholes.
+    The shape is not stylised here; construct.py rebuilds it from arcs and lines."""
     m = ndimage.binary_closing(np.pad(mask, 20), structure=disk(close_r))[20:-20, 20:-20]
     m = ndimage.binary_opening(m, structure=disk(open_r)) | ndimage.binary_erosion(mask, structure=disk(1))
     lab, n = ndimage.label(m)
     if n > 1:
         m = lab == (1 + int(np.argmax(ndimage.sum(m, lab, range(1, n + 1)))))
-    S = 3                                             # supersample the polygon raster
-    img = Image.new("L", (W * S, H * S), 0); d = ImageDraw.Draw(img)
-    contours = trace(m)
-    areas = []
-    for _, P in contours:
-        c = P.mean(0); start = int(np.argmax(np.hypot(*(P - c).T)))
-        Q = np.vstack([np.roll(P, -start, axis=0), P[start:start + 1]])
-        poly = Q[douglas_peucker(Q, eps)][:-1]
-        x, y = poly[:, 0], poly[:, 1]
-        areas.append((abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))) / 2, poly))
-    areas.sort(key=lambda t: -t[0])
-    for i, (area, poly) in enumerate(areas):
-        if len(poly) < 3 or (i > 0 and area < 150):   # tiny holes are fur noise
-            continue
-        d.polygon([(float(px) * S, float(py) * S) for px, py in poly], fill=255 if i == 0 else 0)
-    return np.asarray(img.resize((W, H), Image.LANCZOS)) > 127
+    holes, n = ndimage.label(~m)
+    sizes = ndimage.sum(~m, holes, range(1, n + 1))
+    for k, sz in enumerate(sizes, start=1):
+        if sz < 150:
+            m |= holes == k
+    return m
 
 
 def square_box(mask, pad=0.12):
@@ -72,7 +65,8 @@ def prepare(a):
     lab, n = ndimage.label(animal)
     if n > 1:
         animal = lab == (1 + int(np.argmax(ndimage.sum(animal, lab, range(1, n + 1)))))
-    sil = simplify(animal, a.eps)
+    sil = simplify(animal)
+    Image.fromarray(np.where(animal, 0, 255).astype(np.uint8)).save(os.path.join(a.out, "animal_canvas.png"))
     box = square_box(sil)
     Image.fromarray(np.where(sil, 0, 255).astype(np.uint8)).save(os.path.join(a.out, "silhouette_canvas.png"))
     crop_pad(Image.fromarray(np.where(sil, 0, 255).astype(np.uint8)), box, 255).resize((1024, 1024), Image.LANCZOS) \
@@ -106,17 +100,35 @@ def combine(a):
     if n > 1:
         sizes = np.asarray(ndimage.sum(final, lab, range(1, n + 1)))
         final = np.isin(lab, 1 + np.nonzero(sizes >= 0.004 * sizes.sum())[0])
-    Image.fromarray(np.where(final, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
-    sq = mask_to_square(final, 1024)
-    Image.fromarray(np.where(sq, 0, 255).astype(np.uint8)).convert("RGB").save(os.path.join(a.work, "logo.png"))
-    to_svg(sq, os.path.join(a.work, "logo.svg"), 1024)
-    print(f"model drawing vs silhouette IoU {iou:.2f}; kept {kept} cuts; outline stays on the real silhouette")
+    if not a.no_ground:                                # feet end on one flat ground line, as in the references
+        x0, y0, x1, y1 = bbox(final)
+        final[int(y1 - 0.012 * (y1 - y0)) - 1:] = False
+    Image.fromarray(np.where(final, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "mask_canvas.png"))
+    animal = np.asarray(Image.open(os.path.join(a.work, "animal_canvas.png")).convert("L")) < 128
+    print(f"model drawing vs silhouette IoU {iou:.2f}; kept {kept} cuts. Rebuilding from arcs and lines:")
+    target = animal & ~cuts                            # judge the outline, not the cuts we carved on purpose
+    eps, chains, st, cr, trail = K.construct(final, target)
+    logo = K.rasterize(chains, final.shape); bb = [int(v) for v in bbox(logo)]
+    Image.fromarray(np.where(logo, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
+    Image.fromarray(np.where(mask_to_square(logo, 1024), 0, 255).astype(np.uint8)).convert("RGB").save(os.path.join(a.work, "logo.png"))
+    K.write_svg(chains, bb, os.path.join(a.work, "logo.svg"))
+    guides = K.build_guides(chains, W)
+    json.dump({"eps": eps, "paths": [K.chain_path(c) for c in chains], "guides": guides, "bbox": bb,
+               "stats": {k: v for k, v in st.items() if k != "radii"}, "critique": cr, "search": trail},
+              open(os.path.join(a.work, "construction.json"), "w"))
+    img = np.full(final.shape + (3,), 255, np.uint8); img[logo & target] = (30, 30, 30)
+    img[logo & ~target] = (230, 50, 40); img[target & ~logo] = (40, 110, 230)
+    Image.fromarray(img).crop((max(0, bb[0] - 40), max(0, bb[1] - 40), bb[2] + 40, bb[3] + 40)).save(os.path.join(a.work, "critique.png"))
+    print(f"-> {st['primitives']} primitives ({st['line_share']:.0%} lines), {len(guides)} guides, tolerance {eps}px\n"
+          f"   critique vs the animal: IoU {cr['iou']:.3f} | outline off by mean {cr['outline_mean_px']:.1f}px, "
+          f"p95 {cr['outline_p95_px']:.1f}px, max {cr['outline_max_px']:.0f}px | "
+          f"{cr['outside_animal_share']:.1%} of the mark outside the animal, {cr['uncovered_animal_share']:.1%} of the animal uncovered")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
-    p.add_argument("--out", required=True); p.add_argument("--eps", type=float, default=4.0); p.set_defaults(f=prepare)
+    p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True)
-    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.set_defaults(f=combine)
+    c.add_argument("--min-depth", type=float, default=15.0, help="mean distance (px) of a cut from the outline"); c.add_argument("--no-ground", action="store_true"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

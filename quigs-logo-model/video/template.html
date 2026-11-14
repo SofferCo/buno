@@ -32,8 +32,14 @@ $('cardp').setAttribute('d', SC.fillD);
 
 // guides
 const prims = SC.prims.map(p => {
-  const el = document.createElementNS(NS, p.type === 'circle' ? 'ellipse' : 'line');
+  const el = document.createElementNS(NS, p.type === 'circle' ? 'ellipse' : p.type === 'path' ? 'path' : 'line');
   el.setAttribute('visibility', 'hidden'); $('guides').appendChild(el);
+  if (p.type === 'path') {
+    el.setAttribute('d', p.d);
+    const len = el.getTotalLength(), s = el.getPointAtLength(0), e = el.getPointAtLength(len);
+    el.setAttribute('stroke-dasharray', len + ' ' + len);
+    return { ...p, el, len, a: [s.x, s.y], b: [e.x, e.y] };
+  }
   const a = p.type === 'circle' ? [p.cx - p.r, p.cy - p.r] : [p.x1, p.y1];
   const b = p.type === 'circle' ? [p.cx + p.r, p.cy + p.r] : [p.x2, p.y2];
   return { ...p, el, a, b };
@@ -60,7 +66,11 @@ function cursorAt(t) {
   for (const p of prims) {
     if (t < p.t0) return prev;
     if (t < p.t1) { const u = ease((t - p.t0) / (p.t1 - p.t0)); return [lerp(prev[0], p.a[0], u), lerp(prev[1], p.a[1], u)]; }
-    if (t < p.t2) { const u = ease((t - p.t1) / (p.t2 - p.t1)); return [lerp(p.a[0], p.b[0], u), lerp(p.a[1], p.b[1], u)]; }
+    if (t < p.t2) {
+      const u = ease((t - p.t1) / (p.t2 - p.t1));
+      if (p.type === 'path') { const q = p.el.getPointAtLength(p.len * u); return [q.x, q.y]; }
+      return [lerp(p.a[0], p.b[0], u), lerp(p.a[1], p.b[1], u)];
+    }
     prev = p.b;
   }
   for (const p of paths) {
@@ -81,7 +91,9 @@ window.setTime = function (t) {
     p.el.setAttribute('visibility', 'visible');
     const u = ease((t - p.t1) / (p.t2 - p.t1));
     const cx = lerp(p.a[0], p.b[0], u), cy = lerp(p.a[1], p.b[1], u);
-    if (p.type === 'circle') {
+    if (p.type === 'path') {
+      p.el.setAttribute('stroke-dashoffset', p.len * (1 - u));
+    } else if (p.type === 'circle') {
       p.el.setAttribute('cx', (p.a[0] + cx) / 2); p.el.setAttribute('cy', (p.a[1] + cy) / 2);
       p.el.setAttribute('rx', Math.abs(cx - p.a[0]) / 2); p.el.setAttribute('ry', Math.abs(cy - p.a[1]) / 2);
     } else {

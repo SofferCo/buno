@@ -48,9 +48,27 @@ python3 scripts/make_video.py --photo bg_9x16.png --logo out/lion/v0.png --anima
     --name "Maneo" --bg "#2b1a10" --fg "#f0b24a" -o lion.mp4
 ```
 
-**לוגו שנשען על החיה עצמה:** `silhouette_logo.py prepare` לוקח את ה-cutout של החיה ומפשט אותו לצללית זוויתית
-(97% חפיפה לחיה). המודל מקבל את הצללית הזאת ומוסיף רק חיתוכים פנימיים (עין, רעמה). `combine` מחזיר את
-קו המתאר המקורי ומשאיר מהמודל רק את החיתוכים. את `logo_canvas.png` נותנים ל-`make_video.py --placed`.
+**לוגו שנבנה מעיגולים וקווים על החיה עצמה** (`silhouette_logo.py` + `construct.py`):
+
+1. `prepare`: ה-cutout של החיה מנוקה לצללית אחת (פרווה, חורים).
+2. המודל מקבל את הצללית ומוסיף רק חיתוכים פנימיים (עין, רעמה).
+3. `combine`: קו המתאר נבנה מחדש כשרשרת של **קשתות מעגל וקטעי קו ישרים** שעוברים על קו המתאר האמיתי.
+   קווי הבנייה בסרטון הם בדיוק העיגולים והקווים שהקשתות האלה שייכות אליהם, והמתאר האדום רץ עליהם.
+4. `logo.svg` מכיל רק פקודות קשת וקו, לא trace של פיקסלים.
+
+**כיול מהמקור:** `construct.py calibrate` מתאים את אותו בנאי ל-32 הלוגואים המקוריים ושומר ב-`dataset/style_stats.json`
+כמה "צפופה" הבנייה שלהם (חציון 42 פרימיטיבים ללוגו, 10.5 לכל 1000px של קו מתאר, 30% קווים ישרים).
+בבנייה של חיה חדשה נבחרת הסבילות ההדוקה ביותר שעדיין עומדת בתקציב הזה.
+
+**ביקורת מדודה:** כל בנייה מדפיסה חפיפה (IoU) וסטיית קו המתאר מהחיה בפיקסלים, ושומרת `critique.png`
+(אדום: הלוגו חורג מהחיה, כחול: חלק מהחיה שלא כוסה). באריה: IoU 0.957, סטייה ממוצעת 1.7px, מקסימום 5px.
+
+```bash
+python3 scripts/silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
+# work/silhouette_sq.png + work/photo_sq.jpg -> מודל התמונה -> gen.png
+python3 scripts/silhouette_logo.py combine --work work/ --model-output gen.png
+python3 scripts/make_video.py --photo bg.png --construction work/construction.json --name "Maneo" -o lion.mp4
+```
 
 - `--photo`: התמונה אחרי הרחבה ל-9:16 (outpaint). כל גודל, נחתך ל-1080×1920.
 - `--animal-mask`: cutout של החיה (הסרת רקע) באותו פריים. הלוגו מוזז ומוקטן אוטומטית כך שיכסה את החיה (מקסימום חפיפה).
@@ -92,7 +110,9 @@ quigs-logo-model/
 │   ├── extract_dataset.py   סרטונים → dataset/ (זיהוי אוטומטי של שלבי הסרטון)
 │   ├── build_control_pairs.py  פריימי overlay → dataset/control/ מיושר ללוגואים
 │   ├── prepare_training_data.py  dataset/ → תיקיית אימון (+ שיקוף אופציונלי)
-│   ├── make_video.py        ★ תמונה + לוגו → סרטון תהליך 9:16 (render_video.cjs + video/template.html)
+│   ├── silhouette_logo.py   ★ cutout של החיה + חיתוכי המודל → לוגו שיושב על החיה
+│   ├── construct.py         ★ בונה את קו המתאר מקשתות וקווים, מכייל מהמקור, מודד סטייה
+│   ├── make_video.py        ★ תמונה + בנייה → סרטון תהליך 9:16 (render_video.cjs + video/template.html)
 │   ├── generate.py          FLUX + LoRA → לוגו נקי + SVG (+ כרטיס)
 │   ├── logo_post.py         ניקוי רסטר → מסכה → SVG
 │   └── make_card.py         לוגו + שם + צבעים → הכרטיס הממותג מסוף הסרטון
