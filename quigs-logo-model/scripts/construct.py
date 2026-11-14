@@ -22,6 +22,7 @@ import potrace
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 STEP = 2.0                                             # contour sampling, px
+MIN_R = 9.0                                            # smaller arcs are treated as corners
 
 
 # ------------------------------------------------------------------ contours
@@ -122,6 +123,8 @@ def fit_chain(P, eps, corners):
                 else:
                     hi2 = mid
             pr = dict(best[1]); pr["err"] = best[0]; pr["len"] = float((lo2 - i) * STEP)
+            if pr["type"] == "arc" and pr["r"] < MIN_R:
+                pr = {"type": "line", "A": pr["A"], "B": pr["B"], "err": pr["err"], "len": pr["len"]}
             prims.append(pr); i = lo2
     return prims
 
@@ -167,56 +170,135 @@ def rasterize(chains, shape):
     return out
 
 
-def build_guides(chains, W, max_n=18, cover=0.8, full_circle_r=400, min_r=9, min_line=26):
-    """Guides for the pieces that carry the shape: the longest primitives until `cover` of the
-    outline is explained (at most max_n). Short joins get no guide, as in the reference videos.
-    An arc becomes its full circle; a very large one is drawn as a longer sweep of itself."""
-    prims = sorted([p for c in chains for p in c], key=lambda p: -p["len"])
-    total = sum(p["len"] for p in prims); got = 0.0
+def build_guides(chains, W, full_circle_r=400):
+    """One guide per primitive, so the mark is exactly a union of the regions the guides enclose:
+    an arc gives its full circle (a very large one gives a longer sweep of itself), a line gives
+    the line extended past both ends. Coincident circles and collinear lines share one guide."""
     circles, lines, sweeps = [], [], []
-    for p in prims:
-        if got >= cover * total or len(circles) + len(lines) + len(sweeps) >= max_n:
-            break
-        if p["type"] == "arc" and min_r <= p["r"] <= full_circle_r:
+    for p in sorted([p for c in chains for p in c], key=lambda p: -p["len"]):
+        if p["type"] == "arc" and p["r"] <= full_circle_r:
             for c in circles:
-                tol = 0.07 * max(c["r"], p["r"]) + 3
-                if np.hypot(c["cx"] - p["C"][0], c["cy"] - p["C"][1]) < tol and abs(c["r"] - p["r"]) < tol:
+                if np.hypot(c["cx"] - p["C"][0], c["cy"] - p["C"][1]) < 2.0 and abs(c["r"] - p["r"]) < 2.0:
                     break
             else:
                 circles.append({"type": "circle", "cx": p["C"][0], "cy": p["C"][1], "r": p["r"]})
-        elif p["type"] == "arc" and p["r"] > full_circle_r:
+        elif p["type"] == "arc":
             A, B, C, Q = (np.array(p[k]) for k in ("A", "B", "C", "Q")); r = p["r"]
             w = lambda x: (x + np.pi) % (2 * np.pi) - np.pi
             a0, aq, a1 = (np.arctan2(*(X - C)[::-1]) for X in (A, Q, B))
-            sw = w(aq - a0) + w(a1 - aq); ext = np.sign(sw) * min(0.3 * abs(sw) + 40 / r, 0.6)
-            b0, b1 = a0 - ext, a0 + sw + ext
-            P0 = C + r * np.array([np.cos(b0), np.sin(b0)]); P1 = C + r * np.array([np.cos(b1), np.sin(b1)])
-            if P0[0] > P1[0]:
-                P0, P1, sw = P1, P0, -sw
-            sweeps.append({"type": "path", "x1": float(P0[0]), "y1": float(P0[1]),
-                           "d": f"M{P0[0]:.1f},{P0[1]:.1f}A{r:.1f},{r:.1f} 0 0 {1 if sw > 0 else 0} {P1[0]:.1f},{P1[1]:.1f}"})
-        elif p["type"] == "line" and p["len"] >= min_line:
-            A, B = np.array(p["A"]), np.array(p["B"]); Ln = np.hypot(*(B - A)); d = (B - A) / Ln
+            sw = w(aq - a0) + w(a1 - aq); ext = np.sign(sw) * min(0.25 * abs(sw) + 45 / r, 0.6)
+            ang = np.linspace(a0 - ext, a0 + sw + ext, max(8, int(abs(sw + 2 * ext) * r / 6)))
+            pts = np.stack([C[0] + r * np.cos(ang), C[1] + r * np.sin(ang)], 1)
+            if pts[0, 0] > pts[-1, 0]:
+                pts, sw = pts[::-1], -sw
+            sweeps.append({"type": "path", "x1": float(pts[0, 0]), "y1": float(pts[0, 1]), "pts": np.round(pts, 1).tolist(),
+                           "d": f"M{pts[0,0]:.1f},{pts[0,1]:.1f}A{r:.1f},{r:.1f} 0 0 {1 if sw > 0 else 0} {pts[-1,0]:.1f},{pts[-1,1]:.1f}"})
+        else:
+            A, B = np.array(p["A"]), np.array(p["B"]); Ln = np.hypot(*(B - A))
+            if Ln < 1e-6:
+                continue
+            d = (B - A) / Ln
             if d[0] < 0 or (abs(d[0]) < 1e-9 and d[1] < 0):
                 d, A, B = -d, B, A
             for l in lines:
                 off = abs(l["d"][0] * (A[1] - l["p"][1]) - l["d"][1] * (A[0] - l["p"][0]))
-                if abs(d @ l["d"]) > 0.9994 and off < 3.5:           # collinear: one guide for both
+                if abs(d @ l["d"]) > 0.9996 and off < 2.0:
                     ts = [(X - l["p"]) @ l["d"] for X in (A, B)]
                     l["t0"], l["t1"] = min(l["t0"], *ts), max(l["t1"], *ts); break
             else:
                 lines.append({"p": A, "d": d, "t0": 0.0, "t1": float(Ln)})
-        else:
-            continue
-        got += p["len"]
     out_lines = []
     for l in lines:
-        ext = 0.22 * (l["t1"] - l["t0"]) + 26
+        ext = 0.2 * (l["t1"] - l["t0"]) + 24
         a, b = l["p"] + l["d"] * (l["t0"] - ext), l["p"] + l["d"] * (l["t1"] + ext)
         out_lines.append({"type": "line", "x1": float(a[0]), "y1": float(a[1]), "x2": float(b[0]), "y2": float(b[1])})
     big = sorted([c for c in circles if c["r"] >= 60], key=lambda c: -c["r"])
     small = sorted([c for c in circles if c["r"] < 60], key=lambda c: c["cx"])
-    return big + sorted(out_lines + sweeps, key=lambda l: l["x1"]) + small
+    return big + sorted(sweeps, key=lambda l: l["x1"]) + sorted(out_lines, key=lambda l: l["x1"]) + small
+
+
+# ------------------------------------------------------------------ regions between the guides (shape-builder plan)
+def disk(r):
+    y, x = np.mgrid[-r:r + 1, -r:r + 1]
+    return x * x + y * y <= r * r
+
+
+def raster_guides(guides, shape, width=3):
+    im = Image.new("L", (shape[1], shape[0]), 0); d = ImageDraw.Draw(im)
+    for g in guides:
+        if g["type"] == "circle":
+            d.ellipse([g["cx"] - g["r"], g["cy"] - g["r"], g["cx"] + g["r"], g["cy"] + g["r"]], outline=255, width=width)
+        elif g["type"] == "line":
+            d.line([g["x1"], g["y1"], g["x2"], g["y2"]], fill=255, width=width)
+        else:
+            d.line([tuple(q) for q in g["pts"]], fill=255, width=width)
+    return np.asarray(im) > 0
+
+
+def mask_path(mask, ox=0, oy=0):
+    path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=True, opttolerance=0.5)
+    d = []
+    for curve in path:
+        p = curve.start_point; d.append(f"M{p.x + ox:.1f},{p.y + oy:.1f}")
+        for seg in curve:
+            e = seg.end_point
+            if seg.is_corner:
+                d.append(f"L{seg.c.x + ox:.1f},{seg.c.y + oy:.1f}L{e.x + ox:.1f},{e.y + oy:.1f}")
+            else:
+                d.append(f"C{seg.c1.x + ox:.1f},{seg.c1.y + oy:.1f} {seg.c2.x + ox:.1f},{seg.c2.y + oy:.1f} {e.x + ox:.1f},{e.y + oy:.1f}")
+        d.append("Z")
+    return "".join(d)
+
+
+def merge_plan(guides, body, max_steps=18, min_face=220):
+    """The guides cut the plane into regions. Return the regions inside the body in the order a
+    shape-builder drag would sweep them (always growing from a neighbour), as cumulative unions."""
+    ys, xs = np.nonzero(body); pad = 12
+    y0, y1, x0, x1 = max(0, ys.min() - pad), ys.max() + pad, max(0, xs.min() - pad), xs.max() + pad
+    B = body[y0:y1, x0:x1]; walls = raster_guides(guides, body.shape)[y0:y1, x0:x1]
+    lab, n = ndimage.label(~walls)
+    idx = np.arange(1, n + 1)
+    area = np.asarray(ndimage.sum(np.ones(lab.shape), lab, idx)); inside = np.asarray(ndimage.sum(B, lab, idx)) / np.maximum(area, 1)
+    faces = [int(i) for i in idx if inside[i - 1] > 0.5 and area[i - 1] >= min_face]
+    small = [int(i) for i in idx if inside[i - 1] > 0.5 and area[i - 1] < min_face]
+    dt = ndimage.distance_transform_edt(~walls)
+    poles = {f: np.array(p[::-1], float) for f, p in zip(faces, ndimage.maximum_position(dt, lab, faces))}
+    cur = min(faces, key=lambda f: poles[f][0]); remaining = set(faces); union = np.zeros(B.shape, bool); order = []
+    while True:
+        order.append(cur); remaining.discard(cur); union |= lab == cur
+        if not remaining:
+            break
+        ring = ndimage.binary_dilation(union, structure=disk(5)) & ~union
+        touching = set(np.unique(lab[ring]).tolist())
+        adj = [f for f in remaining if f in touching] or list(remaining)
+        cur = min(adj, key=lambda f: np.hypot(*(poles[f] - poles[order[-1]])))
+    k = len(order); cuts_at = sorted(set(np.linspace(0, k - 1, min(k, max_steps)).round().astype(int).tolist()))
+    steps, union = [], np.zeros(B.shape, bool); smallmask = np.isin(lab, small)
+    for i, f in enumerate(order):
+        union |= lab == f
+        if i in cuts_at:
+            U = ndimage.binary_closing(np.pad(union, 8), structure=disk(4))[8:-8, 8:-8]
+            U |= ndimage.binary_dilation(U, structure=disk(4)) & smallmask
+            U = ndimage.binary_closing(np.pad(U, 8), structure=disk(3))[8:-8, 8:-8] & ndimage.binary_dilation(B, structure=disk(2))
+            holes, hn = ndimage.label(ndimage.binary_fill_holes(U) & ~U)       # slivers enclosed by merged regions
+            if hn:
+                hs = np.asarray(ndimage.sum(np.ones(U.shape), holes, range(1, hn + 1)))
+                U |= np.isin(holes, 1 + np.nonzero(hs < 1400)[0])
+            if i == k - 1:
+                U = B
+            steps.append({"d": mask_path(U, x0, y0), "poles": []})
+    # every region the cursor passes, grouped under the step that shows it
+    groups, g = [[] for _ in steps], 0
+    for i, f in enumerate(order):
+        groups[g].append([float(poles[f][0] + x0), float(poles[f][1] + y0)])
+        if i in cuts_at:
+            g += 1
+    for st, gp in zip(steps, groups):
+        st["poles"] = gp
+    final_union = np.isin(lab, faces + small)
+    covered = (ndimage.binary_closing(np.pad(final_union, 8), structure=disk(4))[8:-8, 8:-8] & B).sum() / B.sum()
+    return {"steps": steps, "regions": k, "small_regions": len(small), "union_covers_body": float(covered),
+            "bbox": [int(x0), int(y0), int(x1), int(y1)]}
 
 
 # ------------------------------------------------------------------ fit a whole mask
@@ -269,18 +351,19 @@ def calibrate(a):
           f"outline (p75 {out['density_p75']:.1f}), {out['line_share_median']:.0%} straight lines")
 
 
-def construct(mask, target=None, style=None, log=print):
-    """Tightest construction whose density stays within the reference logos' density."""
+def construct(mask, target=None, style=None, log=print, max_guides=None):
+    """Tightest construction whose density stays within the reference logos' density
+    (and, when asked, whose number of guide shapes stays readable on screen)."""
     style = style or json.load(open(os.path.join(ROOT, "dataset", "style_stats.json")))
     budget = style["density_p75"]; chosen = None; trail = []
-    for eps in (1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0):
-        chains = fit_mask(mask, eps); st = stats(chains)
+    for eps in (1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 12.0):
+        chains = fit_mask(mask, eps); st = stats(chains); ng = len(build_guides(chains, mask.shape[1]))
         cr = critique(rasterize(chains, mask.shape), target if target is not None else mask)
         trail.append({"eps": eps, "primitives": st["primitives"], "density": round(st["density"], 1),
                       "line_share": round(st["line_share"], 2), "iou": round(cr["iou"], 4), "p95": round(cr["outline_p95_px"], 1)})
-        log(f"  eps {eps:4.1f}px -> {st['primitives']:3d} primitives ({st['density']:5.1f}/1000px, budget {budget:.1f})  "
+        log(f"  eps {eps:4.1f}px -> {st['primitives']:3d} primitives, {ng:2d} guides ({st['density']:5.1f}/1000px, budget {budget:.1f})  "
             f"IoU {cr['iou']:.3f}  outline p95 {cr['outline_p95_px']:.1f}px")
-        if st["density"] <= budget and chosen is None:
+        if st["density"] <= budget and (max_guides is None or ng <= max_guides) and chosen is None:
             chosen = (eps, chains, st, cr)
             break
     if chosen is None:

@@ -9,15 +9,27 @@
 <svg id="s" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
   <image id="photo" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice"/>
   <rect id="wash" width="1080" height="1920" fill="#fff" opacity="0"/>
+  <defs>
+    <pattern id="dots" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#fff" fill-opacity="0.42"/><circle cx="3.5" cy="3.5" r="1.25" fill="#3a3a3a"/>
+    </pattern>
+    <pattern id="dotsDel" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#d9d9d9"/><circle cx="3.5" cy="3.5" r="1.25" fill="#3a3a3a"/>
+    </pattern>
+  </defs>
   <path id="fillp" fill="#000" fill-rule="evenodd" visibility="hidden"/>
   <g id="guides" fill="none" stroke="#111" stroke-width="2.4"></g>
   <g id="trace" fill="none" stroke="#e8362d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"></g>
+  <path id="sel" fill="url(#dots)" fill-rule="evenodd" stroke="#e8362d" stroke-width="3.5" stroke-linejoin="round" visibility="hidden"/>
+  <path id="cuthover" fill="url(#dotsDel)" stroke="#e8362d" stroke-width="3" stroke-linejoin="round" visibility="hidden"/>
+  <rect id="marquee" fill="none" stroke="#222" stroke-width="1.6" stroke-dasharray="3 4" visibility="hidden"/>
   <g id="card" visibility="hidden">
     <rect id="cardbg" width="1080" height="1920"/>
     <path id="cardp" fill-rule="evenodd"/>
     <text id="name" text-anchor="middle" font-size="84" letter-spacing="-1.5"></text>
   </g>
-  <g id="cursor"><polygon points="0,0 0,34 9,26 15,40 21,37.5 15,24 27,24" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></g>
+  <g id="cursor"><polygon points="0,0 0,34 9,26 15,40 21,37.5 15,24 27,24" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    <g id="plus" stroke="#111" stroke-width="2.4" visibility="hidden"><path d="M30,36h14M37,29v14" stroke="#fff" stroke-width="5"/><path d="M30,36h14M37,29v14"/></g></g>
 </svg>
 <script>
 const SC = /*SCENE*/null;
@@ -52,6 +64,8 @@ const paths = SC.paths.map(p => {
   el.setAttribute('stroke-dasharray', len + ' ' + len);
   return { ...p, el, len };
 });
+// shape-builder data
+const B = SC.build || null;
 // card layout: centre the mark horizontally, name underneath
 const [bx0, by0, bx1, by1] = SC.logoBBox;
 const cardDx = SC.W / 2 - (bx0 + bx1) / 2;
@@ -72,6 +86,17 @@ function cursorAt(t) {
       return [lerp(p.a[0], p.b[0], u), lerp(p.a[1], p.b[1], u)];
     }
     prev = p.b;
+  }
+  if (SC.cursorKeys) {
+    for (const k of SC.cursorKeys) {
+      if (t < k.t) {
+        const t0 = k.prevT === undefined ? (prims.length ? prims[prims.length - 1].t2 : 0) : k.prevT;
+        const u = ease((t - Math.max(t0, k.t - 0.45)) / (k.t - Math.max(t0, k.t - 0.45)));
+        return [lerp(prev[0], k.x, u), lerp(prev[1], k.y, u)];
+      }
+      prev = [k.x, k.y];
+    }
+    return prev;
   }
   for (const p of paths) {
     const start = p.el.getPointAtLength(0);
@@ -107,6 +132,29 @@ window.setTime = function (t) {
     if (vis) p.el.setAttribute('stroke-dashoffset', p.len * (1 - ease((t - p.ta) / (p.tb - p.ta))));
   }
   $('fillp').setAttribute('visibility', t >= T.fill && !onCard ? 'visible' : 'hidden');
+  if (B) {
+    // regions merged so far: dotted fill, red outline around their union
+    let cur = null;
+    if (t >= B.tStart && t < B.tRelease) for (const st of B.steps) if (t >= st.t) cur = st;
+    $('sel').setAttribute('visibility', cur ? 'visible' : 'hidden');
+    if (cur && $('sel').getAttribute('d') !== cur.d) $('sel').setAttribute('d', cur.d);
+    // merged body, then cuts deleted one by one, then the clean final outline
+    let k = 0, hover = null;
+    for (const c of B.cuts) { if (t >= c.tDelete) k++; if (t >= c.tHover && t < c.tDelete) hover = c; }
+    const d = t >= T.guidesOff ? SC.fillD : B.fillStates[k];
+    if ($('fillp').getAttribute('d') !== d) $('fillp').setAttribute('d', d);
+    $('cuthover').setAttribute('visibility', hover ? 'visible' : 'hidden');
+    if (hover) $('cuthover').setAttribute('d', hover.d);
+    let mq = null;
+    for (const m of B.marquees) if (t >= m.ta && t < m.tOff) mq = m;
+    $('marquee').setAttribute('visibility', mq ? 'visible' : 'hidden');
+    if (mq) {
+      const u = ease((t - mq.ta) / (mq.tb - mq.ta)), [x0, y0, x1, y1] = mq.box;
+      $('marquee').setAttribute('x', x0); $('marquee').setAttribute('y', y0);
+      $('marquee').setAttribute('width', Math.max(1, (x1 - x0) * u)); $('marquee').setAttribute('height', Math.max(1, (y1 - y0) * u));
+    }
+    $('plus').setAttribute('visibility', t >= B.marquees[0].tOff && t < B.marquees[1].ta - 0.2 && !onCard ? 'visible' : 'hidden');
+  }
   const c = cursorAt(t);
   $('cursor').setAttribute('transform', `translate(${c[0]},${c[1]})`);
   $('cursor').setAttribute('visibility', onCard || t < 0.9 ? 'hidden' : 'visible');

@@ -238,15 +238,8 @@ def main():
 
     if a.construction:
         con = json.load(open(a.construction))
-        prims = con["guides"]; contours = [(d, np.zeros((max(30, int(len(d))), 2))) for d in con["paths"]]
-        bb = con["bbox"]; iou = con["critique"]["iou"]; big = lines = arcs = []
-        import re
-        lens_override = []
-        for d in con["paths"]:                         # rough length per path for trace timing
-            nums = np.array(re.findall(r"-?\d+\.?\d*", d), float)
-            lens_override.append(len(nums))
+        prims = con["guides"]; contours = []; bb = con["bbox"]; iou = con["critique"]["iou"]
     else:
-        lens_override = None
         lm = np.asarray(Image.open(a.logo).convert("L")) < 128
         if not a.placed:
             x0, y0, x1, y1 = bbox(lm); lm = lm[y0:y1, x0:x1]
@@ -268,31 +261,59 @@ def main():
 
     # ---- timeline (seconds)
     t = 1.25
-    per = float(np.clip(11.0 / max(len(prims), 1), 0.24, 0.5))   # whole build stays around 11 s
+    per = float(np.clip(10.0 / max(len(prims), 1), 0.24, 0.5))   # whole build stays around 10 s
     for p in prims:
         p["t0"], p["t1"], p["t2"] = round(t, 3), round(t + 0.36 * per, 3), round(t + 0.96 * per, 3)
         t += per
-    trace_start = t + 0.3
-    lens = np.array(lens_override if lens_override else [len(c[1]) for c in contours], float)
-    durs = np.maximum(0.22, 3.4 * lens / lens.sum())
-    paths, tt = [], trace_start
-    for (d, _), du in zip(contours, durs):
-        paths.append({"d": d, "ta": round(tt, 3), "tb": round(tt + du, 3)}); tt += du + 0.05
-    fill = tt + 0.2
-    guides_off = fill + 1.1
-    card_white = guides_off + 1.2
+    bx0, by0, bx1, by1 = bb
+    scene = {"W": W, "H": H, "fps": FPS, "bg": "file://" + bg_path, "wash": 0.4, "prims": prims,
+             "card": {"bg": a.bg, "fg": a.fg, "name": a.name}, "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
+    T = {"washStart": 0.7, "washEnd": 1.1}
+    if a.construction:
+        # select all -> shape-builder sweep over the regions -> black -> delete cuts -> delete leftovers
+        keys = []; mg = 46
+        gx0, gy0 = max(8, bx0 - mg), max(8, by0 - mg); gx1, gy1 = min(W - 8, bx1 + mg), min(H - 8, by1 + mg)
+        m1a, m1b = t + 0.35, t + 0.85
+        keys += [{"t": m1a, "x": gx0, "y": gy0}, {"t": m1b, "x": gx1, "y": gy1}]
+        steps = con["merge"]["steps"]; npoles = sum(len(sp["poles"]) for sp in steps)
+        dt = float(np.clip(4.4 / max(npoles, 1), 0.1, 0.36)); t = m1b + 0.55; build_steps = []
+        for sp in steps:
+            for (x, y) in sp["poles"]:
+                keys.append({"t": round(t, 3), "x": x, "y": y}); t += dt
+            build_steps.append({"d": sp["d"], "t": round(t - dt, 3)})
+        release = t + 0.15; t = release + 0.45; cuts = []
+        for c in con["cuts"]:
+            keys.append({"t": round(t + 0.35, 3), "x": c["pole"][0], "y": c["pole"][1]})
+            cuts.append({"d": c["d"], "tHover": round(t + 0.35, 3), "tDelete": round(t + 0.8, 3)}); t += 0.95
+        m2a, m2b = t + 0.4, t + 0.85
+        keys += [{"t": m2a, "x": gx0, "y": gy0}, {"t": m2b, "x": gx1, "y": gy1},
+                 {"t": m2b + 0.55, "x": W * 0.82, "y": H * 0.62}]
+        guides_off = m2b + 0.2
+        scene.update({"paths": [], "fillD": " ".join(con["paths"]), "cursorKeys": keys,
+                      "build": {"steps": build_steps, "tStart": build_steps[0]["t"], "tRelease": round(release, 3),
+                                "fillStates": con["fill_states"], "cuts": cuts,
+                                "marquees": [{"ta": m1a, "tb": m1b, "tOff": m1b + 0.25, "box": [gx0, gy0, gx1, gy1]},
+                                             {"ta": m2a, "tb": m2b, "tOff": guides_off, "box": [gx0, gy0, gx1, gy1]}]}})
+        fill = release
+    else:
+        trace_start = t + 0.3
+        lens = np.array([len(c[1]) for c in contours], float)
+        durs = np.maximum(0.22, 3.4 * lens / lens.sum())
+        paths, tt = [], trace_start
+        for (d, _), du in zip(contours, durs):
+            paths.append({"d": d, "ta": round(tt, 3), "tb": round(tt + du, 3)}); tt += du + 0.05
+        fill = tt + 0.2
+        guides_off = fill + 1.1
+        scene.update({"paths": paths, "fillD": " ".join(c[0] for c in contours)})
+        T["traceStart"] = round(trace_start, 3)
+    card_white = guides_off + 1.3
     card_color = card_white + 1.1
     end = card_color + 3.0
-    bx0, by0, bx1, by1 = bb
-    scene = {"W": W, "H": H, "fps": FPS, "duration": round(end, 3), "bg": "file://" + bg_path,
-             "wash": 0.4, "prims": prims, "paths": paths, "fillD": " ".join(c[0] for c in contours),
-             "t": {"washStart": 0.7, "washEnd": 1.1, "traceStart": round(trace_start, 3), "fill": round(fill, 3),
-                   "guidesOff": round(guides_off, 3), "cardWhite": round(card_white, 3), "cardColor": round(card_color, 3)},
-             "card": {"bg": a.bg, "fg": a.fg, "name": a.name},
-             "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
+    T.update({"fill": round(fill, 3), "guidesOff": round(guides_off, 3), "cardWhite": round(card_white, 3), "cardColor": round(card_color, 3)})
+    scene["t"] = T; scene["duration"] = round(end, 3)
     scene_path = os.path.join(work, "scene.json")
     json.dump(scene, open(scene_path, "w"))
-    print(f"IoU with the animal {iou:.2f} | {len(prims)} guides, {len(paths)} contours | {end:.1f}s")
+    print(f"IoU with the animal {iou:.2f} | {len(prims)} guides | {end:.1f}s")
     cmd = ["node", os.path.join(HERE, "render_video.cjs"), scene_path, os.path.abspath(a.out)]
     for s in a.still or []:
         cmd += ["--still", str(s)]
