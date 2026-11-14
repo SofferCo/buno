@@ -41,6 +41,19 @@ python3 scripts/photo_to_logo.py my_horse.jpg --backend kontext --lora output/qu
 
 הדגימות במהלך האימון רצות על תמונות ה-holdout (סוס, שועל, דוב) – השוואה ישירה ל-`dataset/logos/`.
 
+## הסרטון (שלב 2, עובד)
+
+```bash
+python3 scripts/make_video.py --photo bg_9x16.png --logo out/lion/v0.png --animal-mask cutout.png \
+    --name "Maneo" --bg "#2b1a10" --fg "#f0b24a" -o lion.mp4
+```
+
+- `--photo`: התמונה אחרי הרחבה ל-9:16 (outpaint). כל גודל, נחתך ל-1080×1920.
+- `--animal-mask`: cutout של החיה (הסרת רקע) באותו פריים. הלוגו מוזז ומוקטן אוטומטית כך שיכסה את החיה (מקסימום חפיפה).
+- קווי הבנייה נגזרים מהלוגו עצמו: עיגולים חסומים לגושי הגוף, קווים מוארכים לאורך הקצוות הישרים, עיגולים שמותאמים לקשתות.
+- הרינדור: `video/template.html` פריים-פריים ב-Playwright → ffmpeg (h264, 30fps, ערוץ שמע שקט). כ-35 שניות לסרטון של 20 שניות.
+- דורש Node עם `playwright` ו-`ffmpeg`. דוגמת לוגו: `examples/lion/`.
+
 ## הרואדמפ
 
 | שלב | מה | סטטוס |
@@ -48,7 +61,7 @@ python3 scripts/photo_to_logo.py my_horse.jpg --backend kontext --lora output/qu
 | 1 | תמונה → לוגו (API) | ✅ עובד, `photo_to_logo.py` |
 | 1ב | תמונה → לוגו (LoRA משלנו על Kontext) | מוכן לאימון, צריך GPU |
 | 1ג | לוגו מטקסט בלבד (LoRA על FLUX) | מוכן לאימון, `train/flux_lora.yaml` |
-| 2 | סרטון תהליך (תמונה → קווי בנייה → מתאר → סילואטה → כרטיס) מ-SVG, ב-HTML+Playwright → mp4 | הבא |
+| 2 | סרטון תהליך 9:16 (תמונה → קווי בנייה → מתאר אדום → סילואטה → כרטיס לבן → כרטיס ממותג) | ✅ עובד, `make_video.py` |
 | 3 | פוסט יומי אוטומטי (תור חיות, רינדור, העלאה) | אחרי 2 |
 | 4 | מכירה: SVG + כרטיס + קבצי מותג בחבילה | אחרי 3 |
 
@@ -75,6 +88,7 @@ quigs-logo-model/
 │   ├── extract_dataset.py   סרטונים → dataset/ (זיהוי אוטומטי של שלבי הסרטון)
 │   ├── build_control_pairs.py  פריימי overlay → dataset/control/ מיושר ללוגואים
 │   ├── prepare_training_data.py  dataset/ → תיקיית אימון (+ שיקוף אופציונלי)
+│   ├── make_video.py        ★ תמונה + לוגו → סרטון תהליך 9:16 (render_video.cjs + video/template.html)
 │   ├── generate.py          FLUX + LoRA → לוגו נקי + SVG (+ כרטיס)
 │   ├── logo_post.py         ניקוי רסטר → מסכה → SVG
 │   └── make_card.py         לוגו + שם + צבעים → הכרטיס הממותג מסוף הסרטון

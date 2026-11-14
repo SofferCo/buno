@@ -1,0 +1,114 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  svg { display: block; }
+  text { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; font-weight: 700; }
+</style></head>
+<body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <image id="photo" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice"/>
+  <rect id="wash" width="1080" height="1920" fill="#fff" opacity="0"/>
+  <path id="fillp" fill="#000" fill-rule="evenodd" visibility="hidden"/>
+  <g id="guides" fill="none" stroke="#111" stroke-width="2.4"></g>
+  <g id="trace" fill="none" stroke="#e8362d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"></g>
+  <g id="card" visibility="hidden">
+    <rect id="cardbg" width="1080" height="1920"/>
+    <path id="cardp" fill-rule="evenodd"/>
+    <text id="name" text-anchor="middle" font-size="84" letter-spacing="-1.5"></text>
+  </g>
+  <g id="cursor"><polygon points="0,0 0,34 9,26 15,40 21,37.5 15,24 27,24" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></g>
+</svg>
+<script>
+const SC = /*SCENE*/null;
+const NS = 'http://www.w3.org/2000/svg', $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = u => { u = clamp(u); return u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2; };
+const lerp = (a, b, u) => a + (b - a) * u;
+
+$('photo').setAttribute('href', SC.bg);
+$('fillp').setAttribute('d', SC.fillD);
+$('cardp').setAttribute('d', SC.fillD);
+
+// guides
+const prims = SC.prims.map(p => {
+  const el = document.createElementNS(NS, p.type === 'circle' ? 'ellipse' : 'line');
+  el.setAttribute('visibility', 'hidden'); $('guides').appendChild(el);
+  const a = p.type === 'circle' ? [p.cx - p.r, p.cy - p.r] : [p.x1, p.y1];
+  const b = p.type === 'circle' ? [p.cx + p.r, p.cy + p.r] : [p.x2, p.y2];
+  return { ...p, el, a, b };
+});
+// outline paths
+const paths = SC.paths.map(p => {
+  const el = document.createElementNS(NS, 'path');
+  el.setAttribute('d', p.d); el.setAttribute('visibility', 'hidden'); $('trace').appendChild(el);
+  const len = el.getTotalLength();
+  el.setAttribute('stroke-dasharray', len + ' ' + len);
+  return { ...p, el, len };
+});
+// card layout: centre the mark horizontally, name underneath
+const [bx0, by0, bx1, by1] = SC.logoBBox;
+const cardDx = SC.W / 2 - (bx0 + bx1) / 2;
+$('cardp').setAttribute('transform', `translate(${cardDx},0)`);
+const nameEl = $('name');
+nameEl.setAttribute('x', SC.W / 2); nameEl.setAttribute('y', by1 + 160);
+if (SC.card.name) nameEl.innerHTML = SC.card.name + '<tspan font-size="32" dy="-36" dx="6" font-weight="500">®</tspan>';
+
+const REST = [SC.W * 0.82, SC.H * 0.62];
+function cursorAt(t) {
+  let prev = [SC.W * 0.7, SC.H * 0.3];
+  for (const p of prims) {
+    if (t < p.t0) return prev;
+    if (t < p.t1) { const u = ease((t - p.t0) / (p.t1 - p.t0)); return [lerp(prev[0], p.a[0], u), lerp(prev[1], p.a[1], u)]; }
+    if (t < p.t2) { const u = ease((t - p.t1) / (p.t2 - p.t1)); return [lerp(p.a[0], p.b[0], u), lerp(p.a[1], p.b[1], u)]; }
+    prev = p.b;
+  }
+  for (const p of paths) {
+    const start = p.el.getPointAtLength(0);
+    if (t < p.ta) { const u = ease((t - (p.ta - 0.25)) / 0.25); return [lerp(prev[0], start.x, u), lerp(prev[1], start.y, u)]; }
+    if (t < p.tb) { const q = p.el.getPointAtLength(p.len * ease((t - p.ta) / (p.tb - p.ta))); return [q.x, q.y]; }
+    prev = [start.x, start.y];
+  }
+  const u = ease((t - SC.t.fill) / 0.5);
+  return [lerp(prev[0], REST[0], u), lerp(prev[1], REST[1], u)];
+}
+
+window.setTime = function (t) {
+  const T = SC.t, onCard = t >= T.cardWhite;
+  $('wash').setAttribute('opacity', SC.wash * clamp((t - T.washStart) / (T.washEnd - T.washStart)));
+  for (const p of prims) {
+    if (t < p.t1 || t >= T.guidesOff) { p.el.setAttribute('visibility', 'hidden'); continue; }
+    p.el.setAttribute('visibility', 'visible');
+    const u = ease((t - p.t1) / (p.t2 - p.t1));
+    const cx = lerp(p.a[0], p.b[0], u), cy = lerp(p.a[1], p.b[1], u);
+    if (p.type === 'circle') {
+      p.el.setAttribute('cx', (p.a[0] + cx) / 2); p.el.setAttribute('cy', (p.a[1] + cy) / 2);
+      p.el.setAttribute('rx', Math.abs(cx - p.a[0]) / 2); p.el.setAttribute('ry', Math.abs(cy - p.a[1]) / 2);
+    } else {
+      p.el.setAttribute('x1', p.a[0]); p.el.setAttribute('y1', p.a[1]);
+      p.el.setAttribute('x2', cx); p.el.setAttribute('y2', cy);
+    }
+  }
+  for (const p of paths) {
+    const vis = t >= p.ta && t < T.fill;
+    p.el.setAttribute('visibility', vis ? 'visible' : 'hidden');
+    if (vis) p.el.setAttribute('stroke-dashoffset', p.len * (1 - ease((t - p.ta) / (p.tb - p.ta))));
+  }
+  $('fillp').setAttribute('visibility', t >= T.fill && !onCard ? 'visible' : 'hidden');
+  const c = cursorAt(t);
+  $('cursor').setAttribute('transform', `translate(${c[0]},${c[1]})`);
+  $('cursor').setAttribute('visibility', onCard || t < 0.9 ? 'hidden' : 'visible');
+  $('card').setAttribute('visibility', onCard ? 'visible' : 'hidden');
+  if (onCard) {
+    const col = t >= T.cardColor;
+    $('cardbg').setAttribute('fill', col ? SC.card.bg : '#fff');
+    $('cardp').setAttribute('fill', col ? SC.card.fg : '#000');
+    nameEl.setAttribute('fill', SC.card.fg);
+    nameEl.setAttribute('opacity', col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0);
+  }
+};
+window.ready = Promise.all([document.fonts.ready, $('photo').decode ? $('photo').decode().catch(() => {}) : null])
+  .then(() => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = SC.bg; }));
+setTime(0);
+</script>
+</body></html>
