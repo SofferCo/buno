@@ -79,11 +79,11 @@ def prepare(a):
 
 
 SYMMETRY_MIN = 0.72     # a drawing whose mirror image overlaps it at least this much is meant to be symmetric
-# A drawing made by the abstraction step is already the design: it is rebuilt as drawn. Looser
-# settings visibly damage it (curves become facets, flat feet become blobs), so the outline may sit
-# at most 0.3% of the animal's size from the drawing, a circle may be as large as the designer's
-# largest (0.367 of the animal; a smaller limit turns every gentle curve into a row of strokes), and
-# an arc costs what it was learned to cost from his clips, so a straight edge stays a stroke.
+EYE_DRIFT = 0.045       # a drawn eye further than this (share of the animal's size) from the real one: the drawn head is elsewhere
+# A drawing made by the abstraction step is the design, and is rebuilt as drawn. With looser settings
+# (outline within 0.5%, circles up to 0.25) its thin legs turned into blobs and its long curves into
+# rows of strokes. So the outline may sit at most 0.3% of the animal's size from the drawing, and a
+# circle may be as large as the designer's largest (0.367 of the animal).
 ABSTRACT_TOL = 0.003
 ABSTRACT_MAX_CIRCLE = 0.37
 
@@ -149,22 +149,25 @@ def combine(a):
                 seen = [e for e in eyes if min(np.hypot(cx - e["x"], cy - e["y"]) for cy, cx in small) < 0.1 * size0]
                 if seen and len(seen) < len(eyes):
                     print(f"   {len(eyes) - len(seen)} marked eye(s) with no eye in the drawing nearby: ignored"); eyes = seen
+            room0 = ndimage.distance_transform_edt(sil); need0 = 0.008 * size0 + 4
             for k in range(1, n + 1):
                 comp = lab == k; cy, cx = ndimage.center_of_mass(comp)
-                j = int(np.argmin([np.hypot(cx - e["x"], cy - e["y"]) for e in eyes])); d = float(np.hypot(cx - eyes[j]["x"], cy - eyes[j]["y"]))
+                j = int(np.argmin([np.hypot(cx - e["x"], cy - e["y"]) for e in eyes])); e = eyes[j]; d = float(np.hypot(cx - e["x"], cy - e["y"]))
                 if comp.sum() < 0.012 * sil.sum() and d < 0.1 * size0:
-                    # The drawing is a design, not a tracing: its head need not sit exactly where the
-                    # photo's does, and the eye belongs to the head. So the eye stays where the drawing
-                    # put it and is never smaller than drawn; the photo gives its shape (round or a
-                    # lens). Only a drawing with no eye gets one at the photo's position.
                     mark |= comp
-                    if not eyes[j].get("drawn"):
-                        e = eyes[j]; e["x"], e["y"], e["drawn"] = float(cx), float(cy), True
+                    # The eye sits where the animal's eye is in the photo, as long as that is on the
+                    # drawing's head. Where the drawing has drifted from the photo there (the real
+                    # position is far from the drawn eye, or on the edge of the drawing) the eye
+                    # belongs to the drawn head: it stays where it was drawn, no smaller than drawn.
+                    off_head = room0[int(np.clip(e["y"], 0, sil.shape[0] - 1)), int(np.clip(e["x"], 0, sil.shape[1] - 1))] < need0
+                    if (d > EYE_DRIFT * size0 or off_head) and not e.get("drawn"):
                         grow = np.sqrt(comp.sum() / max(1.0, np.pi * e.get("rx", e["r"]) * e.get("ry", e["r"])))
-                        if grow > 1:
-                            for k_ in ("r", "rx", "ry"):
-                                e[k_] = e.get(k_, e["r"]) * grow
-                        print(f"   the drawing's eye is {d:.0f}px ({d / size0:.1%} of the animal) from the photo's: kept where it was drawn, redrawn as a perfect shape")
+                        e["x"], e["y"], e["drawn"] = float(cx), float(cy), True
+                        for k_ in ("r", "rx", "ry"):
+                            e[k_] = e.get(k_, e["r"]) * max(1.0, grow)
+                        print(f"   the real eye is {d:.0f}px ({d / size0:.1%} of the animal) from the drawn one" + (", on the edge of the drawing" if off_head else "") + ": the drawing has drifted there, eye kept where it was drawn")
+                    else:
+                        print(f"   the drawing's eye was {d:.0f}px ({d / size0:.1%} of the animal) from the real eye: moved")
             if axis is not None and len(eyes) == 2 and (eyes[0]["x"] - axis) * (eyes[1]["x"] - axis) < 0:
                 off = (abs(eyes[0]["x"] - axis) + abs(eyes[1]["x"] - axis)) / 2; y_ = (eyes[0]["y"] + eyes[1]["y"]) / 2
                 for e in eyes:                          # a pair of eyes sits symmetrically about the same axis
@@ -327,5 +330,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True, nargs="+", help="one or more drawings from the image model; the one that overlaps the animal best is used")
-    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--max-circle", type=float, help="with --abstract: largest circle radius as a share of the animal's size (default 0.37, the designer's largest)"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=3.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=1.5, help="with --abstract: cost of a short circular arc against 1.0 for a straight stroke (default: the value learned from the designer's clips). Below 1 a circle is used wherever one fits, which rounds off edges the drawing made straight"); c.add_argument("--arc-cost-long", type=float, default=0.7, help="... and of an arc longer than a tenth of the animal"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
+    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--max-circle", type=float, help="with --abstract: largest circle radius as a share of the animal's size (default 0.37, the designer's largest)"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=3.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=0.9, help="with --abstract: cost of a short circular arc against 1.0 for a straight stroke. Near 1 the mark is built from circles wherever a circle fits, and strokes are left for what is truly straight"); c.add_argument("--arc-cost-long", type=float, default=0.7, help="... and of an arc longer than a tenth of the animal"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)
