@@ -226,18 +226,15 @@ def combine(a):
     Image.fromarray(np.where(logo, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
     K.render_square(final_chains, bb).save(os.path.join(a.work, "logo_sharp.png"))
     K.write_svg(final_chains, bb, os.path.join(a.work, "logo_sharp.svg"))          # exactly the construction: arcs and lines
-    # the finished logo: the same mark with its corners eased by a few pixels
-    # --corner-radius is given for a logo 512 px across (2-5 px there); on the canvas it scales with the mark
+    # the finished logo: the same shapes with every corner eased (--corner-radius is given for a logo
+    # 512 px across, 2-5 px there; on the canvas it scales with the mark)
     r_px = a.corner_radius * max(bb[2] - bb[0], bb[3] - bb[1]) / 512.0
-    UPR = 4; hi, hx, hy = K.round_corners(logo, r_px, UPR)
-    print(f"   corners eased by {r_px:.1f}px on the canvas ({a.corner_radius:g}px at a 512px logo)")
-    round_d = K.mask_path(hi, ox=hx, oy=hy, scale=1.0 / UPR)
-    side = max(bb[2] - bb[0], bb[3] - bb[1]) * 1.24; ox, oy = (bb[0] + bb[2]) / 2 - side / 2, (bb[1] + bb[3]) / 2 - side / 2
-    sq = Image.new("L", (int(side * UPR), int(side * UPR)), 255)
-    sq.paste(Image.fromarray(np.where(hi, 0, 255).astype(np.uint8)), (int((hx - ox) * UPR), int((hy - oy) * UPR)))
-    sq.resize((1024, 1024), Image.LANCZOS).convert("RGB").save(os.path.join(a.work, "logo.png"))
-    open(os.path.join(a.work, "logo.svg"), "w").write(
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{ox:.1f} {oy:.1f} {side:.1f} {side:.1f}"><path fill-rule="evenodd" d="{round_d}"/></svg>')
+    round_chains = K.fillet_chains(final_chains, r_px) if a.corner_radius > 0 else final_chains
+    n_f = sum(p["type"] == "fillet" for c in round_chains for p in c)
+    print(f"   {n_f} corners eased by up to {r_px:.1f}px on the canvas ({a.corner_radius:g}px at a 512px logo)")
+    round_d = " ".join(K.chain_path(c) for c in round_chains)
+    K.render_square(round_chains, bb).save(os.path.join(a.work, "logo.png"))
+    K.write_svg(round_chains, bb, os.path.join(a.work, "logo.svg"))
     json.dump({"eps": eps, "paths": [K.chain_path(c) for c in final_chains], "guides": guides, "bbox": bb,
                "fill_states": fill_states, "cuts": cut_items, "merge": plan, "round_path": round_d,
                "stats": {k: v for k, v in fst.items() if k != "radii"}, "critique": cr, "search": trail},
@@ -256,5 +253,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True, nargs="+", help="one or more drawings from the image model; the one that overlaps the animal best is used")
-    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=4.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
+    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=5.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

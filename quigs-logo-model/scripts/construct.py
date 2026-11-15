@@ -826,7 +826,13 @@ def arc_points(p, step=2.0):
 def chain_polyline(prims):
     pts = []
     for p in prims:
-        pts.append(np.array([p["A"]]) if p["type"] == "line" else arc_points(p))
+        if p["type"] == "line":
+            pts.append(np.array([p["A"]]))
+        elif p["type"] == "fillet":
+            A, C, B = (np.array(p[k]) for k in ("A", "C", "B")); u = np.linspace(0, 1, 9)[:-1, None]
+            pts.append((1 - u) ** 2 * A + 2 * (1 - u) * u * C + u ** 2 * B)
+        else:
+            pts.append(arc_points(p))
     return np.vstack(pts)
 
 
@@ -842,6 +848,8 @@ def chain_path(prims):
     for k, p in enumerate(prims):
         if p["type"] == "line":
             d.append(f"L{p['B'][0]:.2f},{p['B'][1]:.2f}")
+        elif p["type"] == "fillet":
+            d.append(f"Q{p['C'][0]:.2f},{p['C'][1]:.2f} {p['B'][0]:.2f},{p['B'][1]:.2f}")
         elif p["type"] == "earc":
             cx, cy, rx, ry, ph = p["E"]
             if k and not _same(prims[k - 1]["B"], p["A"]):
@@ -973,30 +981,6 @@ def raster_guides(guides, shape, width=3):
         else:
             d.line([tuple(q) for q in g["pts"]], fill=255, width=width)
     return np.asarray(im) > 0
-
-
-def round_corners(mask, r, up=4):
-    """The finished mark with every sharp corner eased by a small radius (r px), as on the
-    designer's cards. Works at `up` times the resolution on the mark's own bounding box and
-    returns (high-resolution mask, x offset, y offset) in canvas pixels. Only corners change: a
-    thin limb or a narrow gap that the rounding would swallow is put back."""
-    ys, xs = np.nonzero(mask); pad = int(2 * r) + 8; H, W = mask.shape
-    y0, y1, x0, x1 = max(0, ys.min() - pad), min(H, ys.max() + pad + 1), max(0, xs.min() - pad), min(W, xs.max() + pad + 1)
-    hi = upsample(mask[y0:y1, x0:x1], up); R = r * up
-    if R < 0.5:
-        return hi, x0, y0
-    edt = ndimage.distance_transform_edt; limit = 1.3 * R * R
-    opened = edt(~(edt(hi) > R)) <= R                   # round the outer corners
-    lab, n = ndimage.label(hi & ~opened)
-    if n:
-        area = np.asarray(ndimage.sum(hi, lab, range(1, n + 1)))
-        opened |= np.isin(lab, 1 + np.nonzero(area > limit)[0])
-    closed = edt(edt(~opened) <= R) > R                 # round the inner corners
-    lab, n = ndimage.label(closed & ~opened)
-    if n:
-        area = np.asarray(ndimage.sum(closed, lab, range(1, n + 1)))
-        opened |= np.isin(lab, 1 + np.nonzero(area <= limit)[0])
-    return opened, x0, y0
 
 
 def mask_path(mask, ox=0, oy=0, scale=1.0):
@@ -1135,6 +1119,89 @@ def scale_chains(chains, f):
                 if k in p:
                     p[k] = np.asarray(p[k]) * f
     return chains
+
+
+def _tangent(p, end):
+    """Unit direction of travel at the start ("A") or the end ("B") of a stroke or an arc."""
+    if p["type"] == "line":
+        v = np.array(p["B"], float) - np.array(p["A"], float)
+    else:
+        cx, cy, rx, ry, ph = p["E"]; t = p["t0"] + (p["sw"] if end == "B" else 0.0); c, s_ = np.cos(ph), np.sin(ph)
+        dx, dy = -rx * np.sin(t), ry * np.cos(t)
+        v = np.array([dx * c - dy * s_, dx * s_ + dy * c]) * (1.0 if p["sw"] >= 0 else -1.0)
+    return v / (np.hypot(*v) + 1e-12)
+
+
+def _length(p):
+    if p["type"] == "line":
+        return float(np.hypot(*(np.array(p["B"], float) - np.array(p["A"], float))))
+    q = ell_xy(p["E"], p["t0"] + np.linspace(0, p["sw"], 25)); return float(np.hypot(*np.diff(q, axis=0).T).sum())
+
+
+def _trim(p, d, end):
+    """Shorten a stroke or an arc by length d at one end."""
+    if d <= 0:
+        return
+    if p["type"] == "line":
+        A, B = np.array(p["A"], float), np.array(p["B"], float); u = (B - A) / (np.hypot(*(B - A)) + 1e-12)
+        if end == "A":
+            p["A"] = (A + u * d).tolist()
+        else:
+            p["B"] = (B - u * d).tolist()
+        return
+    cx, cy, rx, ry, ph = p["E"]; t = p["t0"] + (p["sw"] if end == "B" else 0.0)
+    dt = d / (np.hypot(rx * np.sin(t), ry * np.cos(t)) + 1e-9) * (1.0 if p["sw"] >= 0 else -1.0)
+    if end == "A":
+        p["t0"] = float(p["t0"] + dt)
+    p["sw"] = float(p["sw"] - dt)
+    p["A"] = ell_xy(p["E"], p["t0"]).tolist(); p["B"] = ell_xy(p["E"], p["t0"] + p["sw"]).tolist()
+
+
+def fillet_chains(chains, r, kink=0.05):
+    """The finished mark: every corner eased by radius r, the way a designer rounds the corners of a
+    built shape. Each corner is replaced by a short curve between two points taken a little way
+    back along its two neighbours, so nothing is removed: the radius simply shrinks where the
+    neighbours are short (a thin limb, a sharp tip). The small steps and kinks where two arcs
+    meet are blended the same way. The strokes and arcs themselves are untouched."""
+    out = []
+    for prims in chains:
+        n = len(prims)
+        if n < 2 or any(p["type"] not in ("line", "earc") for p in prims):
+            out.append(prims); continue
+        P = [dict(p) for p in prims]
+        changed = True                                  # a stroke shorter than the radius between two strokes is a tiny chamfer:
+        while changed and len(P) > 3:                   # its two corners become one, where the neighbours cross
+            changed = False
+            for i in range(len(P)):
+                a, c, b = P[i - 1], P[i], P[(i + 1) % len(P)]
+                if not (a["type"] == c["type"] == b["type"] == "line") or _length(c) >= r:
+                    continue
+                A1, d1 = np.array(a["A"], float), _tangent(a, "B"); B2, d2 = np.array(b["B"], float), _tangent(b, "A")
+                den = d1[0] * d2[1] - d1[1] * d2[0]
+                if abs(den) < 0.2:                      # nearly parallel neighbours: not a chamfer
+                    continue
+                w = B2 - A1; X = A1 + d1 * ((w[0] * d2[1] - w[1] * d2[0]) / den)
+                if np.hypot(*(X - (np.array(c["A"], float) + np.array(c["B"], float)) / 2)) > 1.5 * r:
+                    continue
+                a["B"] = X.tolist(); b["A"] = X.tolist(); P.pop(i); changed = True
+                break
+        n = len(P); L = [_length(p) for p in P]; D = [0.0] * n; J = [None] * n
+        for i in range(n):
+            a, b = P[i], P[(i + 1) % n]; Ba, Ab = np.array(a["B"], float), np.array(b["A"], float)
+            J[i] = (Ba + Ab) / 2; gap = float(np.hypot(*(Ba - Ab)))
+            th = float(np.arccos(np.clip(_tangent(a, "B") @ _tangent(b, "A"), -1, 1)))
+            d = max(r * np.tan(min(th, 2.6) / 2), 2.5 * gap, 0.8 * r if th > kink else 0.0)
+            D[i] = float(min(d, 0.45 * L[i], 0.45 * L[(i + 1) % n]))
+        for i in range(n):
+            if D[i] > 0.3:
+                _trim(P[i], D[i], "B"); _trim(P[(i + 1) % n], D[i], "A")
+        chain = []
+        for i in range(n):
+            chain.append(P[i])
+            if D[i] > 0.3:
+                chain.append({"type": "fillet", "A": P[i]["B"], "C": J[i].tolist(), "B": P[(i + 1) % n]["A"], "len": 2 * D[i]})
+        out.append(chain)
+    return out
 
 
 def stats(chains):

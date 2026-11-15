@@ -94,7 +94,9 @@ python3 scripts/abstraction.py input --photo bg.png --cutout cutout.png --out wo
 python3 scripts/locate_eyes.py --photo bg.png --cutout cutout.png --annotated marked.png --out work/eyes.json
 python3 scripts/silhouette_logo.py combine --abstract --work work/ --model-output v0.png v1.png --eyes work/eyes.json
 #   בוחר את הגרסה שיושבת הכי טוב על החיה; העין נחתכת במקום ובצורה של העין האמיתית (עיגול, או אליפסה לעין מוארכת);
-#   logo.svg/png = הלוגו הסופי עם פינות מעוגלות (--corner-radius, ברירת מחדל 4px ללוגו ברוחב 512px); logo_sharp.svg = קשתות וקווים בלבד
+#   logo_sharp.svg = הלוגו הווקטורי כפי שנבנה: קשתות וקווים בלבד.
+#   logo.svg/png = אותו וקטור אחרי השלב האחרון, עיגול פינות וקטורי (--corner-radius, ברירת מחדל 5px ללוגו ברוחב 512px; 0 מבטל).
+#   כל פינה מוחלפת בעקומה קצרה בין שתי נקודות על הקטעים השכנים, כך ששום פרט לא נמחק; ליד קטע קצר הרדיוס קטן מעצמו.
 python3 scripts/make_video.py --photo bg.png --construction work/construction.json --name "Maneo" -o lion.mp4
 ```
 
