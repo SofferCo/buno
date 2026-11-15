@@ -80,32 +80,57 @@ def prepare(a):
 
 def combine(a):
     sil = np.asarray(Image.open(os.path.join(a.work, "silhouette_canvas.png")).convert("L")) < 128
-    gen = raster_to_mask(Image.open(a.model_output))
-    x0, y0, x1, y1 = bbox(gen)
-    placed, iou = place_logo(gen[y0:y1, x0:x1], sil)   # snap the model's drawing back onto the silhouette
-    # The model's own negative space: white shapes inside the envelope of what it drew. Taking the
-    # cuts this way keeps the open gaps (between legs, under a mane) that make up 82% of the
-    # designer's cuts, and ignores places where the model merely redrew the outline.
-    x0, y0, x1, y1 = bbox(sil); size = max(x1 - x0, y1 - y0)
-    env_m, mcuts, mlab = K.cut_list(placed, size)
-    learned = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dataset", "learned_results.json")))["cuts"]
-    cuts = np.zeros_like(sil); kept = 0; total = 0.0
-    for c in sorted(mcuts, key=lambda c: -c["area_share"]):
-        comp = ndimage.binary_opening((mlab == c["label"]) & sil, structure=disk(2))
-        if comp.sum() < 0.0006 * sil.sum() or c["width_rel"] < 0.012:     # a sliver, not a designed gap
-            continue
-        edge = comp & ~ndimage.binary_erosion(comp); rim = (edge & ndimage.binary_dilation(~sil, iterations=2)).sum() / max(1, edge.sum())
-        large = c["width_rel"] > learned["width_rel_p95"] or c["area_share"] > learned["area_share_p95"]
-        if large and not (c["enclosed"] and rim == 0 and c["area_share"] <= learned["area_share_p98"]):
-            if a.verbose: print(f"    cut skipped (too large): width {c['width_rel']:.3f} area {c['area_share']:.3f} enclosed {c['enclosed']}")
-            continue                                   # a wide open gap is a misdrawn limb; a large patch fully inside (a white chest) is a marking
-        if a.verbose: print(f"    cut: width {c['width_rel']:.3f} area {c['area_share']:.3f} share of its edge on the outline {rim:.2f} enclosed {c['enclosed']}")
-        if rim > a.max_rim:                            # it runs along the outline: the model redrew the edge, it did not carve a gap
-            continue
+    best = None                                        # several drawings: take the one that sits best on the animal
+    for path in a.model_output:
+        gen = raster_to_mask(Image.open(path)); x0, y0, x1, y1 = bbox(gen)
+        placed, iou = place_logo(gen[y0:y1, x0:x1], sil)   # snap the model's drawing back onto the silhouette
+        if len(a.model_output) > 1:
+            print(f"   {os.path.basename(path)}: overlaps the animal {iou:.3f}")
+        if best is None or iou > best[1]:
+            best = (placed, iou, path)
+    placed, iou, chosen = best
+    if len(a.model_output) > 1:
+        print(f"   using {os.path.basename(chosen)}")
+    if a.abstract:
+        # The model was shown the designer's own photo -> mark pairs and drew his kind of abstraction
+        # of this animal. That drawing is the mark: its outline is rebuilt from perfect shapes as it
+        # is (no further simplification), its enclosed white shapes are the cuts.
+        if iou < 0.7:
+            print(f"   warning: the drawing only overlaps the animal {iou:.2f}; it may have drifted from the pose")
+        mark = ndimage.binary_opening(placed, structure=disk(1)); lab, n = ndimage.label(mark)
+        if n > 1:
+            sizes = np.asarray(ndimage.sum(mark, lab, range(1, n + 1)))
+            mark = np.isin(lab, 1 + np.nonzero(sizes >= 0.004 * sizes.sum())[0])
+        sil = ndimage.binary_fill_holes(mark); holes = sil & ~mark; lab, n = ndimage.label(holes)
+        cuts = np.zeros_like(sil); kept = 0
+        for k in range(1, n + 1):
+            if (lab == k).sum() >= 0.0006 * sil.sum():
+                cuts |= lab == k; kept += 1
+        a.no_ground = True
+    else:
+        # The model's own negative space: white shapes inside the envelope of what it drew. Taking the
+        # cuts this way keeps the open gaps (between legs, under a mane) that make up 82% of the
+        # designer's cuts, and ignores places where the model merely redrew the outline.
+        x0, y0, x1, y1 = bbox(sil); size = max(x1 - x0, y1 - y0)
+        env_m, mcuts, mlab = K.cut_list(placed, size)
+        learned = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dataset", "learned_results.json")))["cuts"]
+        cuts = np.zeros_like(sil); kept = 0; total = 0.0
+        for c in sorted(mcuts, key=lambda c: -c["area_share"]):
+            comp = ndimage.binary_opening((mlab == c["label"]) & sil, structure=disk(2))
+            if comp.sum() < 0.0006 * sil.sum() or c["width_rel"] < 0.012:     # a sliver, not a designed gap
+                continue
+            edge = comp & ~ndimage.binary_erosion(comp); rim = (edge & ndimage.binary_dilation(~sil, iterations=2)).sum() / max(1, edge.sum())
+            large = c["width_rel"] > learned["width_rel_p95"] or c["area_share"] > learned["area_share_p95"]
+            if large and not (c["enclosed"] and rim == 0 and c["area_share"] <= learned["area_share_p98"]):
+                if a.verbose: print(f"    cut skipped (too large): width {c['width_rel']:.3f} area {c['area_share']:.3f} enclosed {c['enclosed']}")
+                continue                                   # a wide open gap is a misdrawn limb; a large patch fully inside (a white chest) is a marking
+            if a.verbose: print(f"    cut: width {c['width_rel']:.3f} area {c['area_share']:.3f} share of its edge on the outline {rim:.2f} enclosed {c['enclosed']}")
+            if rim > a.max_rim:                            # it runs along the outline: the model redrew the edge, it did not carve a gap
+                continue
 
-        if kept >= a.max_cuts or total + comp.sum() / sil.sum() > a.max_cut_share:
-            continue
-        cuts |= comp; kept += 1; total += comp.sum() / sil.sum()
+            if kept >= a.max_cuts or total + comp.sum() / sil.sum() > a.max_cut_share:
+                continue
+            cuts |= comp; kept += 1; total += comp.sum() / sil.sum()
     body = sil.copy()
     if not a.no_ground:                                # feet end on one flat ground line, as in the references
         x0, y0, x1, y1 = bbox(body)
@@ -122,8 +147,14 @@ def combine(a):
     # 1. the uncut body, built the way the reference clips are: a few ovals that sit inside the
     #    animal as its masses, then straight strokes for everything else
     bx0, by0, bx1, by1 = bbox(body); size = max(bx1 - bx0, by1 - by0)
-    tol = float(np.clip((a.tolerance or K.PARAMS["tol_rel"]) * size, 3.0, 26.0))
-    body_chains = K.fit_mask(body, tol, shapes_first="dp", delta=tol, log=print)
+    prm = dict(K.PARAMS)
+    UP = 2 if a.abstract else 1                        # a drawing is fitted at twice the resolution: crisp corners, no pixel steps
+    if a.abstract:                                     # the drawing is already abstract: rebuild it as it is
+        prm.update({"thick_k": 0.0, "tol_rel": a.tolerance or 0.005, "arc_cost": a.arc_cost,
+                    "circle_max_r": 0.6, "ell_max_r": 0.6})    # a long sweep the drawing already has (a beak) stays one arc
+    tol = float(np.clip((a.tolerance or prm["tol_rel"]) * size * UP, 3.0, 26.0 * UP))
+    fit = (lambda m, t, **kw: K.scale_chains(K.fit_mask(K.upsample(m, UP), t, **kw), 1.0 / UP)) if UP > 1 else K.fit_mask
+    body_chains = fit(body, tol, shapes_first="dp", delta=tol, log=print, prm=prm); tol /= UP
     st = K.stats(body_chains); eps = tol; trail = []
     # 2. each cut is its own closed shape that gets deleted from the merged body
     cut_items, cut_chains = [], []
@@ -132,7 +163,7 @@ def combine(a):
     for i in range(1, cn + 1):
         comp = clab == i
         ext = comp | (ndimage.binary_dilation(comp, structure=disk(6)) & ~body)   # reach past the outline at an open mouth
-        ch = K.fit_mask(ext, 0.7 * tol if comp.sum() > 1500 else min(tol, 2.5), shapes_first="cut")
+        ch = fit(ext, (0.7 * tol if comp.sum() > 1500 else min(tol, 2.5)) * UP, shapes_first="cut")
         if not ch:
             continue
         py, px = ndimage.maximum_position(depth, clab, i)
@@ -155,7 +186,8 @@ def combine(a):
         guides.insert(k, {"type": "line", "x1": float(bx0 - 0.07 * size), "y1": gy, "x2": float(bx1 + 0.07 * size), "y2": gy})
     plan = K.merge_plan(guides, body_built)
     # 3. the finished mark = built body minus the cuts, re-expressed as clean arcs and lines for the SVG
-    final_chains = K.fit_mask(state, 1.5, share=False)
+    # (a drawing: the mark is exactly the shapes it was rebuilt from, holes included)
+    final_chains = body_chains + cut_chains if a.abstract else K.fit_mask(state, 1.5, share=False)
     logo = K.rasterize(final_chains, final.shape); bb = [int(v) for v in bbox(logo)]
     target = animal & ~cuts                            # judge the outline, not the cuts carved on purpose
     cr = K.critique(logo, target); fst = K.stats(final_chains)
@@ -183,6 +215,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
-    c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True)
-    c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
+    c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True, nargs="+", help="one or more drawings from the image model; the one that overlaps the animal best is used")
+    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

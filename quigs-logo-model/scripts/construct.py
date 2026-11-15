@@ -974,7 +974,10 @@ def raster_guides(guides, shape, width=3):
 
 
 def mask_path(mask, ox=0, oy=0):
-    path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=True, opttolerance=0.5)
+    try:
+        path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=True, opttolerance=0.5)
+    except ValueError:                                  # the tracer's curve optimiser fails on some crisp polygons
+        path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=False)
     d = []
     for curve in path:
         p = curve.start_point; d.append(f"M{p.x + ox:.1f},{p.y + oy:.1f}")
@@ -1076,6 +1079,31 @@ def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, pr
             for p in c:
                 if p["type"] == "arc":
                     to_earc(p)
+    return chains
+
+
+def upsample(mask, f):
+    """The mask at f times the resolution with smooth edges, so that a fit is not limited by pixels."""
+    from PIL import ImageFilter
+    im = Image.fromarray((mask * 255).astype(np.uint8)).resize((mask.shape[1] * f, mask.shape[0] * f), Image.BICUBIC)
+    return np.asarray(im.filter(ImageFilter.GaussianBlur(0.8 * f))) > 127
+
+
+def scale_chains(chains, f):
+    """Chains fitted at another resolution, brought back to canvas coordinates."""
+    for c in chains:
+        for p in c:
+            for k in ("A", "B", "C", "Q"):
+                if k in p:
+                    p[k] = [float(v) * f for v in p[k]]
+            for k in ("r", "s", "len", "err"):
+                if k in p:
+                    p[k] = float(p[k]) * f
+            if "E" in p:
+                p["E"] = [p["E"][0] * f, p["E"][1] * f, p["E"][2] * f, p["E"][3] * f, p["E"][4]]
+            for k in ("pts", "tau"):
+                if k in p:
+                    p[k] = np.asarray(p[k]) * f
     return chains
 
 

@@ -52,6 +52,9 @@ python3 scripts/make_video.py --photo bg_9x16.png --logo out/lion/v0.png --anima
 
 1. `prepare`: ה-cutout של החיה מנוקה לצללית אחת (פרווה, חורים).
 2. המודל מקבל את הצללית ומוסיף רק חיתוכים פנימיים (עין, רעמה).
+2ב. **הפשטה (`abstraction.py`, `combine --abstract`)**: לעקוב אחרי הצללית לא נותן את הסגנון של המעצב, כי הוא מצייר את החיה מחדש
+   (גב כקו אחד, זנב כצורה אחת, רגליים מופרדות). את ההחלטה הזאת מקבל מודל תמונה שרואה זוגות צילום -> לוגו של המעצב עצמו
+   ואת החיה החדשה, ומצייר אותה באותה תנוחה. הציור מוצמד לחיה, נבדקת החפיפה איתה, ואז הוא נבנה מחדש מצורות מושלמות כמו שהוא.
 3. `combine`: קו המתאר נבנה מחדש כ**שרשרת הזולה ביותר של צורות מושלמות** (קו ישר, קשת של עיגול אמיתי, קשת של אליפסה).
    תכנון דינמי על כל ההיקף בוחר את החלוקה; הסטייה המותרת תלויה בעובי המקומי של החיה; הפינות הן נקודות החיתוך בין הצורות.
    הפרמטרים מאומנים על 32 סרטוני המקור (`train_on_references.py`), והתוצאות ב-`dataset/style_study.md`.
@@ -84,8 +87,10 @@ python3 scripts/frame_photo.py --photo upscaled.png --cutout cutout.png --out wo
 # (outpaint גנרטיבי לגובה החליף פעם אחת את הציפור בציפור אחרת; כך החיה נשארת כמו שצולמה)
 python3 scripts/frame_photo.py --photo photo.png --cutout cutout.png --out work/ --extend
 python3 scripts/silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
-# work/silhouette_sq.png + work/photo_sq.jpg -> מודל התמונה -> gen.png
-python3 scripts/silhouette_logo.py combine --work work/ --model-output gen.png
+# שלב ההפשטה: החיה חתוכה על לבן + שני דפי דוגמה של המעצב (צילום -> לוגו) -> מודל התמונה מצייר את ההפשטה בסגנון שלו
+python3 scripts/abstraction.py input --photo bg.png --cutout cutout.png --out work/cutout_sq.jpg
+# מודל תמונה (gpt_image_2_6, 1:1): dataset/abstraction/sheet_a.png, sheet_b.png, work/cutout_sq.jpg + dataset/abstraction/prompt.txt -> v0.png, v1.png
+python3 scripts/silhouette_logo.py combine --abstract --work work/ --model-output v0.png v1.png   # בוחר את הגרסה שיושבת הכי טוב על החיה
 python3 scripts/make_video.py --photo bg.png --construction work/construction.json --name "Maneo" -o lion.mp4
 ```
 
