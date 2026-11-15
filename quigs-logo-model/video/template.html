@@ -40,7 +40,7 @@ const lerp = (a, b, u) => a + (b - a) * u;
 
 $('photo').setAttribute('href', SC.bg);
 $('fillp').setAttribute('d', SC.fillD);
-$('cardp').setAttribute('d', SC.fillD);
+$('cardp').setAttribute('d', SC.cardD || SC.fillD);   // the finished logo: corners eased by a few pixels
 
 // guides
 const rotv = (v, deg) => { const a = deg * Math.PI / 180; return [v[0]*Math.cos(a) - v[1]*Math.sin(a), v[0]*Math.sin(a) + v[1]*Math.cos(a)]; };
@@ -159,7 +159,7 @@ window.setTime = function (t) {
     // merged body, then cuts deleted one by one, then the clean final outline
     let k = 0, hover = null;
     for (const c of B.cuts) { if (t >= c.tDelete) k++; if (t >= c.tHover && t < c.tDelete) hover = c; }
-    const d = t >= T.guidesOff ? SC.fillD : B.fillStates[k];
+    const d = t >= T.guidesOff ? (SC.cardD || SC.fillD) : B.fillStates[k];
     if ($('fillp').getAttribute('d') !== d) $('fillp').setAttribute('d', d);
     $('cuthover').setAttribute('visibility', hover ? 'visible' : 'hidden');
     if (hover) $('cuthover').setAttribute('d', hover.d);

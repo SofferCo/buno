@@ -102,6 +102,32 @@ def combine(a):
             sizes = np.asarray(ndimage.sum(mark, lab, range(1, n + 1)))
             mark = np.isin(lab, 1 + np.nonzero(sizes >= 0.004 * sizes.sum())[0])
         sil = ndimage.binary_fill_holes(mark); holes = sil & ~mark; lab, n = ndimage.label(holes)
+        if a.eyes:
+            # The eye belongs where the animal's eye is in the photo. The drawing's own eye is
+            # dropped and a perfect circle is cut at the real position.
+            ys, xs = np.nonzero(sil); size0 = max(np.ptp(xs), np.ptp(ys)); eyes = json.load(open(a.eyes))["eyes"]
+            for k in range(1, n + 1):
+                comp = lab == k; cy, cx = ndimage.center_of_mass(comp)
+                d = min(np.hypot(cx - e["x"], cy - e["y"]) for e in eyes)
+                if comp.sum() < 0.012 * sil.sum() and d < 0.1 * size0:
+                    mark |= comp; print(f"   the drawing's eye was {d:.0f}px ({d / size0:.1%} of the animal) from the real eye: moved")
+            yy, xx = np.mgrid[:sil.shape[0], :sil.shape[1]]
+            for e in eyes:                              # the eye keeps its own shape: a circle, or an ellipse for an elongated eye
+                lo, hi = 0.008 * size0, 0.06 * size0
+                rx, ry = float(np.clip(e.get("rx", e["r"]), lo, hi)), float(np.clip(e.get("ry", e["r"]), lo, hi))
+                if max(rx, ry) / min(rx, ry) <= 1.25:
+                    rx = ry = float(np.sqrt(rx * ry))
+                c_, s_ = np.cos(np.radians(e.get("rot", 0.0))), np.sin(np.radians(e.get("rot", 0.0)))
+                u = (xx - e["x"]) * c_ + (yy - e["y"]) * s_; v = -(xx - e["x"]) * s_ + (yy - e["y"]) * c_
+                for shrink in (1.0, 0.85, 0.7, 0.55):
+                    a_, b_ = max(lo, rx * shrink), max(lo, ry * shrink)
+                    if not (((u / (a_ + 3)) ** 2 + (v / (b_ + 3)) ** 2 <= 1) & ~sil).any():
+                        mark &= ~((u / a_) ** 2 + (v / b_) ** 2 <= 1)
+                        print(f"   eye cut at ({e['x']:.0f},{e['y']:.0f}): {a_:.0f}x{b_:.0f}px" + ("" if shrink == 1.0 else f" (reduced to {shrink:.0%} to keep a rim)"))
+                        break
+                else:
+                    print(f"   warning: the real eye at ({e['x']:.0f},{e['y']:.0f}) falls on the edge of the drawing; eye not cut")
+            sil = ndimage.binary_fill_holes(mark); holes = sil & ~mark; lab, n = ndimage.label(holes)
         cuts = np.zeros_like(sil); kept = 0
         for k in range(1, n + 1):
             if (lab == k).sum() >= 0.0006 * sil.sum():
@@ -151,7 +177,9 @@ def combine(a):
     UP = 2 if a.abstract else 1                        # a drawing is fitted at twice the resolution: crisp corners, no pixel steps
     if a.abstract:                                     # the drawing is already abstract: rebuild it as it is
         prm.update({"thick_k": 0.0, "tol_rel": a.tolerance or 0.005, "arc_cost": a.arc_cost,
-                    "circle_max_r": 0.6, "ell_max_r": 0.6})    # a long sweep the drawing already has (a beak) stays one arc
+                    "circle_max_r": 0.6, "ell_max_r": 0.6,     # a long sweep the drawing already has (a beak) stays one arc
+                    "arc_long_rel": 0.10, "arc_cost_long": 1.2, "ell_cost_long": 1.6,    # ... and a long curve (a snake's coil) is arcs, not facets
+                    "ell_max_aspect": 4.5, "arc_min_sweep": 0.35, "ell_min_sweep": 0.6, "oval_min_r": 0.02})
     tol = float(np.clip((a.tolerance or prm["tol_rel"]) * size * UP, 3.0, 26.0 * UP))
     fit = (lambda m, t, **kw: K.scale_chains(K.fit_mask(K.upsample(m, UP), t, **kw), 1.0 / UP)) if UP > 1 else K.fit_mask
     body_chains = fit(body, tol, shapes_first="dp", delta=tol, log=print, prm=prm); tol /= UP
@@ -196,10 +224,22 @@ def combine(a):
         kinds[g["type"]] = kinds.get(g["type"], 0) + 1
 
     Image.fromarray(np.where(logo, 0, 255).astype(np.uint8)).save(os.path.join(a.work, "logo_canvas.png"))
-    K.render_square(final_chains, bb).save(os.path.join(a.work, "logo.png"))
-    K.write_svg(final_chains, bb, os.path.join(a.work, "logo.svg"))
+    K.render_square(final_chains, bb).save(os.path.join(a.work, "logo_sharp.png"))
+    K.write_svg(final_chains, bb, os.path.join(a.work, "logo_sharp.svg"))          # exactly the construction: arcs and lines
+    # the finished logo: the same mark with its corners eased by a few pixels
+    # --corner-radius is given for a logo 512 px across (2-5 px there); on the canvas it scales with the mark
+    r_px = a.corner_radius * max(bb[2] - bb[0], bb[3] - bb[1]) / 512.0
+    UPR = 4; hi, hx, hy = K.round_corners(logo, r_px, UPR)
+    print(f"   corners eased by {r_px:.1f}px on the canvas ({a.corner_radius:g}px at a 512px logo)")
+    round_d = K.mask_path(hi, ox=hx, oy=hy, scale=1.0 / UPR)
+    side = max(bb[2] - bb[0], bb[3] - bb[1]) * 1.24; ox, oy = (bb[0] + bb[2]) / 2 - side / 2, (bb[1] + bb[3]) / 2 - side / 2
+    sq = Image.new("L", (int(side * UPR), int(side * UPR)), 255)
+    sq.paste(Image.fromarray(np.where(hi, 0, 255).astype(np.uint8)), (int((hx - ox) * UPR), int((hy - oy) * UPR)))
+    sq.resize((1024, 1024), Image.LANCZOS).convert("RGB").save(os.path.join(a.work, "logo.png"))
+    open(os.path.join(a.work, "logo.svg"), "w").write(
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{ox:.1f} {oy:.1f} {side:.1f} {side:.1f}"><path fill-rule="evenodd" d="{round_d}"/></svg>')
     json.dump({"eps": eps, "paths": [K.chain_path(c) for c in final_chains], "guides": guides, "bbox": bb,
-               "fill_states": fill_states, "cuts": cut_items, "merge": plan,
+               "fill_states": fill_states, "cuts": cut_items, "merge": plan, "round_path": round_d,
                "stats": {k: v for k, v in fst.items() if k != "radii"}, "critique": cr, "search": trail},
               open(os.path.join(a.work, "construction.json"), "w"))
     img = np.full(final.shape + (3,), 255, np.uint8); img[logo & target] = (30, 30, 30)
@@ -216,5 +256,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True, nargs="+", help="one or more drawings from the image model; the one that overlaps the animal best is used")
-    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
+    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=4.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

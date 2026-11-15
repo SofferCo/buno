@@ -295,7 +295,7 @@ def main():
         keys += [{"t": m2a, "x": gx0, "y": gy0}, {"t": m2b, "x": gx1, "y": gy1},
                  {"t": m2b + 0.55, "x": W * 0.82, "y": H * 0.62}]
         guides_off = m2b + 0.2
-        scene.update({"paths": [], "fillD": " ".join(con["paths"]), "cursorKeys": keys,
+        scene.update({"paths": [], "fillD": " ".join(con["paths"]), "cardD": con.get("round_path"), "cursorKeys": keys,
                       "build": {"steps": build_steps, "tStart": build_steps[0]["t"], "tRelease": round(release, 3),
                                 "fillStates": con["fill_states"], "cuts": cuts,
                                 "marquees": [{"ta": m1a, "tb": m1b, "tOff": m1b + 0.25, "box": [gx0, gy0, gx1, gy1]},

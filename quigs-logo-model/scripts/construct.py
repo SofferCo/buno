@@ -691,7 +691,7 @@ def dp_chain(P, mask, tmin, prm=None, log=None):
                         hi = mid
                 hi_a[k] = lo
     corner = np.array([1.0 - min(1.0, turn[B[j] % N] / 60.0) for j in range(K + 1)]) * 0.08   # break at real corners
-    f = np.full(K + 1, 1e9); f[0] = 0.0; back = [None] * (K + 1)
+    f = np.full(K + 1, 1e9); f[0] = 0.0; back = [None] * (K + 1); Barr = np.asarray(B)
     for j in range(1, K + 1):
         for typ, cost in (("line", 1.0), ("circle", prm["arc_cost"]), ("ellipse", prm["ell_cost"])):
             if typ == "line":
@@ -701,6 +701,9 @@ def dp_chain(P, mask, tmin, prm=None, log=None):
             else:
                 ok = (lo_e[:j] <= j) & (hi_e[:j] >= j)
             if ok.any():
+                if typ != "line" and "arc_long_rel" in prm:     # a long sweep is a real curve, not a rounded corner: cheaper
+                    span = (B[j] - Barr[:j]) * STEP
+                    cost = np.where(span >= prm["arc_long_rel"] * size, min(cost, prm["arc_cost_long" if typ == "circle" else "ell_cost_long"]), cost)
                 c = np.where(ok, f[:j] + cost, 1e9); i = int(np.argmin(c))
                 if c[i] + corner[j] < f[j]:
                     f[j] = c[i] + corner[j]; back[j] = (i, typ)
@@ -919,9 +922,8 @@ def build_guides(chains, W, full_r=400, min_line=12):
         a, b = l["p"] + l["d"] * (l["t0"] - ext), l["p"] + l["d"] * (l["t1"] + ext)
         out_lines.append({"type": "line", "x1": float(a[0]), "y1": float(a[1]), "x2": float(b[0]), "y2": float(b[1])})
     size = lambda o: o.get("r", o.get("rx", 0))
-    big = sorted([o for o in ovals if size(o) >= 60], key=lambda o: -size(o))
-    small = sorted([o for o in ovals if size(o) < 60], key=lambda o: o["cx"])
-    return big + sorted(sweeps, key=lambda l: l["x1"]) + sorted(out_lines, key=lambda l: l["x1"]) + small
+    # drawing order: every circle and ellipse first (largest to smallest), then the arcs, then the strokes
+    return sorted(ovals, key=lambda o: -size(o)) + sorted(sweeps, key=lambda l: l["x1"]) + sorted(out_lines, key=lambda l: l["x1"])
 
 
 # ------------------------------------------------------------------ regions between the guides (shape-builder plan)
@@ -973,20 +975,44 @@ def raster_guides(guides, shape, width=3):
     return np.asarray(im) > 0
 
 
-def mask_path(mask, ox=0, oy=0):
+def round_corners(mask, r, up=4):
+    """The finished mark with every sharp corner eased by a small radius (r px), as on the
+    designer's cards. Works at `up` times the resolution on the mark's own bounding box and
+    returns (high-resolution mask, x offset, y offset) in canvas pixels. Only corners change: a
+    thin limb or a narrow gap that the rounding would swallow is put back."""
+    ys, xs = np.nonzero(mask); pad = int(2 * r) + 8; H, W = mask.shape
+    y0, y1, x0, x1 = max(0, ys.min() - pad), min(H, ys.max() + pad + 1), max(0, xs.min() - pad), min(W, xs.max() + pad + 1)
+    hi = upsample(mask[y0:y1, x0:x1], up); R = r * up
+    if R < 0.5:
+        return hi, x0, y0
+    edt = ndimage.distance_transform_edt; limit = 1.3 * R * R
+    opened = edt(~(edt(hi) > R)) <= R                   # round the outer corners
+    lab, n = ndimage.label(hi & ~opened)
+    if n:
+        area = np.asarray(ndimage.sum(hi, lab, range(1, n + 1)))
+        opened |= np.isin(lab, 1 + np.nonzero(area > limit)[0])
+    closed = edt(edt(~opened) <= R) > R                 # round the inner corners
+    lab, n = ndimage.label(closed & ~opened)
+    if n:
+        area = np.asarray(ndimage.sum(closed, lab, range(1, n + 1)))
+        opened |= np.isin(lab, 1 + np.nonzero(area <= limit)[0])
+    return opened, x0, y0
+
+
+def mask_path(mask, ox=0, oy=0, scale=1.0):
     try:
         path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=True, opttolerance=0.5)
     except ValueError:                                  # the tracer's curve optimiser fails on some crisp polygons
         path = potrace.Bitmap(~mask).trace(turdsize=10, alphamax=0.9, opticurve=False)
     d = []
     for curve in path:
-        p = curve.start_point; d.append(f"M{p.x + ox:.1f},{p.y + oy:.1f}")
+        p = curve.start_point; d.append(f"M{p.x * scale + ox:.1f},{p.y * scale + oy:.1f}")
         for seg in curve:
             e = seg.end_point
             if seg.is_corner:
-                d.append(f"L{seg.c.x + ox:.1f},{seg.c.y + oy:.1f}L{e.x + ox:.1f},{e.y + oy:.1f}")
+                d.append(f"L{seg.c.x * scale + ox:.1f},{seg.c.y * scale + oy:.1f}L{e.x * scale + ox:.1f},{e.y * scale + oy:.1f}")
             else:
-                d.append(f"C{seg.c1.x + ox:.1f},{seg.c1.y + oy:.1f} {seg.c2.x + ox:.1f},{seg.c2.y + oy:.1f} {e.x + ox:.1f},{e.y + oy:.1f}")
+                d.append(f"C{seg.c1.x * scale + ox:.1f},{seg.c1.y * scale + oy:.1f} {seg.c2.x * scale + ox:.1f},{seg.c2.y * scale + oy:.1f} {e.x * scale + ox:.1f},{e.y * scale + oy:.1f}")
         d.append("Z")
     return "".join(d)
 
@@ -1060,6 +1086,10 @@ def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, pr
                 gid = next(_GID)
                 prims = [{"type": "earc", "E": list(E), "t0": t0, "sw": np.pi, "g": gid, "len": float(np.pi * E[2]),
                           "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + np.pi).tolist(), "pts": P} for t0 in (0.0, np.pi)]
+            elif (Ee := perfect(fit_ellipse(P), P)) is not None and Ee[2] / Ee[3] <= 3.5 and ell_project(Ee, P)[0].max() <= max(2.5, 0.14 * Ee[3]):
+                gid = next(_GID)                                      # an oval cut (an elongated eye) is simply an ellipse
+                prims = [{"type": "earc", "E": list(Ee), "t0": t0, "sw": np.pi, "g": gid, "len": float(ell_perimeter(Ee) / 2),
+                          "A": ell_xy(Ee, t0).tolist(), "B": ell_xy(Ee, t0 + np.pi).tolist(), "pts": P} for t0 in (0.0, np.pi)]
             else:                                                     # any other cut: a few strokes, straight or one arc each
                 prims = fit_chain(P, eps, find_corners(P))
                 for q in prims:

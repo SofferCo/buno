@@ -89,8 +89,12 @@ python3 scripts/frame_photo.py --photo photo.png --cutout cutout.png --out work/
 python3 scripts/silhouette_logo.py prepare --photo bg.png --cutout cutout.png --out work/
 # שלב ההפשטה: החיה חתוכה על לבן + שני דפי דוגמה של המעצב (צילום -> לוגו) -> מודל התמונה מצייר את ההפשטה בסגנון שלו
 python3 scripts/abstraction.py input --photo bg.png --cutout cutout.png --out work/cutout_sq.jpg
-# מודל תמונה (gpt_image_2_6, 1:1): dataset/abstraction/sheet_a.png, sheet_b.png, work/cutout_sq.jpg + dataset/abstraction/prompt.txt -> v0.png, v1.png
-python3 scripts/silhouette_logo.py combine --abstract --work work/ --model-output v0.png v1.png   # בוחר את הגרסה שיושבת הכי טוב על החיה
+# מודל תמונה (gpt_image_2_6, 1:1): dataset/abstraction/sheet_a.png, sheet_b.png, sheet_c.png, work/cutout_sq.jpg + dataset/abstraction/prompt.txt -> v0.png, v1.png
+# עיניים: מודל התמונה צובע את העין האמיתית במג'נטה (הפרומפט בראש locate_eyes.py), והסקריפט מוציא מיקום, גודל וצורה
+python3 scripts/locate_eyes.py --photo bg.png --cutout cutout.png --annotated marked.png --out work/eyes.json
+python3 scripts/silhouette_logo.py combine --abstract --work work/ --model-output v0.png v1.png --eyes work/eyes.json
+#   בוחר את הגרסה שיושבת הכי טוב על החיה; העין נחתכת במקום ובצורה של העין האמיתית (עיגול, או אליפסה לעין מוארכת);
+#   logo.svg/png = הלוגו הסופי עם פינות מעוגלות (--corner-radius, ברירת מחדל 4px ללוגו ברוחב 512px); logo_sharp.svg = קשתות וקווים בלבד
 python3 scripts/make_video.py --photo bg.png --construction work/construction.json --name "Maneo" -o lion.mp4
 ```
 
