@@ -84,11 +84,18 @@ def combine(a):
     for path in a.model_output:
         gen = raster_to_mask(Image.open(path)); x0, y0, x1, y1 = bbox(gen)
         placed, iou = place_logo(gen[y0:y1, x0:x1], sil)   # snap the model's drawing back onto the silhouette
+        score = iou
+        if a.eyes:                                      # the head matters most: how well the drawing covers the animal around the eye
+            ys_, xs_ = np.nonzero(sil); rad = 0.2 * max(np.ptp(xs_), np.ptp(ys_)); yy_, xx_ = np.mgrid[:sil.shape[0], :sil.shape[1]]
+            near = np.zeros_like(sil)
+            for e in json.load(open(a.eyes))["eyes"]:
+                near |= (xx_ - e["x"]) ** 2 + (yy_ - e["y"]) ** 2 <= rad * rad
+            head = (placed & sil & near).sum() / max(1, ((placed | sil) & near).sum()); score = 0.5 * iou + 0.5 * head
         if len(a.model_output) > 1:
-            print(f"   {os.path.basename(path)}: overlaps the animal {iou:.3f}")
-        if best is None or iou > best[1]:
-            best = (placed, iou, path)
-    placed, iou, chosen = best
+            print(f"   {os.path.basename(path)}: overlaps the animal {iou:.3f}" + (f", around the eye {head:.3f}" if a.eyes else ""))
+        if best is None or score > best[3]:
+            best = (placed, iou, path, score)
+    placed, iou, chosen, _ = best
     if len(a.model_output) > 1:
         print(f"   using {os.path.basename(chosen)}")
     if a.abstract:
@@ -112,7 +119,7 @@ def combine(a):
                 if comp.sum() < 0.012 * sil.sum() and d < 0.1 * size0:
                     mark |= comp; print(f"   the drawing's eye was {d:.0f}px ({d / size0:.1%} of the animal) from the real eye: moved")
             yy, xx = np.mgrid[:sil.shape[0], :sil.shape[1]]
-            for e in eyes:                              # the eye keeps its own shape: a circle, or an ellipse for an elongated eye
+            for e in eyes:                              # the eye keeps its own shape: a circle, or for an elongated eye the lens between two circles
                 lo, hi = 0.008 * size0, 0.06 * size0
                 rx, ry = float(np.clip(e.get("rx", e["r"]), lo, hi)), float(np.clip(e.get("ry", e["r"]), lo, hi))
                 if max(rx, ry) / min(rx, ry) <= 1.25:
@@ -122,7 +129,13 @@ def combine(a):
                 for shrink in (1.0, 0.85, 0.7, 0.55):
                     a_, b_ = max(lo, rx * shrink), max(lo, ry * shrink)
                     if not (((u / (a_ + 3)) ** 2 + (v / (b_ + 3)) ** 2 <= 1) & ~sil).any():
-                        mark &= ~((u / a_) ** 2 + (v / b_) ** 2 <= 1)
+                        if a_ == b_:
+                            eye = u ** 2 + v ** 2 <= a_ * a_
+                        else:                           # two equal circles whose overlap is a_ long and b_ wide
+                            hl, hw = max(a_, b_), min(a_, b_); R = (hl * hl + hw * hw) / (2 * hw)
+                            p_, q_ = (u, v) if a_ >= b_ else (v, u)
+                            eye = (p_ ** 2 + (q_ - (R - hw)) ** 2 <= R * R) & (p_ ** 2 + (q_ + (R - hw)) ** 2 <= R * R)
+                        mark &= ~eye
                         print(f"   eye cut at ({e['x']:.0f},{e['y']:.0f}): {a_:.0f}x{b_:.0f}px" + ("" if shrink == 1.0 else f" (reduced to {shrink:.0%} to keep a rim)"))
                         break
                 else:
@@ -177,9 +190,10 @@ def combine(a):
     UP = 2 if a.abstract else 1                        # a drawing is fitted at twice the resolution: crisp corners, no pixel steps
     if a.abstract:                                     # the drawing is already abstract: rebuild it as it is
         prm.update({"thick_k": 0.0, "tol_rel": a.tolerance or 0.005, "arc_cost": a.arc_cost,
-                    "circle_max_r": 0.6, "ell_max_r": 0.6,     # a long sweep the drawing already has (a beak) stays one arc
-                    "arc_long_rel": 0.10, "arc_cost_long": 1.2, "ell_cost_long": 1.6,    # ... and a long curve (a snake's coil) is arcs, not facets
-                    "ell_max_aspect": 4.5, "arc_min_sweep": 0.35, "ell_min_sweep": 0.6, "oval_min_r": 0.02})
+                    "ell_cost": 99, "ell_cost_long": 99,       # circles and strokes only: no ellipses
+                    "circle_max_r": a.max_circle or prm["circle_max_r"],   # no circle larger than the designer's (90% of his are under 0.21 of the animal)
+                    "arc_long_rel": 0.10, "arc_cost_long": 1.2,            # a long curve (a snake's coil) is arcs, not facets
+                    "arc_min_sweep": 0.35, "oval_min_r": 0.02})
     tol = float(np.clip((a.tolerance or prm["tol_rel"]) * size * UP, 3.0, 26.0 * UP))
     fit = (lambda m, t, **kw: K.scale_chains(K.fit_mask(K.upsample(m, UP), t, **kw), 1.0 / UP)) if UP > 1 else K.fit_mask
     body_chains = fit(body, tol, shapes_first="dp", delta=tol, log=print, prm=prm); tol /= UP
@@ -253,5 +267,5 @@ if __name__ == "__main__":
     p = sub.add_parser("prepare"); p.add_argument("--photo", required=True); p.add_argument("--cutout", required=True)
     p.add_argument("--out", required=True); p.set_defaults(f=prepare)
     c = sub.add_parser("combine"); c.add_argument("--work", required=True); c.add_argument("--model-output", required=True, nargs="+", help="one or more drawings from the image model; the one that overlaps the animal best is used")
-    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=5.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
+    c.add_argument("--abstract", action="store_true", help="the model output is the designer-style abstraction of the animal (see dataset/abstraction/): build the mark from it instead of from the silhouette"); c.add_argument("--max-circle", type=float, help="with --abstract: largest circle radius as a share of the animal's size (default: the trained value, 0.25)"); c.add_argument("--eyes", help="eyes.json from locate_eyes.py: where the animal's eyes are in the photo"); c.add_argument("--corner-radius", type=float, default=5.0, help="radius that eases the corners of the finished logo, in px for a logo 512 px across (2-5); 0 keeps them sharp"); c.add_argument("--arc-cost", type=float, default=2.2, help="with --abstract: an arc is used where it replaces more than this many strokes (keeps the drawing's corners crisp; not a trained value)"); c.add_argument("--max-cuts", type=int, default=10); c.add_argument("--max-rim", type=float, default=0.3, help="most of a cut's edge that may lie on the animal's outline"); c.add_argument("--verbose", action="store_true"); c.add_argument("--max-cut-share", type=float, default=0.16, help="most of the figure the cuts may remove (designer median 0.064, upper quartile about 0.08)"); c.add_argument("--no-ground", action="store_true"); c.add_argument("--tolerance", type=float, default=None, help="how far the built outline may sit from the animal, as a share of its size (default: trained value)"); c.set_defaults(f=combine)
     a = ap.parse_args(); a.f(a)

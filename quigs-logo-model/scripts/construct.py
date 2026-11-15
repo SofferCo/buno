@@ -1070,10 +1070,6 @@ def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, pr
                 gid = next(_GID)
                 prims = [{"type": "earc", "E": list(E), "t0": t0, "sw": np.pi, "g": gid, "len": float(np.pi * E[2]),
                           "A": ell_xy(E, t0).tolist(), "B": ell_xy(E, t0 + np.pi).tolist(), "pts": P} for t0 in (0.0, np.pi)]
-            elif (Ee := perfect(fit_ellipse(P), P)) is not None and Ee[2] / Ee[3] <= 3.5 and ell_project(Ee, P)[0].max() <= max(2.5, 0.14 * Ee[3]):
-                gid = next(_GID)                                      # an oval cut (an elongated eye) is simply an ellipse
-                prims = [{"type": "earc", "E": list(Ee), "t0": t0, "sw": np.pi, "g": gid, "len": float(ell_perimeter(Ee) / 2),
-                          "A": ell_xy(Ee, t0).tolist(), "B": ell_xy(Ee, t0 + np.pi).tolist(), "pts": P} for t0 in (0.0, np.pi)]
             else:                                                     # any other cut: a few strokes, straight or one arc each
                 prims = fit_chain(P, eps, find_corners(P))
                 for q in prims:
