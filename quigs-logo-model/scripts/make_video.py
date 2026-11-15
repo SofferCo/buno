@@ -27,6 +27,7 @@ import potrace
 
 W, H, FPS = 1080, 1920, 30
 HERE = os.path.dirname(os.path.abspath(__file__))
+TRACKING = -0.077      # letter spacing of the wordmark in em, measured against the designer's cards with this typeface
 
 
 def cover(im, resample=Image.LANCZOS):
@@ -40,6 +41,35 @@ def cover(im, resample=Image.LANCZOS):
 def bbox(m):
     ys, xs = np.nonzero(m)
     return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+
+
+def card_layout(name, W, H, bx0, by0, bx1, by1):
+    """The brand card as measured on the designer's own cards (dataset/learned_card.json). The
+    wordmark has one fixed size (its cap height is a fixed share of the frame width), tight
+    tracking and a Helvetica-style bold face; the (c) sign has a fixed size and place relative to
+    the capitals; symbol and name together are centred in the frame. The symbol is scaled to his
+    usual width, so the proportion between symbol and wordmark is his."""
+    import base64
+    from PIL import ImageFont
+    learned = json.load(open(os.path.join(os.path.dirname(HERE), "dataset", "learned_card.json"))); c = learned["median"]
+    fdir = os.path.join(os.path.dirname(HERE), "video", "fonts")
+    bold_p, reg_p = os.path.join(fdir, "texgyreheros-bold.otf"), os.path.join(fdir, "texgyreheros-regular.otf")
+    bold, reg = ImageFont.truetype(bold_p, 1000), ImageFont.truetype(reg_p, 1000)
+    hb = bold.getbbox("H", anchor="ls"); cap_em = (hb[3] - hb[1]) / 1000.0
+    cap = c["cap_over_frame_w"] * W; fs = cap / cap_em; track = TRACKING * fs
+    mw, mh = bx1 - bx0, by1 - by0
+    s = min(c["mark_w"] * W / mw, learned["mark_h_p90"] * H / mh)     # his usual symbol width; a tall animal is limited by height
+    block = mh * s + c["gap_over_cap"] * cap + cap; top = c["block_cy"] * H - block / 2
+    base = top + block; lay = {"s": s, "cx": W / 2, "cy": top + mh * s / 2}
+    if name:
+        nb = bold.getbbox(name, anchor="ls"); ink_l, ink_w = nb[0] * fs / 1000, (nb[2] - nb[0]) * fs / 1000 + track * (len(name) - 1)
+        lay["name"] = {"x": W / 2 - ink_w / 2 - ink_l, "y": base, "fs": fs, "ls": track}
+        cb = reg.getbbox(chr(169), anchor="ls"); d_em = ((cb[2] - cb[0]) + (cb[3] - cb[1])) / 2000.0
+        fc = c["c_diameter_over_cap"] * cap / d_em
+        lay["sign"] = {"x": W / 2 + ink_w / 2 + c["c_gap_over_cap"] * cap - cb[0] * fc / 1000,
+                       "y": base - c["c_centre_over_cap"] * cap - (cb[1] + cb[3]) / 2 * fc / 1000, "fs": fc}
+    data = lambda p: "data:font/otf;base64," + base64.b64encode(open(p, "rb").read()).decode()
+    return lay, [{"family": "BrandBold", "src": data(bold_p)}, {"family": "BrandRegular", "src": data(reg_p)}]
 
 
 def place_logo(logo, animal):
@@ -229,6 +259,7 @@ def main():
     ap.add_argument("--fg", default="#f0b24a")
     ap.add_argument("-o", "--out", default="logo_video.mp4")
     ap.add_argument("--still", type=float, action="append", help="also save a PNG of the frame at this time (s)")
+    ap.add_argument("--stills-only", action="store_true", help="render only the --still frames, not the video")
     a = ap.parse_args()
 
     work = os.path.splitext(os.path.abspath(a.out))[0] + "_work"
@@ -270,10 +301,7 @@ def main():
     bx0, by0, bx1, by1 = bb
     scene = {"W": W, "H": H, "fps": FPS, "bg": "file://" + bg_path, "wash": 0.4, "prims": prims,
              "card": {"bg": a.bg, "fg": a.fg, "name": a.name}, "logoBBox": [int(bx0), int(by0), int(bx1), int(by1)]}
-    lc = json.load(open(os.path.join(os.path.dirname(HERE), "dataset", "learned_results.json")))["card"]
-    # the designer's brand card: mark width / centre / name size as measured; a tall animal is limited by height instead
-    scene["cardLayout"] = {"markW": lc["mark_w"], "markHmax": 0.36, "markCy": lc["mark_cy"], "nameW": lc["name_w_over_mark_w"],
-                           "nameMinW": 0.38, "nameMaxW": 0.62, "nameMaxFont": round(lc["name_h"] * W / 0.9, 1), "gap": lc["gap"]}
+    scene["cardLayout"], scene["fonts"] = card_layout(a.name, W, H, bx0, by0, bx1, by1)
     T = {"washStart": -1.0, "washEnd": -0.5}          # the photo is faded from the first frame, as in the references
     if a.construction:
         # select all -> shape-builder sweep over the regions -> black -> delete cuts -> delete leftovers
@@ -323,6 +351,8 @@ def main():
     cmd = ["node", os.path.join(HERE, "render_video.cjs"), scene_path, os.path.abspath(a.out)]
     for s in a.still or []:
         cmd += ["--still", str(s)]
+    if a.stills_only:
+        cmd.append("--stills-only")
     subprocess.run(cmd, check=True)
     print("wrote", a.out)
 

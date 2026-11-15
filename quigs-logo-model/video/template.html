@@ -3,7 +3,8 @@
 <style>
   html, body { margin: 0; background: #000; }
   svg { display: block; }
-  text { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; font-weight: 700; }
+  text { font-family: 'BrandBold', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  #csign { font-family: 'BrandRegular', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
 </style></head>
 <body>
 <svg id="s" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
@@ -26,7 +27,7 @@
   <g id="card" visibility="hidden">
     <rect id="cardbg" width="1080" height="1920"/>
     <path id="cardp" fill-rule="evenodd"/>
-    <text id="name" text-anchor="middle" font-size="84" letter-spacing="-1.5"></text>
+    <text id="name"></text><text id="csign">&#169;</text>
   </g>
   <g id="cursor"><polygon points="0,0 0,34 9,26 15,40 21,37.5 15,24 27,24" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
     <g id="plus" stroke="#111" stroke-width="2.4" visibility="hidden"><path d="M30,36h14M37,29v14" stroke="#fff" stroke-width="5"/><path d="M30,36h14M37,29v14"/></g></g>
@@ -71,24 +72,20 @@ const paths = SC.paths.map(p => {
 });
 // shape-builder data
 const B = SC.build || null;
-// card layout, as measured on the designer's brand cards (dataset/learned_results.json): the mark
-// is scaled to a fixed share of the frame and centred a little above the middle, the name sits
-// under it at about three quarters of the mark's width. On the white card the mark stays where
-// it was built.
+// brand card, laid out in make_video.py from the measurements of the designer's own cards
+// (dataset/learned_card.json): fixed wordmark size, tight tracking, the (c) sign at its measured
+// size and place, symbol and name centred together. On the white card the mark stays where it
+// was built.
 const [bx0, by0, bx1, by1] = SC.logoBBox;
-const L = SC.cardLayout, mw = bx1 - bx0, mh = by1 - by0;
-const cardS = Math.min(L.markW * SC.W / mw, L.markHmax * SC.H / mh);
-const cardCx = SC.W / 2, cardCy = L.markCy * SC.H;
-const cardTf = `translate(${cardCx},${cardCy}) scale(${cardS}) translate(${-(bx0 + bx1) / 2},${-(by0 + by1) / 2})`;
-const nameEl = $('name');
-if (SC.card.name) {
-  nameEl.textContent = SC.card.name; nameEl.setAttribute('font-size', 100);
-  const want = Math.max(L.nameMinW * SC.W, Math.min(L.nameMaxW * SC.W, L.nameW * mw * cardS));
-  const fs = Math.min(L.nameMaxFont, 100 * want / Math.max(1, nameEl.getComputedTextLength()));
-  nameEl.setAttribute('font-size', fs.toFixed(1)); nameEl.setAttribute('letter-spacing', (-0.018 * fs).toFixed(2));
-  nameEl.setAttribute('x', SC.W / 2); nameEl.setAttribute('y', cardCy + mh * cardS / 2 + L.gap * SC.W + 0.72 * fs);
-  nameEl.innerHTML = SC.card.name + `<tspan font-size="${(0.36 * fs).toFixed(1)}" dy="${(-0.42 * fs).toFixed(1)}" dx="${(0.06 * fs).toFixed(1)}" font-weight="500">®</tspan>`;
-}
+const L = SC.cardLayout;
+const cardTf = `translate(${L.cx},${L.cy}) scale(${L.s}) translate(${-(bx0 + bx1) / 2},${-(by0 + by1) / 2})`;
+const nameEl = $('name'), signEl = $('csign');
+if (L.name) {
+  nameEl.textContent = SC.card.name;
+  nameEl.setAttribute('x', L.name.x.toFixed(2)); nameEl.setAttribute('y', L.name.y.toFixed(2));
+  nameEl.setAttribute('font-size', L.name.fs.toFixed(2)); nameEl.setAttribute('letter-spacing', L.name.ls.toFixed(2));
+  signEl.setAttribute('x', L.sign.x.toFixed(2)); signEl.setAttribute('y', L.sign.y.toFixed(2)); signEl.setAttribute('font-size', L.sign.fs.toFixed(2));
+} else signEl.setAttribute('visibility', 'hidden');
 
 const REST = [SC.W * 0.82, SC.H * 0.62];
 function cursorAt(t) {
@@ -182,11 +179,13 @@ window.setTime = function (t) {
     $('cardbg').setAttribute('fill', col ? SC.card.bg : '#fff');
     $('cardp').setAttribute('fill', col ? SC.card.fg : '#000');
     $('cardp').setAttribute('transform', col ? cardTf : '');
-    nameEl.setAttribute('fill', SC.card.fg);
-    nameEl.setAttribute('opacity', col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0);
+    nameEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('fill', SC.card.fg);
+    const o = col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0;
+    nameEl.setAttribute('opacity', o); signEl.setAttribute('opacity', o);
   }
 };
-window.ready = Promise.all([document.fonts.ready, $('photo').decode ? $('photo').decode().catch(() => {}) : null])
+const brandFonts = Promise.all((SC.fonts || []).map(f => new FontFace(f.family, `url(${f.src})`).load().then(ff => document.fonts.add(ff))));
+window.ready = Promise.all([brandFonts.then(() => document.fonts.ready), $('photo').decode ? $('photo').decode().catch(() => {}) : null])
   .then(() => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = SC.bg; }));
 setTime(0);
 </script>
