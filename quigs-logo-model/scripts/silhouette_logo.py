@@ -113,6 +113,11 @@ def combine(a):
             # The eye belongs where the animal's eye is in the photo. The drawing's own eye is
             # dropped and a perfect circle is cut at the real position.
             ys, xs = np.nonzero(sil); size0 = max(np.ptp(xs), np.ptp(ys)); eyes = json.load(open(a.eyes))["eyes"]
+            small = [ndimage.center_of_mass(lab == k) for k in range(1, n + 1) if (lab == k).sum() < 0.012 * sil.sum()]
+            if small and len(eyes) > 1:                 # a marked "eye" the drawing has no eye near is a look-alike (a cheek scale, a spot)
+                seen = [e for e in eyes if min(np.hypot(cx - e["x"], cy - e["y"]) for cy, cx in small) < 0.1 * size0]
+                if seen and len(seen) < len(eyes):
+                    print(f"   {len(eyes) - len(seen)} marked eye(s) with no eye in the drawing nearby: ignored"); eyes = seen
             for k in range(1, n + 1):
                 comp = lab == k; cy, cx = ndimage.center_of_mass(comp)
                 d = min(np.hypot(cx - e["x"], cy - e["y"]) for e in eyes)
