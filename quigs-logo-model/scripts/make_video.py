@@ -28,6 +28,10 @@ import potrace
 W, H, FPS = 1080, 1920, 30
 HERE = os.path.dirname(os.path.abspath(__file__))
 TRACKING = -0.077      # letter spacing of the wordmark in em, measured against the designer's cards with this typeface
+# Calibrated by measuring our own rendered cards with learn_brand_card.py and comparing with his:
+CAP_FIX = 0.99         # our capitals came out a little too tall
+SIGN_STROKE = 0.025    # the (c) sign's line was a third too thin (0.048 against his 0.073 cap): thickened by this many caps
+SIGN_DX = -0.042       # ... and it sat too far from the last letter (0.121 against his 0.067 cap)
 
 
 def cover(im, resample=Image.LANCZOS):
@@ -56,7 +60,7 @@ def card_layout(name, W, H, bx0, by0, bx1, by1):
     bold_p, reg_p = os.path.join(fdir, "texgyreheros-bold.otf"), os.path.join(fdir, "texgyreheros-regular.otf")
     bold, reg = ImageFont.truetype(bold_p, 1000), ImageFont.truetype(reg_p, 1000)
     hb = bold.getbbox("H", anchor="ls"); cap_em = (hb[3] - hb[1]) / 1000.0
-    cap = c["cap_over_frame_w"] * W; fs = cap / cap_em; track = TRACKING * fs
+    cap = c["cap_over_frame_w"] * W * CAP_FIX; fs = cap / cap_em; track = TRACKING * fs
     mw, mh = bx1 - bx0, by1 - by0
     s = min(c["mark_w"] * W / mw, learned["mark_h_p90"] * H / mh)     # his usual symbol width; a tall animal is limited by height
     block = mh * s + c["gap_over_cap"] * cap + cap; top = c["block_cy"] * H - block / 2
@@ -66,8 +70,8 @@ def card_layout(name, W, H, bx0, by0, bx1, by1):
         lay["name"] = {"x": W / 2 - ink_w / 2 - ink_l, "y": base, "fs": fs, "ls": track}
         cb = reg.getbbox(chr(169), anchor="ls"); d_em = ((cb[2] - cb[0]) + (cb[3] - cb[1])) / 2000.0
         fc = c["c_diameter_over_cap"] * cap / d_em
-        lay["sign"] = {"x": W / 2 + ink_w / 2 + c["c_gap_over_cap"] * cap - cb[0] * fc / 1000,
-                       "y": base - c["c_centre_over_cap"] * cap - (cb[1] + cb[3]) / 2 * fc / 1000, "fs": fc}
+        lay["sign"] = {"x": W / 2 + ink_w / 2 + (c["c_gap_over_cap"] + SIGN_DX) * cap - cb[0] * fc / 1000,
+                       "y": base - c["c_centre_over_cap"] * cap - (cb[1] + cb[3]) / 2 * fc / 1000, "fs": fc, "stroke": SIGN_STROKE * cap}
     data = lambda p: "data:font/otf;base64," + base64.b64encode(open(p, "rb").read()).decode()
     return lay, [{"family": "BrandBold", "src": data(bold_p)}, {"family": "BrandRegular", "src": data(reg_p)}]
 

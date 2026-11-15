@@ -8,8 +8,9 @@ photo itself.
 
   prompt: "Reproduce image 1 exactly: same framing, same size, same position, nothing moved and
            nothing else changed. The only difference: paint each visible eye of the animal
-           solid flat pure magenta (#FF00FF), covering exactly the whole visible eye and following
-           its exact outline and shape. Nothing outside the eye is painted."
+           solid flat pure magenta (#FF00FF), covering exactly the whole visible eye opening
+           between the eyelids, pointed corners included, and following its exact outline and
+           shape. Nothing outside the eye is painted."
 
   python3 locate_eyes.py --photo bg.png --cutout cutout.png --annotated marked.png --out work/eyes.json
 """

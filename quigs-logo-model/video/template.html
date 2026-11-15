@@ -85,6 +85,7 @@ if (L.name) {
   nameEl.setAttribute('x', L.name.x.toFixed(2)); nameEl.setAttribute('y', L.name.y.toFixed(2));
   nameEl.setAttribute('font-size', L.name.fs.toFixed(2)); nameEl.setAttribute('letter-spacing', L.name.ls.toFixed(2));
   signEl.setAttribute('x', L.sign.x.toFixed(2)); signEl.setAttribute('y', L.sign.y.toFixed(2)); signEl.setAttribute('font-size', L.sign.fs.toFixed(2));
+  signEl.setAttribute('stroke-width', (L.sign.stroke || 0).toFixed(2)); signEl.setAttribute('stroke-linejoin', 'round');
 } else signEl.setAttribute('visibility', 'hidden');
 
 const REST = [SC.W * 0.82, SC.H * 0.62];
@@ -179,9 +180,9 @@ window.setTime = function (t) {
     $('cardbg').setAttribute('fill', col ? SC.card.bg : '#fff');
     $('cardp').setAttribute('fill', col ? SC.card.fg : '#000');
     $('cardp').setAttribute('transform', col ? cardTf : '');
-    nameEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('fill', SC.card.fg);
+    nameEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('stroke', SC.card.fg);
     const o = col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0;
-    nameEl.setAttribute('opacity', o); signEl.setAttribute('opacity', o);
+    nameEl.setAttribute('opacity', o); signEl.setAttribute('opacity', o); signEl.setAttribute('stroke-opacity', o);
   }
 };
 const brandFonts = Promise.all((SC.fonts || []).map(f => new FontFace(f.family, `url(${f.src})`).load().then(ff => document.fonts.add(ff))));

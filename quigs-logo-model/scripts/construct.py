@@ -622,7 +622,8 @@ def dp_chain(P, mask, tmin, prm=None, log=None):
     if N - B[-1] < m // 2 + 1:
         B.pop()
     B.append(N); K = len(B) - 1                          # breakpoints 0..K, B[K] closes the ring
-    rmin, rmax, emax = prm["oval_min_r"] * size, prm["circle_max_r"] * size, prm["ell_max_r"] * size
+    ref = prm.get("size_ref") or size                   # circle sizes are judged against the whole animal, not this one piece
+    rmin, rmax, emax = prm["oval_min_r"] * ref, prm["circle_max_r"] * ref, prm["ell_max_r"] * ref
 
     def line_ok(a, b):
         i = _sub(a, b); _, _, r = _line_fit(P2[i], w2[i])
@@ -674,7 +675,9 @@ def dp_chain(P, mask, tmin, prm=None, log=None):
         for fn, lo_a, hi_a, on in ((circle, lo_c, hi_c, True), (ellipse, lo_e, hi_e, prm["ell_cost"] < 50)):
             if not on:
                 continue
-            L = max(3, reach_l[k] - k + 1); last = None  # ovals: a ladder of lengths beyond what a stroke can do
+            # ovals: a ladder of lengths. Normally only beyond what a stroke can do; when arcs are
+            # preferred to strokes (arc_cost below 1) every length is tried, so a circle is used wherever one fits
+            L = 3 if prm["arc_cost"] < 1.0 else max(3, reach_l[k] - k + 1); last = None
             while k + L <= top:
                 if fn(B[k], B[k + L]) is not None:
                     lo_a[k] = min(lo_a[k], k + L); last = k + L
@@ -703,7 +706,7 @@ def dp_chain(P, mask, tmin, prm=None, log=None):
             if ok.any():
                 if typ != "line" and "arc_long_rel" in prm:     # a long sweep is a real curve, not a rounded corner: cheaper
                     span = (B[j] - Barr[:j]) * STEP
-                    cost = np.where(span >= prm["arc_long_rel"] * size, min(cost, prm["arc_cost_long" if typ == "circle" else "ell_cost_long"]), cost)
+                    cost = np.where(span >= prm["arc_long_rel"] * ref, min(cost, prm["arc_cost_long" if typ == "circle" else "ell_cost_long"]), cost)
                 c = np.where(ok, f[:j] + cost, 1e9); i = int(np.argmin(c))
                 if c[i] + corner[j] < f[j]:
                     f[j] = c[i] + corner[j]; back[j] = (i, typ)
@@ -1056,7 +1059,10 @@ def merge_plan(guides, body, max_steps=18, min_face=220):
 def fit_mask(mask, eps, share=True, shapes_first=False, delta=None, log=None, prm=None):
     """shapes_first: the big outline is built from body-mass ovals and straight strokes (the way
     the reference clips are built). Otherwise: free line/arc fit, optionally sharing shapes."""
-    chains = []; prm = prm or PARAMS
+    chains = []; prm = dict(prm or PARAMS)
+    ys_, xs_ = np.nonzero(mask)
+    if len(xs_):
+        prm["size_ref"] = float(max(np.ptp(xs_), np.ptp(ys_)))
     for P in outline_points(mask):
         big = len(P) * STEP > 260
         P = ndimage.gaussian_filter1d(P, prm["contour_sigma"] if (shapes_first is True and big) else 1.2, axis=0, mode="wrap")
