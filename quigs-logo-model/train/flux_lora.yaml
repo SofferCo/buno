@@ -1,0 +1,64 @@
+# ai-toolkit (github.com/ostris/ai-toolkit) config: FLUX.1-dev style LoRA for QUIGS logos.
+# Run:  python run.py train/flux_lora.yaml        (from the ai-toolkit checkout, after
+#       copying quigs-logo-model/train_data there; see README.md)
+# Needs a GPU with >= 24 GB VRAM (A100 40/80, H100, L40S, RTX 4090 with low_vram).
+job: extension
+config:
+  name: quigs_logo_flux_lora
+  process:
+    - type: sd_trainer
+      training_folder: output
+      device: cuda:0
+      trigger_word: QUIGS
+      network:
+        type: lora
+        linear: 16
+        linear_alpha: 16
+      save:
+        dtype: float16
+        save_every: 250
+        max_step_saves_to_keep: 6
+      datasets:
+        - folder_path: train_data
+          caption_ext: txt
+          caption_dropout_rate: 0.05
+          shuffle_tokens: false
+          cache_latents_to_disk: true
+          resolution: [768, 1024]
+      train:
+        batch_size: 1
+        steps: 2000
+        gradient_accumulation_steps: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: flowmatch
+        optimizer: adamw8bit
+        lr: 1.0e-4
+        ema_config:
+          use_ema: true
+          ema_decay: 0.99
+        dtype: bf16
+      model:
+        name_or_path: black-forest-labs/FLUX.1-dev
+        is_flux: true
+        quantize: true
+        low_vram: false
+      sample:
+        sampler: flowmatch
+        sample_every: 250
+        width: 1024
+        height: 1024
+        prompts:
+          - "QUIGS logo mark, a horse galloping in side profile with a flowing mane, geometric minimalist flat black silhouette, bold negative-space cuts, solid white background, vector icon"
+          - "QUIGS logo mark, a fox pouncing in side profile with a bushy tail raised, geometric minimalist flat black silhouette, bold negative-space cuts, solid white background, vector icon"
+          - "QUIGS logo mark, a bear face seen from the front with round ears, symmetrical, geometric minimalist flat black silhouette, bold negative-space cuts, solid white background, vector icon"
+          - "QUIGS logo mark, an owl perched in side profile, geometric minimalist flat black silhouette, bold negative-space cuts, solid white background, vector icon"
+        neg: ""
+        seed: 42
+        walk_seed: true
+        guidance_scale: 4
+        sample_steps: 20
+meta:
+  name: quigs_logo_flux_lora
+  version: "1.0"

@@ -1,0 +1,58 @@
+# ai-toolkit config: FLUX.1 Kontext [dev] LoRA that maps an animal PHOTO to its QUIGS logo.
+# Control image = dataset/control/<stem>.png (photo crop aligned to the logo),
+# target        = dataset/logos/<stem>.png, caption = dataset/captions/<stem>.txt.
+# Build the folders with scripts/prepare_training_data.py --kontext, then: python run.py train/kontext_lora.yaml
+job: extension
+config:
+  name: quigs_kontext_lora
+  process:
+    - type: sd_trainer
+      training_folder: output
+      device: cuda:0
+      trigger_word: QUIGS
+      network:
+        type: lora
+        linear: 32
+        linear_alpha: 32
+      save:
+        dtype: float16
+        save_every: 250
+        max_step_saves_to_keep: 6
+      datasets:
+        - folder_path: train_data
+          control_path: train_control
+          caption_ext: txt
+          caption_dropout_rate: 0.05
+          cache_latents_to_disk: true
+          resolution: [768, 1024]
+      train:
+        batch_size: 1
+        steps: 2500
+        gradient_accumulation_steps: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: flowmatch
+        optimizer: adamw8bit
+        lr: 1.0e-4
+        timestep_type: weighted
+        dtype: bf16
+      model:
+        name_or_path: black-forest-labs/FLUX.1-Kontext-dev
+        arch: flux_kontext
+        quantize: true
+      sample:
+        sampler: flowmatch
+        sample_every: 250
+        width: 1024
+        height: 1024
+        prompts:
+          - "--ctrl_img holdout_control/29_horse_holdout.png Turn this photo into a QUIGS logo mark: geometric minimalist flat black silhouette with bold negative-space cuts on a solid white background"
+          - "--ctrl_img holdout_control/28_fox_holdout.png Turn this photo into a QUIGS logo mark: geometric minimalist flat black silhouette with bold negative-space cuts on a solid white background"
+          - "--ctrl_img holdout_control/32_bear_holdout.png Turn this photo into a QUIGS logo mark: geometric minimalist flat black silhouette with bold negative-space cuts on a solid white background"
+        seed: 42
+        guidance_scale: 2.5
+        sample_steps: 20
+meta:
+  name: quigs_kontext_lora
+  version: "1.0"

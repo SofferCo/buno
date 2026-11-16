@@ -1,0 +1,67 @@
+{
+ "stem": "09_bison_train",
+ "size": 397,
+ "cuts": 6,
+ "cut_area_share": 0.020243147149902514,
+ "parts": 1,
+ "regions": {
+  "regions": 16,
+  "kept": 13,
+  "thrown": 2,
+  "decided_area_share": 0.9893861666371838,
+  "kept_area_share": 0.9840202842148712
+ },
+ "added_to_animal": 0.023645678021179797,
+ "removed_from_animal": 0.06742742377213803,
+ "cut_list": [
+  {
+   "area_share": 0.007684367473334098,
+   "width_rel": 0.038366615142891226,
+   "elongation": 1.732758620689655,
+   "enclosed": true,
+   "cx_rel": 0.8367795781796308,
+   "cy_rel": 0.17597779365139038
+  },
+  {
+   "area_share": 0.004950873571128188,
+   "width_rel": 0.035622507868339925,
+   "elongation": 1.2949999999999997,
+   "enclosed": false,
+   "cx_rel": 0.05714674732306975,
+   "cy_rel": 0.2031743870534804
+  },
+  {
+   "area_share": 0.0028864166379936537,
+   "width_rel": 0.03225755283341485,
+   "elongation": 0.9207317073170732,
+   "enclosed": true,
+   "cx_rel": 0.90678432615477,
+   "cy_rel": 0.24778554389710908
+  },
+  {
+   "area_share": 0.0013954199640631572,
+   "width_rel": 0.01593086982452584,
+   "elongation": 1.8249999999999997,
+   "enclosed": false,
+   "cx_rel": 0.20817087057037373,
+   "cy_rel": 0.3427763017149168
+  },
+  {
+   "area_share": 0.0007454983369652483,
+   "width_rel": 0.011264826083122367,
+   "elongation": 1.9499999999999997,
+   "enclosed": false,
+   "cx_rel": 0.9331524898275527,
+   "cy_rel": 0.38132144933152484
+  },
+  {
+   "area_share": 0.0025805711664181673,
+   "width_rel": 0.02518891687657431,
+   "elongation": 1.35,
+   "enclosed": false,
+   "cx_rel": 0.49099729452374286,
+   "cy_rel": 0.38792797835619
+  }
+ ],
+ "card": null
+}

@@ -1,0 +1,358 @@
+{
+ "clips": 32,
+ "ovals_per_clip": {
+  "median": 7.0,
+  "p25": 5.75,
+  "p75": 10.0
+ },
+ "lines_per_clip": {
+  "median": 35.5,
+  "p25": 24.75,
+  "p75": 40.25
+ },
+ "outline_on_ovals": 0.30666510025062654,
+ "outline_on_lines": 0.6173201487102833,
+ "outline_unexplained": 0.025994148653306876,
+ "mark_vs_animal_iou": 0.7910322010562439,
+ "oval": {
+  "circle_share": 0.42338709677419356,
+  "ellipse_axis_aligned_share": 0.5034965034965035,
+  "ellipse_aspect_median": 1.5451640048445514,
+  "rel_size_median": 0.12804455983361046,
+  "rel_size_p75": 0.197692639015528,
+  "big_edge_on_outline_median": 0.34444444444444444,
+  "big_edge_on_outline_p25": 0.26666666666666666,
+  "big_edge_on_outline_p75": 0.44166666666666665,
+  "big_inside_mark_median": 0.5433515068908072,
+  "big_inside_mark_p25": 0.19909913849613547,
+  "big_inside_animal_median": 0.6074939870880628
+ },
+ "line": {
+  "rel_len_median": 0.12578389458619682,
+  "rel_len_p75": 0.2567985705449379,
+  "horizontal_or_vertical_share": 0.16618357487922705,
+  "on_outline_median": 0.525
+ },
+ "per_clip": [
+  {
+   "stem": "01_wolf_train",
+   "size": 458,
+   "ovals": 6,
+   "lines": 43,
+   "outline_on_ovals": 0.3082706766917293,
+   "outline_on_lines": 0.6569548872180451,
+   "outline_unexplained": 0.03477443609022557,
+   "mark_vs_animal_iou": 0.8450481495468278
+  },
+  {
+   "stem": "02_maned-wolf_train",
+   "size": 372,
+   "ovals": 8,
+   "lines": 37,
+   "outline_on_ovals": 0.22135619641465315,
+   "outline_on_lines": 0.7778643803585347,
+   "outline_unexplained": 0.000779423226812237,
+   "mark_vs_animal_iou": 0.8460651959170233
+  },
+  {
+   "stem": "03_hyena_train",
+   "size": 488,
+   "ovals": 6,
+   "lines": 37,
+   "outline_on_ovals": 0.1706379707916987,
+   "outline_on_lines": 0.8224442736356649,
+   "outline_unexplained": 0.006917755572636408,
+   "mark_vs_animal_iou": 0.752609914693074
+  },
+  {
+   "stem": "04_cheetah_train",
+   "size": 471,
+   "ovals": 4,
+   "lines": 37,
+   "outline_on_ovals": 0.18941798941798943,
+   "outline_on_lines": 0.8074074074074075,
+   "outline_unexplained": 0.0031746031746030523,
+   "mark_vs_animal_iou": 0.743597621189844
+  },
+  {
+   "stem": "05_snow-leopard_train",
+   "size": 550,
+   "ovals": 6,
+   "lines": 33,
+   "outline_on_ovals": 0.2302231237322515,
+   "outline_on_lines": 0.7434077079107505,
+   "outline_unexplained": 0.026369168356997985,
+   "mark_vs_animal_iou": 0.8659050424773911
+  },
+  {
+   "stem": "06_ferret_train",
+   "size": 464,
+   "ovals": 10,
+   "lines": 50,
+   "outline_on_ovals": 0.40950455005055614,
+   "outline_on_lines": 0.5824064711830131,
+   "outline_unexplained": 0.008088978766430777,
+   "mark_vs_animal_iou": 0.7910322010562439
+  },
+  {
+   "stem": "07_hare_train",
+   "size": 412,
+   "ovals": 5,
+   "lines": 25,
+   "outline_on_ovals": 0.3310344827586207,
+   "outline_on_lines": 0.6537931034482759,
+   "outline_unexplained": 0.015172413793103412,
+   "mark_vs_animal_iou": 0.7903962973676598
+  },
+  {
+   "stem": "08_rhino_train",
+   "size": 441,
+   "ovals": 9,
+   "lines": 55,
+   "outline_on_ovals": 0.2591549295774648,
+   "outline_on_lines": 0.6788732394366197,
+   "outline_unexplained": 0.06197183098591552,
+   "mark_vs_animal_iou": 0.8884814454057565
+  },
+  {
+   "stem": "09_bison_train",
+   "size": 397,
+   "ovals": 8,
+   "lines": 29,
+   "outline_on_ovals": 0.2782258064516129,
+   "outline_on_lines": 0.7056451612903226,
+   "outline_unexplained": 0.016129032258064502,
+   "mark_vs_animal_iou": 0.910675185756847
+  },
+  {
+   "stem": "10_moose_train",
+   "size": 371,
+   "ovals": 5,
+   "lines": 42,
+   "outline_on_ovals": 0.11996779388083736,
+   "outline_on_lines": 0.8631239935587761,
+   "outline_unexplained": 0.01690821256038655,
+   "mark_vs_animal_iou": 0.8007341998214108
+  },
+  {
+   "stem": "11_elk_train",
+   "size": 478,
+   "ovals": 7,
+   "lines": 40,
+   "outline_on_ovals": 0.2380566801619433,
+   "outline_on_lines": 0.6388663967611335,
+   "outline_unexplained": 0.1230769230769232,
+   "mark_vs_animal_iou": 0.8243344977113949
+  },
+  {
+   "stem": "12_polar-bear_train",
+   "size": 455,
+   "ovals": 15,
+   "lines": 57,
+   "outline_on_ovals": 0.8116402116402116,
+   "outline_on_lines": 0.1492063492063492,
+   "outline_unexplained": 0.03915343915343919,
+   "mark_vs_animal_iou": 0.8719153393511815
+  },
+  {
+   "stem": "13_lemur_train",
+   "size": 434,
+   "ovals": 13,
+   "lines": 41,
+   "outline_on_ovals": 0.623398804440649,
+   "outline_on_lines": 0.35098206660973524,
+   "outline_unexplained": 0.025619128949615766,
+   "mark_vs_animal_iou": 0.7028248771969907
+  },
+  {
+   "stem": "14_monkey_train",
+   "size": 427,
+   "ovals": 4,
+   "lines": 36,
+   "outline_on_ovals": 0.3721973094170404,
+   "outline_on_lines": 0.6278026905829597,
+   "outline_unexplained": 0.0,
+   "mark_vs_animal_iou": 0.7645333822083743
+  },
+  {
+   "stem": "15_elephant_train",
+   "size": 432,
+   "ovals": 10,
+   "lines": 26,
+   "outline_on_ovals": 0.4413533834586466,
+   "outline_on_lines": 0.5428571428571428,
+   "outline_unexplained": 0.015789473684210575,
+   "mark_vs_animal_iou": 0.8360993905297702
+  },
+  {
+   "stem": "16_swan_train",
+   "size": 338,
+   "ovals": 9,
+   "lines": 38,
+   "outline_on_ovals": 0.5144766146993318,
+   "outline_on_lines": 0.40200445434298443,
+   "outline_unexplained": 0.08351893095768376,
+   "mark_vs_animal_iou": 0.8595553224114276
+  },
+  {
+   "stem": "17_penguin_train",
+   "size": 409,
+   "ovals": 13,
+   "lines": 24,
+   "outline_on_ovals": 0.72,
+   "outline_on_lines": 0.26476190476190475,
+   "outline_unexplained": 0.015238095238095273,
+   "mark_vs_animal_iou": 0.9239982657079886
+  },
+  {
+   "stem": "18_kiwi_train",
+   "size": 407,
+   "ovals": 3,
+   "lines": 9,
+   "outline_on_ovals": 0.3929824561403509,
+   "outline_on_lines": 0.15087719298245614,
+   "outline_unexplained": 0.45614035087719296,
+   "mark_vs_animal_iou": 0.7692205765436825
+  },
+  {
+   "stem": "19_eagle_train",
+   "size": 514,
+   "ovals": 5,
+   "lines": 51,
+   "outline_on_ovals": 0.17476635514018693,
+   "outline_on_lines": 0.8065420560747664,
+   "outline_unexplained": 0.01869158878504673,
+   "mark_vs_animal_iou": 0.7571780833368161
+  },
+  {
+   "stem": "20_secretary-bird_train",
+   "size": 503,
+   "ovals": 7,
+   "lines": 15,
+   "outline_on_ovals": 0.17579250720461095,
+   "outline_on_lines": 0.2818443804034582,
+   "outline_unexplained": 0.5423631123919308,
+   "mark_vs_animal_iou": 0.7381455967671421
+  },
+  {
+   "stem": "21_bee_train",
+   "size": 451,
+   "ovals": 10,
+   "lines": 14,
+   "outline_on_ovals": 0.5320261437908497,
+   "outline_on_lines": 0.16013071895424835,
+   "outline_unexplained": 0.307843137254902,
+   "mark_vs_animal_iou": 0.5095804784228873
+  },
+  {
+   "stem": "22_butterfly_train",
+   "size": 466,
+   "ovals": 7,
+   "lines": 11,
+   "outline_on_ovals": 0.2970561998215879,
+   "outline_on_lines": 0.2586975914362177,
+   "outline_unexplained": 0.4442462087421944,
+   "mark_vs_animal_iou": 0.858308649465282
+  },
+  {
+   "stem": "23_moth_train",
+   "size": 489,
+   "ovals": 10,
+   "lines": 8,
+   "outline_on_ovals": 0.34805537244561635,
+   "outline_on_lines": 0.22017139090309823,
+   "outline_unexplained": 0.4317732366512854,
+   "mark_vs_animal_iou": 0.7595883592926572
+  },
+  {
+   "stem": "24_shrimp_train",
+   "size": 388,
+   "ovals": 6,
+   "lines": 34,
+   "outline_on_ovals": 0.30097087378640774,
+   "outline_on_lines": 0.0016181229773462784,
+   "outline_unexplained": 0.6974110032362459,
+   "mark_vs_animal_iou": 0.5563822489578386
+  },
+  {
+   "stem": "25_badger_train",
+   "size": 319,
+   "ovals": 6,
+   "lines": 32,
+   "outline_on_ovals": 0.3606837606837607,
+   "outline_on_lines": 0.6068376068376068,
+   "outline_unexplained": 0.032478632478632474,
+   "mark_vs_animal_iou": 0.12086408369128993
+  },
+  {
+   "stem": "26_espeon_train",
+   "size": 471,
+   "ovals": 13,
+   "lines": 3,
+   "outline_on_ovals": 0.5789473684210527,
+   "outline_on_lines": 0.013582342954159592,
+   "outline_unexplained": 0.40747028862478774,
+   "mark_vs_animal_iou": 0.9456036033889015
+  },
+  {
+   "stem": "27_red-panda_train",
+   "size": 530,
+   "ovals": 4,
+   "lines": 33,
+   "outline_on_ovals": 0.23746452223273415,
+   "outline_on_lines": 0.7559129612109745,
+   "outline_unexplained": 0.0066225165562913135,
+   "mark_vs_animal_iou": 0.36556780513492165
+  },
+  {
+   "stem": "28_fox_holdout",
+   "size": 517,
+   "ovals": 1,
+   "lines": 22,
+   "outline_on_ovals": 0.13245033112582782,
+   "outline_on_lines": 0.8675496688741722,
+   "outline_unexplained": 0.0,
+   "mark_vs_animal_iou": 0.8673228122151322
+  },
+  {
+   "stem": "29_horse_holdout",
+   "size": 507,
+   "ovals": 6,
+   "lines": 38,
+   "outline_on_ovals": 0.23211169284467714,
+   "outline_on_lines": 0.756544502617801,
+   "outline_unexplained": 0.011343804537521818,
+   "mark_vs_animal_iou": 0.7834513190057458
+  },
+  {
+   "stem": "30_serval_holdout",
+   "size": 436,
+   "ovals": 10,
+   "lines": 35,
+   "outline_on_ovals": 0.30505952380952384,
+   "outline_on_lines": 0.6703869047619048,
+   "outline_unexplained": 0.024553571428571397,
+   "mark_vs_animal_iou": 0.7761166996405383
+  },
+  {
+   "stem": "31_gazelle_holdout",
+   "size": 428,
+   "ovals": 15,
+   "lines": 43,
+   "outline_on_ovals": 0.40356394129979034,
+   "outline_on_lines": 0.5429769392033543,
+   "outline_unexplained": 0.053459119496855334,
+   "mark_vs_animal_iou": 0.7687835108975698
+  },
+  {
+   "stem": "32_bear_holdout",
+   "size": 369,
+   "ovals": 7,
+   "lines": 37,
+   "outline_on_ovals": 0.467382328654005,
+   "outline_on_lines": 0.4318744838976053,
+   "outline_unexplained": 0.10074318744838973,
+   "mark_vs_animal_iou": 0.48451071378351773
+  }
+ ]
+}

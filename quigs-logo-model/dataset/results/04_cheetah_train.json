@@ -1,0 +1,54 @@
+{
+ "stem": "04_cheetah_train",
+ "size": 471,
+ "cuts": 3,
+ "cut_area_share": 0.08148926895561424,
+ "parts": 2,
+ "regions": {
+  "regions": 27,
+  "kept": 16,
+  "thrown": 11,
+  "decided_area_share": 1.0,
+  "kept_area_share": 0.953984153087158
+ },
+ "added_to_animal": 0.05836047078130208,
+ "removed_from_animal": 0.15915647753812337,
+ "cut_list": [
+  {
+   "area_share": 0.0031026436575296804,
+   "width_rel": 0.021231422505307854,
+   "elongation": 1.21,
+   "enclosed": true,
+   "cx_rel": 0.9357617869488165,
+   "cy_rel": 0.06853713744275416
+  },
+  {
+   "area_share": 0.07066847867894048,
+   "width_rel": 0.051132036427992765,
+   "elongation": 4.751724137931035,
+   "enclosed": false,
+   "cx_rel": 0.565633291117007,
+   "cy_rel": 0.26236137175327173
+  },
+  {
+   "area_share": 0.007718146619144081,
+   "width_rel": 0.021231422505307854,
+   "elongation": 3.01,
+   "enclosed": false,
+   "cx_rel": 0.48904924138222905,
+   "cy_rel": 0.39091210473227944
+  }
+ ],
+ "card": {
+  "mark_w": 0.6648148148148149,
+  "mark_h": 0.16041666666666668,
+  "mark_cy": 0.4515625,
+  "mark_cx": 0.49074074074074076,
+  "name_h": 0.1111111111111111,
+  "name_w": 0.43333333333333335,
+  "name_w_over_mark_w": 0.6518105849582173,
+  "gap": 0.044444444444444446,
+  "name_cx": 0.5175925925925926,
+  "mark_lighter_than_card": false
+ }
+}

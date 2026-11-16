@@ -1,0 +1,54 @@
+{
+ "stem": "28_fox_holdout",
+ "size": 517,
+ "cuts": 3,
+ "cut_area_share": 0.033199179892171006,
+ "parts": 1,
+ "regions": {
+  "regions": 61,
+  "kept": 55,
+  "thrown": 6,
+  "decided_area_share": 1.0,
+  "kept_area_share": 0.9719499321369326
+ },
+ "added_to_animal": 0.06749183688966512,
+ "removed_from_animal": 0.09180866169684061,
+ "cut_list": [
+  {
+   "area_share": 0.0013668463816538842,
+   "width_rel": 0.013947973986321041,
+   "elongation": 1.730769230769231,
+   "enclosed": false,
+   "cx_rel": 0.4935740382548894,
+   "cy_rel": 0.2227810015044058
+  },
+  {
+   "area_share": 0.02868858683271319,
+   "width_rel": 0.0425531914893617,
+   "elongation": 3.902892561983471,
+   "enclosed": false,
+   "cx_rel": 0.786047287922647,
+   "cy_rel": 0.28654543816230166
+  },
+  {
+   "area_share": 0.0031437466778039334,
+   "width_rel": 0.02083235902179692,
+   "elongation": 1.78448275862069,
+   "enclosed": false,
+   "cx_rel": 0.2873788766480718,
+   "cy_rel": 0.25284295312047406
+  }
+ ],
+ "card": {
+  "mark_w": 0.7185185185185186,
+  "mark_h": 0.26458333333333334,
+  "mark_cy": 0.4421875,
+  "mark_cx": 0.49722222222222223,
+  "name_h": 0.09444444444444444,
+  "name_w": 0.387037037037037,
+  "name_w_over_mark_w": 0.538659793814433,
+  "gap": 0.07222222222222222,
+  "name_cx": 0.524074074074074,
+  "mark_lighter_than_card": false
+ }
+}

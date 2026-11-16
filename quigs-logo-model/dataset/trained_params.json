@@ -1,0 +1,310 @@
+{
+ "params": {
+  "tol_rel": 0.004,
+  "oval_delta_mult": 1.0,
+  "line_tau_mult": 1.6,
+  "oval_inside_min": 0.86,
+  "oval_max_r": 0.5,
+  "oval_min_r": 0.045,
+  "oval_max_aspect": 4.0,
+  "oval_min_cover": 0.0,
+  "oval_min_gain": 0.045,
+  "oval_max_k": 6,
+  "circle_bonus": 1.08,
+  "contour_sigma": 1.2,
+  "curl_max_r": 0.075,
+  "curl_min_span": 1.5,
+  "thick_k": 0.1,
+  "tol_max_rel": 0.03,
+  "arc_cost": 1.5,
+  "ell_cost": 2.9,
+  "arc_min_sweep": 0.9,
+  "ell_min_sweep": 1.2,
+  "circle_max_r": 0.25,
+  "ell_max_r": 0.35,
+  "ell_max_aspect": 2.0
+ },
+ "trained_on": [
+  "01_wolf_train",
+  "02_maned-wolf_train",
+  "03_hyena_train",
+  "04_cheetah_train",
+  "05_snow-leopard_train",
+  "06_ferret_train",
+  "07_hare_train",
+  "08_rhino_train",
+  "09_bison_train",
+  "10_moose_train",
+  "11_elk_train",
+  "12_polar-bear_train",
+  "13_lemur_train",
+  "14_monkey_train",
+  "15_elephant_train",
+  "16_swan_train",
+  "17_penguin_train",
+  "18_kiwi_train",
+  "19_eagle_train",
+  "20_secretary-bird_train",
+  "22_butterfly_train",
+  "23_moth_train",
+  "26_espeon_train"
+ ],
+ "held_out": [
+  "28_fox_holdout",
+  "29_horse_holdout",
+  "30_serval_holdout",
+  "31_gazelle_holdout"
+ ],
+ "earlier_method": {
+  "train": {
+   "mark": 0.8109664159783982,
+   "ovals": 0.11001884588841113,
+   "strokes": 0.24264502180512723,
+   "counts": 0.6508734109757789,
+   "length": 0.8300340212919078,
+   "n_ovals": 5.521739130434782,
+   "n_lines": 28.304347826086957,
+   "fix_mark": 0.9628571245364587,
+   "fix_ovals": 0.19374849312658418,
+   "fix_strokes": 0.46388540967579495,
+   "fix_n_ovals": 7.521739130434782,
+   "fix_n_lines": 34.04347826086956,
+   "total": 0.5909276410204202
+  },
+  "holdout": {
+   "mark": 0.7849727558593868,
+   "ovals": 0.07878787878787878,
+   "strokes": 0.3336313345391452,
+   "counts": 0.5843351275917066,
+   "length": 0.7925398449885865,
+   "n_ovals": 4.25,
+   "n_lines": 30.75,
+   "fix_mark": 0.9541695423151492,
+   "fix_ovals": 0.14488636363636365,
+   "fix_strokes": 0.5885964780666877,
+   "fix_n_ovals": 6.0,
+   "fix_n_lines": 37.0,
+   "total": 0.5920479498334137
+  }
+ },
+ "before": {
+  "train": {
+   "mark": 0.815082727140762,
+   "ovals": 0.0737781542129368,
+   "strokes": 0.2907413551894352,
+   "counts": 0.654814220651351,
+   "length": 0.8159034237001227,
+   "n_ovals": 2.9130434782608696,
+   "n_lines": 27.26086956521739,
+   "fix_mark": 0.9846069410698643,
+   "fix_ovals": 0.2854864799877587,
+   "fix_strokes": 0.5417554719912129,
+   "fix_n_ovals": 3.347826086956522,
+   "fix_n_lines": 32.26086956521739,
+   "total": 0.6216670129705094
+  },
+  "holdout": {
+   "mark": 0.8033950728864298,
+   "ovals": 0.04166666666666667,
+   "strokes": 0.40472411273986475,
+   "counts": 0.5898936007947636,
+   "length": 0.7912326388888888,
+   "n_ovals": 3.0,
+   "n_lines": 28.5,
+   "fix_mark": 0.9816817715452549,
+   "fix_ovals": 0.2142857142857143,
+   "fix_strokes": 0.6723410576351754,
+   "fix_n_ovals": 2.0,
+   "fix_n_lines": 36.0,
+   "total": 0.6270731611062341
+  }
+ },
+ "after": {
+  "train": {
+   "mark": 0.8212583794848523,
+   "ovals": 0.0811940842186589,
+   "strokes": 0.2651126036748785,
+   "counts": 0.7182134397084036,
+   "length": 0.8190331611094487,
+   "n_ovals": 8.73913043478261,
+   "n_lines": 27.565217391304348,
+   "fix_mark": 0.9843304205073052,
+   "fix_ovals": 0.4258743402840859,
+   "fix_strokes": 0.5346409048114941,
+   "fix_n_ovals": 6.043478260869565,
+   "fix_n_lines": 28.08695652173913,
+   "total": 0.6464615434161227
+  },
+  "holdout": {
+   "mark": 0.8065391704810023,
+   "ovals": 0.09986631016042782,
+   "strokes": 0.406824967599124,
+   "counts": 0.7632201953748007,
+   "length": 0.8470090818077802,
+   "n_ovals": 8.75,
+   "n_lines": 29.75,
+   "fix_mark": 0.9835415879852079,
+   "fix_ovals": 0.5416666666666666,
+   "fix_strokes": 0.6902893678852677,
+   "fix_n_ovals": 6.75,
+   "fix_n_lines": 27.75,
+   "total": 0.7015785984966921
+  }
+ },
+ "search": [
+  {
+   "pass": 1,
+   "param": "thick_k",
+   "from": 0.22,
+   "to": 0.1,
+   "train_total": 0.6245
+  },
+  {
+   "pass": 1,
+   "param": "tol_max_rel",
+   "from": 0.03,
+   "to": 0.03,
+   "train_total": 0.6245
+  },
+  {
+   "pass": 1,
+   "param": "tol_rel",
+   "from": 0.0075,
+   "to": 0.0075,
+   "train_total": 0.6245
+  },
+  {
+   "pass": 1,
+   "param": "arc_cost",
+   "from": 2.2,
+   "to": 1.5,
+   "train_total": 0.6307
+  },
+  {
+   "pass": 1,
+   "param": "ell_cost",
+   "from": 2.9,
+   "to": 2.9,
+   "train_total": 0.6307
+  },
+  {
+   "pass": 1,
+   "param": "arc_min_sweep",
+   "from": 0.6,
+   "to": 0.6,
+   "train_total": 0.6307
+  },
+  {
+   "pass": 1,
+   "param": "ell_min_sweep",
+   "from": 1.6,
+   "to": 1.2,
+   "train_total": 0.6379
+  },
+  {
+   "pass": 1,
+   "param": "circle_max_r",
+   "from": 0.25,
+   "to": 0.25,
+   "train_total": 0.6379
+  },
+  {
+   "pass": 1,
+   "param": "ell_max_r",
+   "from": 0.35,
+   "to": 0.35,
+   "train_total": 0.6379
+  },
+  {
+   "pass": 1,
+   "param": "ell_max_aspect",
+   "from": 2.6,
+   "to": 2.0,
+   "train_total": 0.6405
+  },
+  {
+   "pass": 1,
+   "param": "oval_min_r",
+   "from": 0.045,
+   "to": 0.045,
+   "train_total": 0.6405
+  },
+  {
+   "pass": 2,
+   "param": "thick_k",
+   "from": 0.1,
+   "to": 0.1,
+   "train_total": 0.6405
+  },
+  {
+   "pass": 2,
+   "param": "tol_max_rel",
+   "from": 0.03,
+   "to": 0.03,
+   "train_total": 0.6405
+  },
+  {
+   "pass": 2,
+   "param": "tol_rel",
+   "from": 0.0075,
+   "to": 0.004,
+   "train_total": 0.6429
+  },
+  {
+   "pass": 2,
+   "param": "arc_cost",
+   "from": 1.5,
+   "to": 1.5,
+   "train_total": 0.6429
+  },
+  {
+   "pass": 2,
+   "param": "ell_cost",
+   "from": 2.9,
+   "to": 2.9,
+   "train_total": 0.6429
+  },
+  {
+   "pass": 2,
+   "param": "arc_min_sweep",
+   "from": 0.6,
+   "to": 0.9,
+   "train_total": 0.6465
+  },
+  {
+   "pass": 2,
+   "param": "ell_min_sweep",
+   "from": 1.2,
+   "to": 1.2,
+   "train_total": 0.6465
+  },
+  {
+   "pass": 2,
+   "param": "circle_max_r",
+   "from": 0.25,
+   "to": 0.25,
+   "train_total": 0.6465
+  },
+  {
+   "pass": 2,
+   "param": "ell_max_r",
+   "from": 0.35,
+   "to": 0.35,
+   "train_total": 0.6465
+  },
+  {
+   "pass": 2,
+   "param": "ell_max_aspect",
+   "from": 2.0,
+   "to": 2.0,
+   "train_total": 0.6465
+  },
+  {
+   "pass": 2,
+   "param": "oval_min_r",
+   "from": 0.045,
+   "to": 0.045,
+   "train_total": 0.6465
+  }
+ ]
+}

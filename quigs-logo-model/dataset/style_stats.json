@@ -1,0 +1,266 @@
+{
+ "fit_eps_px": 2.0,
+ "logos": 32,
+ "density_median": 10.52824273649665,
+ "density_p75": 11.453563435296177,
+ "line_share_median": 0.29520697167755994,
+ "primitives_median": 42.5,
+ "per_logo": [
+  {
+   "logo": "01_wolf_train",
+   "primitives": 46,
+   "outline_px": 3942.0,
+   "density": 11.669203450025368,
+   "line_share": 0.21739130434782608,
+   "r_median": 161.06727350377065
+  },
+  {
+   "logo": "02_maned-wolf_train",
+   "primitives": 60,
+   "outline_px": 5936.0,
+   "density": 10.107816711590296,
+   "line_share": 0.2833333333333333,
+   "r_median": 310.28404784347515
+  },
+  {
+   "logo": "03_hyena_train",
+   "primitives": 47,
+   "outline_px": 4452.0,
+   "density": 10.557053009883198,
+   "line_share": 0.3829787234042553,
+   "r_median": 350.1574703080076
+  },
+  {
+   "logo": "04_cheetah_train",
+   "primitives": 33,
+   "outline_px": 3028.0,
+   "density": 10.898282694848085,
+   "line_share": 0.42424242424242425,
+   "r_median": 206.3532516001292
+  },
+  {
+   "logo": "05_snow-leopard_train",
+   "primitives": 50,
+   "outline_px": 3318.0,
+   "density": 15.06931886678722,
+   "line_share": 0.36,
+   "r_median": 73.3641495435541
+  },
+  {
+   "logo": "06_ferret_train",
+   "primitives": 42,
+   "outline_px": 3710.0,
+   "density": 11.320754716981131,
+   "line_share": 0.2857142857142857,
+   "r_median": 124.423585462874
+  },
+  {
+   "logo": "07_hare_train",
+   "primitives": 27,
+   "outline_px": 2940.0,
+   "density": 9.183673469387756,
+   "line_share": 0.2962962962962963,
+   "r_median": 285.06104450315667
+  },
+  {
+   "logo": "08_rhino_train",
+   "primitives": 60,
+   "outline_px": 4080.0,
+   "density": 14.705882352941176,
+   "line_share": 0.38333333333333336,
+   "r_median": 115.4426890849052
+  },
+  {
+   "logo": "09_bison_train",
+   "primitives": 34,
+   "outline_px": 3138.0,
+   "density": 10.834926704907584,
+   "line_share": 0.4117647058823529,
+   "r_median": 105.38134296087637
+  },
+  {
+   "logo": "10_moose_train",
+   "primitives": 63,
+   "outline_px": 5862.0,
+   "density": 10.74718526100307,
+   "line_share": 0.2698412698412698,
+   "r_median": 116.97956288648481
+  },
+  {
+   "logo": "11_elk_train",
+   "primitives": 51,
+   "outline_px": 4298.0,
+   "density": 11.865984178687762,
+   "line_share": 0.37254901960784315,
+   "r_median": 138.99817015343177
+  },
+  {
+   "logo": "12_polar-bear_train",
+   "primitives": 37,
+   "outline_px": 3524.0,
+   "density": 10.499432463110102,
+   "line_share": 0.1891891891891892,
+   "r_median": 140.76888688021137
+  },
+  {
+   "logo": "13_lemur_train",
+   "primitives": 40,
+   "outline_px": 4578.0,
+   "density": 8.73743993010048,
+   "line_share": 0.2,
+   "r_median": 137.42829610027817
+  },
+  {
+   "logo": "14_monkey_train",
+   "primitives": 36,
+   "outline_px": 5328.0,
+   "density": 6.756756756756757,
+   "line_share": 0.3333333333333333,
+   "r_median": 362.9660266471667
+  },
+  {
+   "logo": "15_elephant_train",
+   "primitives": 63,
+   "outline_px": 5912.0,
+   "density": 10.656292286874153,
+   "line_share": 0.31746031746031744,
+   "r_median": 123.97639521586872
+  },
+  {
+   "logo": "16_swan_train",
+   "primitives": 41,
+   "outline_px": 4876.0,
+   "density": 8.40853158326497,
+   "line_share": 0.21951219512195122,
+   "r_median": 172.0133725369668
+  },
+  {
+   "logo": "17_penguin_train",
+   "primitives": 40,
+   "outline_px": 4270.0,
+   "density": 9.36768149882904,
+   "line_share": 0.3,
+   "r_median": 144.98574217840618
+  },
+  {
+   "logo": "18_kiwi_train",
+   "primitives": 23,
+   "outline_px": 3566.0,
+   "density": 6.449803701626473,
+   "line_share": 0.4782608695652174,
+   "r_median": 257.85956697160407
+  },
+  {
+   "logo": "19_eagle_train",
+   "primitives": 42,
+   "outline_px": 3428.0,
+   "density": 12.252042007001167,
+   "line_share": 0.38095238095238093,
+   "r_median": 91.33046942652113
+  },
+  {
+   "logo": "20_secretary-bird_train",
+   "primitives": 70,
+   "outline_px": 5562.0,
+   "density": 12.585400934915498,
+   "line_share": 0.2857142857142857,
+   "r_median": 143.40691272394855
+  },
+  {
+   "logo": "21_bee_train",
+   "primitives": 54,
+   "outline_px": 6014.0,
+   "density": 8.979048885932823,
+   "line_share": 0.14814814814814814,
+   "r_median": 98.32791373207712
+  },
+  {
+   "logo": "22_butterfly_train",
+   "primitives": 41,
+   "outline_px": 4014.0,
+   "density": 10.214250124564026,
+   "line_share": 0.2682926829268293,
+   "r_median": 183.99155045631795
+  },
+  {
+   "logo": "23_moth_train",
+   "primitives": 46,
+   "outline_px": 5034.0,
+   "density": 9.137862534763608,
+   "line_share": 0.1956521739130435,
+   "r_median": 82.03846781447565
+  },
+  {
+   "logo": "24_shrimp_train",
+   "primitives": 40,
+   "outline_px": 4860.0,
+   "density": 8.23045267489712,
+   "line_share": 0.275,
+   "r_median": 100.90417895322753
+  },
+  {
+   "logo": "25_badger_train",
+   "primitives": 46,
+   "outline_px": 5836.0,
+   "density": 7.882111034955449,
+   "line_share": 0.2391304347826087,
+   "r_median": 111.67867689483498
+  },
+  {
+   "logo": "26_espeon_train",
+   "primitives": 53,
+   "outline_px": 5002.0,
+   "density": 10.59576169532187,
+   "line_share": 0.2830188679245283,
+   "r_median": 165.1499717704306
+  },
+  {
+   "logo": "27_red-panda_train",
+   "primitives": 41,
+   "outline_px": 3394.0,
+   "density": 12.080141426045964,
+   "line_share": 0.43902439024390244,
+   "r_median": 158.4486499467755
+  },
+  {
+   "logo": "28_fox_holdout",
+   "primitives": 27,
+   "outline_px": 3420.0,
+   "density": 7.894736842105263,
+   "line_share": 0.4074074074074074,
+   "r_median": 276.11668786525024
+  },
+  {
+   "logo": "29_horse_holdout",
+   "primitives": 56,
+   "outline_px": 4448.0,
+   "density": 12.589928057553957,
+   "line_share": 0.30357142857142855,
+   "r_median": 198.7290554830118
+  },
+  {
+   "logo": "30_serval_holdout",
+   "primitives": 51,
+   "outline_px": 5176.0,
+   "density": 9.853168469860897,
+   "line_share": 0.29411764705882354,
+   "r_median": 188.2126094711188
+  },
+  {
+   "logo": "31_gazelle_holdout",
+   "primitives": 43,
+   "outline_px": 3778.0,
+   "density": 11.381683430386447,
+   "line_share": 0.20930232558139536,
+   "r_median": 140.8962397837244
+  },
+  {
+   "logo": "32_bear_holdout",
+   "primitives": 32,
+   "outline_px": 5528.0,
+   "density": 5.788712011577424,
+   "line_share": 0.3125,
+   "r_median": 140.2047443240362
+  }
+ ]
+}

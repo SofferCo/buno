@@ -1,0 +1,70 @@
+{
+ "stem": "02_maned-wolf_train",
+ "size": 372,
+ "cuts": 5,
+ "cut_area_share": 0.19405670419958918,
+ "parts": 3,
+ "regions": {
+  "regions": 43,
+  "kept": 30,
+  "thrown": 12,
+  "decided_area_share": 0.990543219666931,
+  "kept_area_share": 0.8049365582870738
+ },
+ "added_to_animal": 0.17510532707618034,
+ "removed_from_animal": 0.05650541045735942,
+ "cut_list": [
+  {
+   "area_share": 0.02407904403496409,
+   "width_rel": 0.049567443318778964,
+   "elongation": 4.723529411764706,
+   "enclosed": false,
+   "cx_rel": 0.18291286707106413,
+   "cy_rel": 0.36486495534219804
+  },
+  {
+   "area_share": 0.11222393810816078,
+   "width_rel": 0.13978494623655913,
+   "elongation": 2.768121301775148,
+   "enclosed": false,
+   "cx_rel": 0.41665014617047724,
+   "cy_rel": 0.5053361202692122
+  },
+  {
+   "area_share": 0.002863697017856875,
+   "width_rel": 0.026881720430107527,
+   "elongation": 1.91,
+   "enclosed": false,
+   "cx_rel": 0.8816500591116365,
+   "cy_rel": 0.28422845240105826
+  },
+  {
+   "area_share": 0.053450679940627015,
+   "width_rel": 0.11840169648142601,
+   "elongation": 1.8376288659793816,
+   "enclosed": false,
+   "cx_rel": 0.7828892005610097,
+   "cy_rel": 0.4897894705092822
+  },
+  {
+   "area_share": 0.001439345097980419,
+   "width_rel": 0.026881720430107527,
+   "elongation": 0.96,
+   "enclosed": true,
+   "cx_rel": 0.9265793010752689,
+   "cy_rel": 0.43744399641577053
+  }
+ ],
+ "card": {
+  "mark_w": 0.5222222222222223,
+  "mark_h": 0.22708333333333333,
+  "mark_cy": 0.4557291666666667,
+  "mark_cx": 0.4935185185185185,
+  "name_h": 0.1037037037037037,
+  "name_w": 0.39444444444444443,
+  "name_w_over_mark_w": 0.7553191489361702,
+  "gap": 0.03333333333333333,
+  "name_cx": 0.5185185185185185,
+  "mark_lighter_than_card": true
+ }
+}

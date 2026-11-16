@@ -1,0 +1,193 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; }
+  svg { display: block; }
+  text { font-family: 'BrandBold', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  #csign { font-family: 'BrandRegular', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+</style></head>
+<body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <image id="photo" x="0" y="0" width="1080" height="1920" preserveAspectRatio="xMidYMid slice"/>
+  <rect id="wash" width="1080" height="1920" fill="#fff" opacity="0"/>
+  <defs>
+    <pattern id="dots" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#fff" fill-opacity="0.42"/><circle cx="3.5" cy="3.5" r="1.25" fill="#3a3a3a"/>
+    </pattern>
+    <pattern id="dotsDel" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#d9d9d9"/><circle cx="3.5" cy="3.5" r="1.25" fill="#3a3a3a"/>
+    </pattern>
+  </defs>
+  <path id="fillp" fill="#000" fill-rule="evenodd" visibility="hidden"/>
+  <g id="guides" fill="none" stroke="#111" stroke-width="3" stroke-linecap="butt"></g>
+  <g id="trace" fill="none" stroke="#e8362d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"></g>
+  <path id="sel" fill="url(#dots)" fill-rule="evenodd" stroke="#e8362d" stroke-width="3.5" stroke-linejoin="round" visibility="hidden"/>
+  <path id="cuthover" fill="url(#dotsDel)" stroke="#e8362d" stroke-width="3" stroke-linejoin="round" visibility="hidden"/>
+  <rect id="marquee" fill="none" stroke="#222" stroke-width="1.6" stroke-dasharray="3 4" visibility="hidden"/>
+  <g id="card" visibility="hidden">
+    <rect id="cardbg" width="1080" height="1920"/>
+    <path id="cardp" fill-rule="evenodd"/>
+    <text id="name"></text><text id="csign">&#169;</text>
+  </g>
+  <g id="cursor"><polygon points="0,0 0,34 9,26 15,40 21,37.5 15,24 27,24" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    <g id="plus" stroke="#111" stroke-width="2.4" visibility="hidden"><path d="M30,36h14M37,29v14" stroke="#fff" stroke-width="5"/><path d="M30,36h14M37,29v14"/></g></g>
+</svg>
+<script>
+const SC = /*SCENE*/null;
+const NS = 'http://www.w3.org/2000/svg', $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = u => { u = clamp(u); return u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2; };
+const lerp = (a, b, u) => a + (b - a) * u;
+
+$('photo').setAttribute('href', SC.bg);
+$('fillp').setAttribute('d', SC.fillD);
+$('cardp').setAttribute('d', SC.cardD || SC.fillD);   // the finished logo: corners eased by a few pixels
+
+// guides
+const rotv = (v, deg) => { const a = deg * Math.PI / 180; return [v[0]*Math.cos(a) - v[1]*Math.sin(a), v[0]*Math.sin(a) + v[1]*Math.cos(a)]; };
+const prims = SC.prims.map(p => {
+  const oval = p.type === 'circle' || p.type === 'ellipse';
+  const el = document.createElementNS(NS, oval ? 'ellipse' : p.type === 'path' ? 'path' : 'line');
+  el.setAttribute('visibility', 'hidden'); $('guides').appendChild(el);
+  if (p.type === 'path') {
+    el.setAttribute('d', p.d);
+    const len = el.getTotalLength(), s = el.getPointAtLength(0), e = el.getPointAtLength(len);
+    el.setAttribute('stroke-dasharray', len + ' ' + len);
+    return { ...p, el, len, a: [s.x, s.y], b: [e.x, e.y] };
+  }
+  if (oval) {                                           // dragged out from one corner of its own box, like the ellipse tool
+    const rx = p.rx || p.r, ry = p.ry || p.r, rot = p.rot || 0;
+    const off = rotv([rx, ry], rot);
+    return { ...p, el, rx, ry, rot, a: [p.cx - off[0], p.cy - off[1]], b: [p.cx + off[0], p.cy + off[1]] };
+  }
+  return { ...p, el, a: [p.x1, p.y1], b: [p.x2, p.y2] };
+});
+// outline paths
+const paths = SC.paths.map(p => {
+  const el = document.createElementNS(NS, 'path');
+  el.setAttribute('d', p.d); el.setAttribute('visibility', 'hidden'); $('trace').appendChild(el);
+  const len = el.getTotalLength();
+  el.setAttribute('stroke-dasharray', len + ' ' + len);
+  return { ...p, el, len };
+});
+// shape-builder data
+const B = SC.build || null;
+// brand card, laid out in make_video.py from the measurements of the designer's own cards
+// (dataset/learned_card.json): fixed wordmark size, tight tracking, the (c) sign at its measured
+// size and place, symbol and name centred together. On the white card the mark stays where it
+// was built.
+const [bx0, by0, bx1, by1] = SC.logoBBox;
+const L = SC.cardLayout;
+const cardTf = `translate(${L.cx},${L.cy}) scale(${L.s}) translate(${-(bx0 + bx1) / 2},${-(by0 + by1) / 2})`;
+const nameEl = $('name'), signEl = $('csign');
+if (L.name) {
+  nameEl.textContent = SC.card.name;
+  nameEl.setAttribute('x', L.name.x.toFixed(2)); nameEl.setAttribute('y', L.name.y.toFixed(2));
+  nameEl.setAttribute('font-size', L.name.fs.toFixed(2)); nameEl.setAttribute('letter-spacing', L.name.ls.toFixed(2));
+  signEl.setAttribute('x', L.sign.x.toFixed(2)); signEl.setAttribute('y', L.sign.y.toFixed(2)); signEl.setAttribute('font-size', L.sign.fs.toFixed(2));
+  signEl.setAttribute('stroke-width', (L.sign.stroke || 0).toFixed(2)); signEl.setAttribute('stroke-linejoin', 'round');
+} else signEl.setAttribute('visibility', 'hidden');
+
+const REST = [SC.W * 0.82, SC.H * 0.62];
+function cursorAt(t) {
+  let prev = [SC.W * 0.7, SC.H * 0.3];
+  for (const p of prims) {
+    if (t < p.t0) return prev;
+    if (t < p.t1) { const u = ease((t - p.t0) / (p.t1 - p.t0)); return [lerp(prev[0], p.a[0], u), lerp(prev[1], p.a[1], u)]; }
+    if (t < p.t2) {
+      const u = ease((t - p.t1) / (p.t2 - p.t1));
+      if (p.type === 'path') { const q = p.el.getPointAtLength(p.len * u); return [q.x, q.y]; }
+      return [lerp(p.a[0], p.b[0], u), lerp(p.a[1], p.b[1], u)];
+    }
+    prev = p.b;
+  }
+  if (SC.cursorKeys) {
+    for (const k of SC.cursorKeys) {
+      if (t < k.t) {
+        const t0 = k.prevT === undefined ? (prims.length ? prims[prims.length - 1].t2 : 0) : k.prevT;
+        const u = ease((t - Math.max(t0, k.t - 0.45)) / (k.t - Math.max(t0, k.t - 0.45)));
+        return [lerp(prev[0], k.x, u), lerp(prev[1], k.y, u)];
+      }
+      prev = [k.x, k.y];
+    }
+    return prev;
+  }
+  for (const p of paths) {
+    const start = p.el.getPointAtLength(0);
+    if (t < p.ta) { const u = ease((t - (p.ta - 0.25)) / 0.25); return [lerp(prev[0], start.x, u), lerp(prev[1], start.y, u)]; }
+    if (t < p.tb) { const q = p.el.getPointAtLength(p.len * ease((t - p.ta) / (p.tb - p.ta))); return [q.x, q.y]; }
+    prev = [start.x, start.y];
+  }
+  const u = ease((t - SC.t.fill) / 0.5);
+  return [lerp(prev[0], REST[0], u), lerp(prev[1], REST[1], u)];
+}
+
+window.setTime = function (t) {
+  const T = SC.t, onCard = t >= T.cardWhite;
+  $('wash').setAttribute('opacity', SC.wash * clamp((t - T.washStart) / (T.washEnd - T.washStart)));
+  for (const p of prims) {
+    if (t < p.t1 || t >= T.guidesOff) { p.el.setAttribute('visibility', 'hidden'); continue; }
+    p.el.setAttribute('visibility', 'visible');
+    const u = ease((t - p.t1) / (p.t2 - p.t1));
+    const cx = lerp(p.a[0], p.b[0], u), cy = lerp(p.a[1], p.b[1], u);
+    if (p.type === 'path') {
+      p.el.setAttribute('stroke-dashoffset', p.len * (1 - u));
+    } else if (p.type === 'circle' || p.type === 'ellipse') {
+      const off = rotv([p.rx * u, p.ry * u], p.rot), ccx = p.a[0] + off[0], ccy = p.a[1] + off[1];
+      p.el.setAttribute('cx', ccx); p.el.setAttribute('cy', ccy);
+      p.el.setAttribute('rx', p.rx * u); p.el.setAttribute('ry', p.ry * u);
+      p.el.setAttribute('transform', `rotate(${p.rot} ${ccx} ${ccy})`);
+    } else {
+      p.el.setAttribute('x1', p.a[0]); p.el.setAttribute('y1', p.a[1]);
+      p.el.setAttribute('x2', cx); p.el.setAttribute('y2', cy);
+    }
+  }
+  for (const p of paths) {
+    const vis = t >= p.ta && t < T.fill;
+    p.el.setAttribute('visibility', vis ? 'visible' : 'hidden');
+    if (vis) p.el.setAttribute('stroke-dashoffset', p.len * (1 - ease((t - p.ta) / (p.tb - p.ta))));
+  }
+  $('fillp').setAttribute('visibility', t >= T.fill && !onCard ? 'visible' : 'hidden');
+  if (B) {
+    // regions merged so far: dotted fill, red outline around their union
+    let cur = null;
+    if (t >= B.tStart && t < B.tRelease) for (const st of B.steps) if (t >= st.t) cur = st;
+    $('sel').setAttribute('visibility', cur ? 'visible' : 'hidden');
+    if (cur && $('sel').getAttribute('d') !== cur.d) $('sel').setAttribute('d', cur.d);
+    // merged body, then cuts deleted one by one, then the clean final outline
+    let k = 0, hover = null;
+    for (const c of B.cuts) { if (t >= c.tDelete) k++; if (t >= c.tHover && t < c.tDelete) hover = c; }
+    const d = t >= T.guidesOff ? (SC.cardD || SC.fillD) : B.fillStates[k];
+    if ($('fillp').getAttribute('d') !== d) $('fillp').setAttribute('d', d);
+    $('cuthover').setAttribute('visibility', hover ? 'visible' : 'hidden');
+    if (hover) $('cuthover').setAttribute('d', hover.d);
+    let mq = null;
+    for (const m of B.marquees) if (t >= m.ta && t < m.tOff) mq = m;
+    $('marquee').setAttribute('visibility', mq ? 'visible' : 'hidden');
+    if (mq) {
+      const u = ease((t - mq.ta) / (mq.tb - mq.ta)), [x0, y0, x1, y1] = mq.box;
+      $('marquee').setAttribute('x', x0); $('marquee').setAttribute('y', y0);
+      $('marquee').setAttribute('width', Math.max(1, (x1 - x0) * u)); $('marquee').setAttribute('height', Math.max(1, (y1 - y0) * u));
+    }
+    $('plus').setAttribute('visibility', t >= B.marquees[0].tOff && t < B.marquees[1].ta - 0.2 && !onCard ? 'visible' : 'hidden');
+  }
+  const c = cursorAt(t);
+  $('cursor').setAttribute('transform', `translate(${c[0]},${c[1]})`);
+  $('cursor').setAttribute('visibility', onCard ? 'hidden' : 'visible');
+  $('card').setAttribute('visibility', onCard ? 'visible' : 'hidden');
+  if (onCard) {
+    const col = t >= T.cardColor;
+    $('cardbg').setAttribute('fill', col ? SC.card.bg : '#fff');
+    $('cardp').setAttribute('fill', col ? SC.card.fg : '#000');
+    $('cardp').setAttribute('transform', col ? cardTf : '');
+    nameEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('fill', SC.card.fg); signEl.setAttribute('stroke', SC.card.fg);
+    const o = col ? clamp((t - T.cardColor - 0.15) / 0.3) : 0;
+    nameEl.setAttribute('opacity', o); signEl.setAttribute('opacity', o); signEl.setAttribute('stroke-opacity', o);
+  }
+};
+const brandFonts = Promise.all((SC.fonts || []).map(f => new FontFace(f.family, `url(${f.src})`).load().then(ff => document.fonts.add(ff))));
+window.ready = Promise.all([brandFonts.then(() => document.fonts.ready), $('photo').decode ? $('photo').decode().catch(() => {}) : null])
+  .then(() => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = SC.bg; }));
+setTime(0);
+</script>
+</body></html>
