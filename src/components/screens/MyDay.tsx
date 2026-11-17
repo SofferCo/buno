@@ -3,7 +3,7 @@ import { Icon } from "../ui/Icon";
 import { PRIORITY } from "../../lib/constants";
 import { deadlineInfo, flexDay, routineKind } from "../../lib/date";
 import { fmtClock, fmtModeHours } from "../../lib/format";
-import { cardSeconds, sumHours } from "../../lib/time";
+import { cardSeconds, cardHours, sumHours } from "../../lib/time";
 
 // full-word lateness from the DEADLINE (never created_at, never "7ד"):
 // days late if the deadline day is behind today, else "today but the hour passed".
@@ -139,12 +139,28 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   // ---- brief (buno) — observe & hand over; celebrate progress; never scold ----
   const openCount = planTasks.length;
   const doneCount = completedToday.length;
+  // --- "what is the day ABOUT" — weigh by HOURS, not list order or a raw card count.
+  // A day rests on where its TIME goes: the project that fills most of it, or the one
+  // big block. A tiny errand that happens to sort first is NEVER "the day" — that was
+  // the old bug (top = planTasks[0], pure order). Same hours measure as planHours.
+  const priRank: Record<string, number> = { critical: 0, important: 1, regular: 2 };
+  const weighed = planTasks.map((t: any) => ({ card: t.card, h: cardHours(cardSeconds(t.card, now), roundMode) }));
+  const totalH = weighed.reduce((a: number, x: any) => a + x.h, 0);
+  const projH: Record<string, number> = {};               // planned HOURS per project
+  weighed.forEach((x: any) => { const id = x.card.clientId; if (id) projH[id] = (projH[id] || 0) + x.h; });
+  let domHId: string | null = null, domHHours = 0;
+  Object.entries(projH).forEach(([id, h]) => { if (h > domHHours) { domHHours = h; domHId = id; } });
+  const domHName = domHId ? clientOf(domHId)?.name : null;
+  const biggest = [...weighed].sort((a: any, b: any) => (b.h - a.h) || ((priRank[a.card.priority] ?? 2) - (priRank[b.card.priority] ?? 2)))[0]; // biggest single block
+  // fallbacks when nothing is estimated (totalH ≈ 0): a real-priority task, then the
+  // project holding the most CARDS — but never a lone marginal (regular) errand.
+  const topByPri = planTasks.map((t: any) => t.card).filter((c: any) => c.priority && c.priority !== "regular")
+    .sort((a: any, b: any) => (priRank[a.priority] ?? 2) - (priRank[b.priority] ?? 2))[0] || null;
   const byProj: Record<string, number> = {};
   planTasks.forEach((t: any) => { const id = t.card.clientId; if (id) byProj[id] = (byProj[id] || 0) + 1; });
   let domId: string | null = null, domN = 0;
   Object.entries(byProj).forEach(([id, n]) => { if (n > domN) { domN = n; domId = id; } });
   const domName = domId ? clientOf(domId)?.name : null;
-  const top = planTasks[0]?.card;
   // buno reads the CLOCK and the day so far, not just the counts. The same board at
   // 08:00 and at 23:00 deserves a different word: morning plans, evening winds down.
   const nowH = new Date(now).getHours();
@@ -155,10 +171,13 @@ export function MyDay({ planTasks, upcoming, completedToday = [], clients, now, 
   if (openCount === 0) headline = doneCount ? "סגרת את כל מה שתכננת." : "שום דבר לא מחכה לך היום.";
   else if (late && productive) headline = "יום פורה. כל הכבוד.";
   else if (late) headline = "ערב — מחר יום חדש.";
-  // lead with what the day is ABOUT (the dominant project / the top task), not an
-  // alarmist raw count — "יום עמוס: 5 משימות" read as noise, not insight.
+  // lead with what the day is ABOUT, by weight: a project that holds most of the day's
+  // hours → one big block that dominates the hours → a genuinely high-priority task →
+  // (no estimates at all) a project by card-count. Else a plain count — never a random task.
+  else if (totalH > 0 && domHName && domHHours >= 0.45 * totalH && openCount >= 2) headline = <>היום נשען על <span className="clay">"{domHName}"</span>.</>;
+  else if (totalH > 0 && biggest && biggest.h > 0 && biggest.h >= 0.35 * totalH) headline = <>היום נשען על <span className="clay">"{biggest.card.title || "משימה"}"</span>.</>;
+  else if (topByPri) headline = <>היום נשען על <span className="clay">"{topByPri.title || "משימה"}"</span>.</>;
   else if (domName && domN >= Math.ceil(openCount / 2) && openCount >= 2) headline = <>היום נשען על <span className="clay">"{domName}"</span>.</>;
-  else if (top) headline = <>היום נשען על <span className="clay">"{top.title || "משימה"}"</span>.</>;
   else headline = `${openCount} ${openCount === 1 ? "משימה" : "משימות"} על השולחן.`;
 
   const briefLines: any[] = [];
